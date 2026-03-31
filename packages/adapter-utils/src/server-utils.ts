@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { constants as fsConstants, promises as fs, type Dirent } from "node:fs";
 import path from "node:path";
 import type {
@@ -809,6 +810,8 @@ export async function runChildProcess(
         let stdout = "";
         let stderr = "";
         let logChain: Promise<void> = Promise.resolve();
+        const stdoutDecoder = new StringDecoder("utf8");
+        const stderrDecoder = new StringDecoder("utf8");
 
         const timeout =
           opts.timeoutSec > 0
@@ -824,7 +827,8 @@ export async function runChildProcess(
             : null;
 
         child.stdout?.on("data", (chunk: unknown) => {
-          const text = String(chunk);
+          const text = stdoutDecoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+          if (!text) return;
           stdout = appendWithCap(stdout, text);
           logChain = logChain
             .then(() => opts.onLog("stdout", text))
@@ -832,7 +836,8 @@ export async function runChildProcess(
         });
 
         child.stderr?.on("data", (chunk: unknown) => {
-          const text = String(chunk);
+          const text = stderrDecoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+          if (!text) return;
           stderr = appendWithCap(stderr, text);
           logChain = logChain
             .then(() => opts.onLog("stderr", text))
@@ -854,6 +859,11 @@ export async function runChildProcess(
         child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
           if (timeout) clearTimeout(timeout);
           runningProcesses.delete(runId);
+          // Flush any remaining bytes held by the UTF-8 decoders
+          const stdoutTail = stdoutDecoder.end();
+          const stderrTail = stderrDecoder.end();
+          if (stdoutTail) stdout = appendWithCap(stdout, stdoutTail);
+          if (stderrTail) stderr = appendWithCap(stderr, stderrTail);
           void logChain.finally(() => {
             resolve({
               exitCode: code,
