@@ -22,8 +22,13 @@ export type {
   AdapterSkillContext,
   AdapterSessionCodec,
   AdapterModel,
+  AdapterModelProfileKey,
+  AdapterModelProfileDefinition,
   NativeContextManagement,
   ResolvedSessionCompactionPolicy,
   SessionCompactionPolicy,
+  ConfigFieldOption,
+  ConfigFieldSchema,
+  AdapterConfigSchema,
   ServerAdapterModule,
 } from "@paperclipai/adapter-utils";
