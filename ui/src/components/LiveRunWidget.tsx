@@ -9,6 +9,7 @@ import { Identity } from "./Identity";
 import { StatusBadge } from "./StatusBadge";
 import { RunTranscriptView } from "./transcript/RunTranscriptView";
 import { useLiveRunTranscripts } from "./transcript/useLiveRunTranscripts";
+import { GlowFrame, LiveDot } from "@/broadcast";
 
 interface LiveRunWidgetProps {
   issueId: string;
@@ -86,11 +87,19 @@ export function LiveRunWidget({ issueId, companyId }: LiveRunWidgetProps) {
 
   if (runs.length === 0) return null;
 
+  const hasActiveRun = runs.some((r) => isRunActive(r.status));
+
   return (
-    <div className="overflow-hidden rounded-xl border border-cyan-500/25 bg-background/80 shadow-[0_18px_50px_rgba(6,182,212,0.08)]">
+    <GlowFrame
+      state={hasActiveRun ? "active" : "idle"}
+      className="overflow-hidden bg-background/80"
+    >
       <div className="border-b border-border/60 bg-cyan-500/[0.04] px-4 py-3">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300">
-          Live Runs
+        <div className="flex items-center gap-2">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300">
+            Live Runs
+          </div>
+          {hasActiveRun && <LiveDot status="active" pulse label="live" />}
         </div>
         <div className="mt-1 text-xs text-muted-foreground">
           Streamed with the same transcript UI used on the full run detail page.
@@ -102,7 +111,7 @@ export function LiveRunWidget({ issueId, companyId }: LiveRunWidgetProps) {
           const isActive = isRunActive(run.status);
           const transcript = transcriptByRun.get(run.id) ?? [];
           return (
-            <section key={run.id} className="px-4 py-4">
+            <section key={run.id} className="px-4 py-4 bg-card hover:bg-accent/30 transition-colors">
               <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <Link to={`/agents/${run.agentId}`} className="inline-flex hover:underline">
@@ -155,6 +164,6 @@ export function LiveRunWidget({ issueId, companyId }: LiveRunWidgetProps) {
           );
         })}
       </div>
-    </div>
+    </GlowFrame>
   );
 }
