@@ -42,8 +42,8 @@ export function QuotaBar({
         </div>
       </div>
 
-      {/* track — boxed border, square corners to match the theme */}
-      <div className="relative h-2 w-full border border-border overflow-hidden">
+      {/* track */}
+      <div className="relative h-2 w-full bg-muted overflow-hidden">
         {/* fill */}
         <div
           className={cn(
