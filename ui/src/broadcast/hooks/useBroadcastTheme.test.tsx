@@ -13,7 +13,7 @@ function Probe() {
   return null;
 }
 
-describe("useBroadcastTheme", () => {
+describe("useBroadcastTheme (default-on)", () => {
   let container: HTMLDivElement;
 
   beforeEach(() => {
@@ -30,30 +30,68 @@ describe("useBroadcastTheme", () => {
     localStorage.clear();
   });
 
-  it("does not apply broadcast theme when neither flag is set", () => {
+  it("applies broadcast theme by default (no flag set)", () => {
+    const root = createRoot(container);
+    act(() => { root.render(<Probe />); });
+    expect(document.documentElement.getAttribute("data-theme")).toBe("broadcast");
+    act(() => { root.unmount(); });
+  });
+
+  it("does NOT apply broadcast when ?broadcast=0 in URL", () => {
+    window.history.replaceState({}, "", "/?broadcast=0");
     const root = createRoot(container);
     act(() => { root.render(<Probe />); });
     expect(document.documentElement.getAttribute("data-theme")).toBeNull();
+    act(() => { root.unmount(); });
   });
 
-  it("applies broadcast theme when ?broadcast=1 is in URL", () => {
+  it("does NOT apply broadcast when localStorage.paperclip_broadcast='0'", () => {
+    localStorage.setItem("paperclip_broadcast", "0");
+    const root = createRoot(container);
+    act(() => { root.render(<Probe />); });
+    expect(document.documentElement.getAttribute("data-theme")).toBeNull();
+    act(() => { root.unmount(); });
+  });
+
+  it("?broadcast=1 in URL re-enables broadcast even if localStorage said 0", () => {
+    localStorage.setItem("paperclip_broadcast", "0");
     window.history.replaceState({}, "", "/?broadcast=1");
     const root = createRoot(container);
     act(() => { root.render(<Probe />); });
     expect(document.documentElement.getAttribute("data-theme")).toBe("broadcast");
+    act(() => { root.unmount(); });
   });
 
-  it("applies broadcast theme when localStorage.paperclip_broadcast is '1'", () => {
-    localStorage.setItem("paperclip_broadcast", "1");
-    const root = createRoot(container);
-    act(() => { root.render(<Probe />); });
-    expect(document.documentElement.getAttribute("data-theme")).toBe("broadcast");
-  });
-
-  it("persists flag from URL to localStorage", () => {
+  it("?broadcast=1 in URL persists '1' to localStorage", () => {
+    localStorage.setItem("paperclip_broadcast", "0");
     window.history.replaceState({}, "", "/?broadcast=1");
     const root = createRoot(container);
     act(() => { root.render(<Probe />); });
     expect(localStorage.getItem("paperclip_broadcast")).toBe("1");
+    act(() => { root.unmount(); });
+  });
+
+  it("?broadcast=0 in URL persists '0' to localStorage", () => {
+    window.history.replaceState({}, "", "/?broadcast=0");
+    const root = createRoot(container);
+    act(() => { root.render(<Probe />); });
+    expect(localStorage.getItem("paperclip_broadcast")).toBe("0");
+    act(() => { root.unmount(); });
+  });
+
+  it("localStorage.paperclip_broadcast='1' applies broadcast (forward compat)", () => {
+    localStorage.setItem("paperclip_broadcast", "1");
+    const root = createRoot(container);
+    act(() => { root.render(<Probe />); });
+    expect(document.documentElement.getAttribute("data-theme")).toBe("broadcast");
+    act(() => { root.unmount(); });
+  });
+
+  it("invalid localStorage value treated as default-on", () => {
+    localStorage.setItem("paperclip_broadcast", "garbage");
+    const root = createRoot(container);
+    act(() => { root.render(<Probe />); });
+    expect(document.documentElement.getAttribute("data-theme")).toBe("broadcast");
+    act(() => { root.unmount(); });
   });
 });
