@@ -1498,7 +1498,7 @@ export function RunTranscriptView({
   }
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn("bg-neutral-950 rounded-lg p-3 font-mono text-xs space-y-3", className)}>
       {visibleBlocks.map((block, index) => (
         <div
           key={`${block.type}-${block.ts}-${index}`}
