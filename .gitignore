@@ -13,6 +13,7 @@ coverage/
 data/
 .paperclip/
 .pnpm-store/
+.superpowers/
 tmp-*
 cli/tmp/
 
