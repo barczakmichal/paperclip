@@ -63,7 +63,7 @@ import { shouldRedirectCompanylessRouteToOnboarding } from "./lib/onboarding-rou
 function boardRoutes() {
   return (
     <>
-      <Route index element={<Navigate to="dashboard" replace />} />
+      <Route index element={<BoardIndexRedirect />} />
       <Route path="dashboard" element={<Dashboard />} />
       <Route path="dashboard/live" element={<DashboardLive />} />
       <Route path="onboarding" element={<OnboardingRoutePage />} />
@@ -142,6 +142,12 @@ function boardRoutes() {
 
 function InboxRootRedirect() {
   return <Navigate to={`/inbox/${loadLastInboxTab()}`} replace />;
+}
+
+function BoardIndexRedirect() {
+  const liveOpsDefault =
+    typeof window !== "undefined" && localStorage.getItem("paperclip_live_ops_default") === "1";
+  return <Navigate to={liveOpsDefault ? "live" : "dashboard"} replace />;
 }
 
 function LegacySettingsRedirect() {
