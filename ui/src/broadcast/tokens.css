@@ -52,3 +52,14 @@
     --glow-error: none;
   }
 }
+
+/* Universal animation stopper for broadcast theme under reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="broadcast"] *,
+  :root[data-theme="broadcast"] *::before,
+  :root[data-theme="broadcast"] *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
