@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { GlowFrame } from "@/broadcast";
 
 function centsInputValue(value: number) {
   return (value / 100).toFixed(2);
@@ -43,7 +44,8 @@ export function BudgetIncidentCard({
   const stateLabel = incidentStateLabel(incident);
 
   return (
-    <Card className="overflow-hidden border-red-500/20 bg-[linear-gradient(180deg,rgba(255,70,70,0.10),rgba(255,255,255,0.02))]">
+    <GlowFrame state="error" className="overflow-hidden">
+    <Card className="overflow-hidden border-0 bg-card/80">
       <CardHeader className="px-5 pt-5 pb-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -111,5 +113,6 @@ export function BudgetIncidentCard({
         </div>
       </CardContent>
     </Card>
+    </GlowFrame>
   );
 }
