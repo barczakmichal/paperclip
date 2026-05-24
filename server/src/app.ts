@@ -45,7 +45,9 @@ import { setPluginEventBus } from "./services/activity-log.js";
 import { createPluginDevWatcher } from "./services/plugin-dev-watcher.js";
 import { createPluginHostServiceCleanup } from "./services/plugin-host-service-cleanup.js";
 import { pluginRegistryService } from "./services/plugin-registry.js";
+import { secretService } from "./services/secrets.js";
 import { createHostClientHandlers } from "@paperclipai/plugin-sdk";
+import { registerMetaOAuthRoutes, registerGoogleOAuthRoutes } from "@paperclipai/plugin-marketing-ai/server-routes";
 import type { BetterAuthSessionResult } from "./auth/better-auth.js";
 
 type UiMode = "none" | "static" | "vite-dev";
@@ -150,6 +152,33 @@ export async function createApp(
   api.use(goalRoutes(db));
   api.use(approvalRoutes(db));
   api.use(secretRoutes(db));
+
+  // Marketing AI — OAuth routes
+  {
+    const marketingAiRouter = Router();
+    const svc = secretService(db);
+    const saveSecret = async (companyId: string, key: string, value: string) => {
+      const existing = await svc.getByName(companyId, key);
+      if (existing) {
+        await svc.rotate(existing.id, { value }, { userId: null, agentId: null });
+      } else {
+        await svc.create(companyId, { name: key, provider: "local_encrypted", value }, { userId: null, agentId: null });
+      }
+    };
+    registerMetaOAuthRoutes(marketingAiRouter, {
+      getMetaAppId: () => process.env.META_APP_ID ?? "",
+      getMetaAppSecret: () => process.env.META_APP_SECRET ?? "",
+      saveSecret,
+    });
+    registerGoogleOAuthRoutes(marketingAiRouter, {
+      getClientId: () => process.env.GOOGLE_ADS_CLIENT_ID ?? "",
+      getClientSecret: () => process.env.GOOGLE_ADS_CLIENT_SECRET ?? "",
+      getDeveloperToken: () => process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "",
+      saveSecret,
+    });
+    api.use("/plugins/marketing-ai", marketingAiRouter);
+  }
+
   api.use(costRoutes(db));
   api.use(activityRoutes(db));
   api.use(dashboardRoutes(db));
