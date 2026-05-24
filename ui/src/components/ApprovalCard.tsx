@@ -4,14 +4,21 @@ import { Button } from "@/components/ui/button";
 import { Identity } from "./Identity";
 import { approvalLabel, typeIcon, defaultTypeIcon, ApprovalPayloadRenderer } from "./ApprovalPayload";
 import { timeAgo } from "../lib/timeAgo";
+import { GlowFrame, LiveDot } from "@/broadcast";
 import type { Approval, Agent } from "@paperclipai/shared";
 
 function statusIcon(status: string) {
   if (status === "approved") return <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />;
   if (status === "rejected") return <XCircle className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />;
   if (status === "revision_requested") return <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />;
-  if (status === "pending") return <Clock className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400" />;
+  if (status === "pending") return null;
   return null;
+}
+
+function glowState(status: string): "warning" | "success" | "error" | "idle" {
+  if (status === "approved") return "success";
+  if (status === "rejected") return "error";
+  return "warning";
 }
 
 export function ApprovalCard({
@@ -38,7 +45,7 @@ export function ApprovalCard({
     (approval.status === "pending" || approval.status === "revision_requested");
 
   return (
-    <div className="border border-border rounded-lg p-4 space-y-0">
+    <GlowFrame state={glowState(approval.status)} className="p-4 space-y-0">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -53,8 +60,14 @@ export function ApprovalCard({
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {statusIcon(approval.status)}
-          <span className="text-xs text-muted-foreground capitalize">{approval.status}</span>
+          {approval.status === "pending" ? (
+            <LiveDot status="warning" pulse label="awaiting approval" />
+          ) : (
+            <>
+              {statusIcon(approval.status)}
+              <span className="text-xs text-muted-foreground capitalize">{approval.status}</span>
+            </>
+          )}
           <span className="text-xs text-muted-foreground">· {timeAgo(approval.createdAt)}</span>
         </div>
       </div>
@@ -101,6 +114,6 @@ export function ApprovalCard({
           </Button>
         )}
       </div>
-    </div>
+    </GlowFrame>
   );
 }
