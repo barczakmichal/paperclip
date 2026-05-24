@@ -62,8 +62,97 @@ const manifest: PaperclipPluginManifestV1 = {
     },
   },
   tools: [
-    // Tool registration added in C2.
-    // Stubs defined here so manifest compiles.
+    {
+      name: "marketing.list_products",
+      displayName: "List Shop Products",
+      description:
+        "Fetches product catalog from the connected shop (Shopify). Returns id, title, price, image_urls, stock.",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          category: { type: "string" },
+          limit: { type: "number" },
+        },
+      },
+    },
+    {
+      name: "marketing.propose_campaign",
+      displayName: "Propose Marketing Campaign",
+      description:
+        "Creates a campaign proposal with AI-generated brief. Saves to DB as draft. Does NOT publish to Meta/Google.",
+      parametersSchema: {
+        type: "object",
+        required: ["platform", "goal", "product_ids", "budget_daily_pln", "duration_days"],
+        properties: {
+          platform: { type: "string", enum: ["meta", "google"] },
+          goal: { type: "string", enum: ["sales", "awareness", "leads"] },
+          product_ids: { type: "array", items: { type: "string" } },
+          budget_daily_pln: { type: "number" },
+          duration_days: { type: "integer" },
+          audience_brief: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "marketing.generate_creative",
+      displayName: "Generate Campaign Creative",
+      description:
+        "Generates ad copy (Claude) + composed image (sharp/GPT-Image-1) for a proposal. Saves to creatives table.",
+      parametersSchema: {
+        type: "object",
+        required: ["proposal_id", "format"],
+        properties: {
+          proposal_id: { type: "string" },
+          format: { type: "string", enum: ["single_image", "carousel"] },
+          headline_count: { type: "integer" },
+          body_count: { type: "integer" },
+        },
+      },
+    },
+    {
+      name: "marketing.submit_for_approval",
+      displayName: "Submit Campaign for Approval",
+      description:
+        "Submits a campaign proposal + creatives for human review. Creates an Approval record visible in Paperclip UI.",
+      parametersSchema: {
+        type: "object",
+        required: ["proposal_id", "creative_ids"],
+        properties: {
+          proposal_id: { type: "string" },
+          creative_ids: { type: "array", items: { type: "string" } },
+          comments: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "marketing.fetch_metrics",
+      displayName: "Fetch Campaign Metrics",
+      description:
+        "Fetches ROAS, CTR, spend, conversions from Meta or Google. Normalizes spend to PLN via NBP fixing rate.",
+      parametersSchema: {
+        type: "object",
+        required: ["campaign_id"],
+        properties: {
+          campaign_id: { type: "string" },
+          since: { type: "string" },
+          until: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "marketing.pause_campaign",
+      displayName: "Pause Campaign",
+      description:
+        "Pauses a live campaign on Meta or Google. Updates status in DB and writes audit log.",
+      parametersSchema: {
+        type: "object",
+        required: ["campaign_id", "reason"],
+        properties: {
+          campaign_id: { type: "string" },
+          reason: { type: "string" },
+        },
+      },
+    },
   ],
   ui: {
     slots: [
