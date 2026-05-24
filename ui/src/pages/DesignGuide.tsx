@@ -124,6 +124,19 @@ import { InlineEditor } from "@/components/InlineEditor";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Identity } from "@/components/Identity";
 import { IssueReferencePill } from "@/components/IssueReferencePill";
+import {
+  GlowFrame,
+  LiveDot,
+  LevelBadge,
+  StreakBadge,
+  XPBar,
+  EqualizerIndicator,
+  CostTicker,
+  PlatformBadge,
+  ThoughtStream,
+  MissionCard,
+  AgentBroadcastCard,
+} from "@/broadcast";
 
 /* ------------------------------------------------------------------ */
 /*  Section wrapper                                                    */
@@ -1340,6 +1353,132 @@ export function DesignGuide() {
             </div>
           ))}
         </div>
+      </Section>
+
+      {/* ============================================================ */}
+      {/*  BROADCAST (CINEMATIC THEME)                                 */}
+      {/* ============================================================ */}
+      <Section title="Broadcast (cinematic theme)">
+        <SubSection title="GlowFrame — 5 stanów">
+          <div className="grid grid-cols-5 gap-3">
+            {(["active", "idle", "warning", "success", "error"] as const).map((s) => (
+              <GlowFrame key={s} state={s} className="p-3">
+                <div className="text-xs">{s}</div>
+              </GlowFrame>
+            ))}
+          </div>
+        </SubSection>
+        <SubSection title="LiveDot">
+          <div className="flex gap-4">
+            <LiveDot status="active" label="working" pulse />
+            <LiveDot status="idle" label="idle" />
+            <LiveDot status="warning" label="rate limited" />
+            <LiveDot status="success" label="done" />
+            <LiveDot status="error" label="failed" />
+          </div>
+        </SubSection>
+        <SubSection title="LevelBadge / StreakBadge">
+          <div className="flex items-center gap-2">
+            <LevelBadge level={1} size="xs" />
+            <LevelBadge level={7} size="sm" />
+            <LevelBadge level={42} size="md" />
+            <StreakBadge days={3} size="xs" />
+            <StreakBadge days={12} size="sm" />
+            <StreakBadge days={99} size="md" />
+          </div>
+        </SubSection>
+        <SubSection title="XPBar">
+          <div className="space-y-2 max-w-sm">
+            <XPBar current={20} target={100} label="20 / 100 XP" />
+            <XPBar current={75} target={100} label="75 / 100 XP" />
+            <XPBar current={120} target={100} label="overflow capped" />
+          </div>
+        </SubSection>
+        <SubSection title="EqualizerIndicator">
+          <div className="flex items-center gap-4">
+            <EqualizerIndicator active />
+            <EqualizerIndicator active intensity="high" />
+            <EqualizerIndicator active={false} />
+          </div>
+        </SubSection>
+        <SubSection title="CostTicker">
+          <div className="flex items-center gap-6">
+            <CostTicker value={0.41} cap={5} currency="USD" />
+            <CostTicker value={42.5} cap={500} currency="PLN" />
+            <CostTicker value={2.99} currency="EUR" />
+          </div>
+        </SubSection>
+        <SubSection title="PlatformBadge">
+          <div className="flex gap-2">
+            <PlatformBadge platform="meta" />
+            <PlatformBadge platform="google" />
+          </div>
+        </SubSection>
+        <SubSection title="ThoughtStream">
+          <div className="max-w-md">
+            <ThoughtStream
+              active
+              lines={[
+                { kind: "tool", text: "tool: meta_ads.create_campaign", ts: "0.1s" },
+                { kind: "thought", text: "Audiencja wędkarze 25-50, geo PL, interest fishing+spinning...", ts: "2.3s" },
+                { kind: "result", text: "Proposal saved", ts: "3.8s" },
+              ]}
+            />
+          </div>
+        </SubSection>
+        <SubSection title="MissionCard">
+          <div className="grid grid-cols-2 gap-3 max-w-2xl">
+            <MissionCard title="Kampania wiosenna 2026" progress={0.6} tasks={{ done: 3, total: 5 }} reward="+50 XP" />
+            <MissionCard title="Audyt SEO" progress={0.2} tasks={{ done: 1, total: 5 }} />
+          </div>
+        </SubSection>
+        <SubSection title="AgentBroadcastCard — variants">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <AgentBroadcastCard
+              agent={{ id: "1", name: "Marketing AI", initials: "M", color: "var(--grad-marketing)" }}
+              status="active"
+              currentTask="Kampania wiosenna 2026"
+              currentTool="meta_ads.create_campaign"
+              cost={{ value: 0.41, cap: 5, currency: "USD" }}
+              level={7}
+              streakDays={12}
+              thoughts={[{ kind: "thought", text: "Audiencja wędkarze 25-50, geo PL...", ts: "2.3s" }]}
+              tags={[{ kind: "platform", platform: "meta" }, { kind: "text", text: "PROPOSAL", tone: "warning" }]}
+              variant="compact"
+            />
+            <AgentBroadcastCard
+              agent={{ id: "1", name: "Marketing AI", initials: "M", color: "var(--grad-marketing)" }}
+              status="active"
+              currentTask="Kampania wiosenna 2026"
+              currentTool="meta_ads.create_campaign"
+              cost={{ value: 0.41, cap: 5, currency: "USD" }}
+              level={7}
+              streakDays={12}
+              thoughts={[
+                { kind: "tool", text: "tool: meta_ads.create_campaign", ts: "0.1s" },
+                { kind: "thought", text: "Audiencja wędkarze 25-50, geo PL...", ts: "2.3s" },
+              ]}
+              tags={[{ kind: "platform", platform: "meta" }, { kind: "text", text: "PROPOSAL", tone: "warning" }]}
+              variant="full"
+            />
+            <AgentBroadcastCard
+              agent={{ id: "1", name: "Marketing AI", initials: "M", color: "var(--grad-marketing)" }}
+              status="active"
+              currentTask="Kampania wiosenna 2026"
+              currentTool="meta_ads.create_campaign"
+              cost={{ value: 0.41, cap: 5, currency: "USD" }}
+              level={7}
+              streakDays={12}
+              thoughts={[
+                { kind: "tool", text: "tool: meta_ads.create_campaign", ts: "0.1s" },
+                { kind: "thought", text: "Audiencja wędkarze 25-50, geo PL...", ts: "2.3s" },
+                { kind: "result", text: "Brief saved", ts: "4.1s" },
+              ]}
+              tags={[{ kind: "platform", platform: "meta" }, { kind: "text", text: "PROPOSAL", tone: "warning" }]}
+              variant="hero"
+            />
+          </div>
+        </SubSection>
       </Section>
     </div>
   );
