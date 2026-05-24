@@ -38,6 +38,7 @@ import { PluginSettings } from "./pages/PluginSettings";
 import { PluginPage } from "./pages/PluginPage";
 import { RunTranscriptUxLab } from "./pages/RunTranscriptUxLab";
 import { LiveOpsPage } from "./pages/LiveOps";
+import { AgentSoloPage } from "./pages/AgentSolo";
 import { OrgChart } from "./pages/OrgChart";
 import { NewAgent } from "./pages/NewAgent";
 import { AuthPage } from "./pages/Auth";
@@ -164,6 +165,7 @@ function boardRoutes() {
       <Route path="goals" element={<Goals />} />
       <Route path="goals/:goalId" element={<GoalDetail />} />
       <Route path="live" element={<LiveOpsPage />} />
+      <Route path="live/:agentId" element={<AgentSoloPage />} />
       <Route path="approvals" element={<Navigate to="/approvals/pending" replace />} />
       <Route path="approvals/pending" element={<Approvals />} />
       <Route path="approvals/all" element={<Approvals />} />
