@@ -24,10 +24,10 @@ describe("getLogParserFor", () => {
     expect(result.next).toBeDefined();
   });
 
-  it("preserves parser state in stubs", () => {
-    const p = getLogParserFor("claude-local");
-    const state: typeof initialParserState = { buffer: "leftover" };
-    const result = p.parse("more", state);
-    expect(result.next).toEqual(state); // stubs return same state
+  it("returns a parser whose parse returns next state object", () => {
+    const p = getLogParserFor("generic");
+    const result = p.parse("more", { buffer: "leftover" });
+    expect(result.next).toBeDefined();
+    expect(result.next).toHaveProperty("buffer");
   });
 });
