@@ -19,6 +19,14 @@ import { Tabs } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Bot, Plus, List, GitBranch, SlidersHorizontal } from "lucide-react";
 import { AGENT_ROLE_LABELS, type Agent } from "@paperclipai/shared";
+import { AgentBroadcastCard, type LiveDotStatus } from "@/broadcast";
+
+function mapAgentStatusToLiveDot(status: string): LiveDotStatus {
+  if (status === "running" || status === "active") return "active";
+  if (status === "error" || status === "failed") return "error";
+  if (status === "paused") return "warning";
+  return "idle";
+}
 
 const adapterLabels: Record<string, string> = {
   claude_local: "Claude",
@@ -226,57 +234,28 @@ export function Agents() {
 
       {/* List view */}
       {effectiveView === "list" && filtered.length > 0 && (
-        <div className="border border-border">
-          {filtered.map((agent) => {
-            return (
-              <EntityRow
-                key={agent.id}
-                title={agent.name}
-                subtitle={`${roleLabels[agent.role] ?? agent.role}${agent.title ? ` - ${agent.title}` : ""}`}
-                to={agentUrl(agent)}
-                leading={
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span
-                      className={`absolute inline-flex h-full w-full rounded-full ${agentStatusDot[agent.status] ?? agentStatusDotDefault}`}
-                    />
-                  </span>
-                }
-                trailing={
-                  <div className="flex items-center gap-3">
-                    <span className="sm:hidden">
-                      {liveRunByAgent.has(agent.id) ? (
-                        <LiveRunIndicator
-                          agentRef={agentRouteRef(agent)}
-                          runId={liveRunByAgent.get(agent.id)!.runId}
-                          liveCount={liveRunByAgent.get(agent.id)!.liveCount}
-                        />
-                      ) : (
-                        <StatusBadge status={agent.status} />
-                      )}
-                    </span>
-                    <div className="hidden sm:flex items-center gap-3">
-                      {liveRunByAgent.has(agent.id) && (
-                        <LiveRunIndicator
-                          agentRef={agentRouteRef(agent)}
-                          runId={liveRunByAgent.get(agent.id)!.runId}
-                          liveCount={liveRunByAgent.get(agent.id)!.liveCount}
-                        />
-                      )}
-                      <span className="text-xs text-muted-foreground font-mono w-14 text-right">
-                        {adapterLabels[agent.adapterType] ?? agent.adapterType}
-                      </span>
-                      <span className="text-xs text-muted-foreground w-16 text-right">
-                        {agent.lastHeartbeatAt ? relativeTime(agent.lastHeartbeatAt) : "—"}
-                      </span>
-                      <span className="w-20 flex justify-end">
-                        <StatusBadge status={agent.status} />
-                      </span>
-                    </div>
-                  </div>
-                }
-              />
-            );
-          })}
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((agent) => (
+            <AgentBroadcastCard
+              key={agent.id}
+              agent={{
+                id: agent.id,
+                name: agent.name ?? "Unnamed Agent",
+                initials: (agent.name?.trim() ?? "?")[0]?.toUpperCase() ?? "?",
+                color: "var(--grad-agent)",
+              }}
+              status={mapAgentStatusToLiveDot(agent.status)}
+              currentTask={`${roleLabels[agent.role] ?? agent.role}${agent.title ? ` - ${agent.title}` : ""}`}
+              cost={{
+                value: (agent.spentMonthlyCents ?? 0) / 100,
+                cap: agent.budgetMonthlyCents ? agent.budgetMonthlyCents / 100 : undefined,
+                currency: "USD",
+              }}
+              thoughts={undefined}
+              variant="full"
+              onClick={() => navigate(agentUrl(agent))}
+            />
+          ))}
         </div>
       )}
 
