@@ -430,6 +430,9 @@ importers:
         specifier: ^0.34.5
         version: 0.34.5
     devDependencies:
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
       '@types/node':
         specifier: ^24.6.0
         version: 24.12.0
@@ -510,6 +513,9 @@ importers:
       '@paperclipai/db':
         specifier: workspace:*
         version: link:../packages/db
+      '@paperclipai/plugin-marketing-ai':
+        specifier: workspace:*
+        version: link:../packages/plugins/marketing-ai
       '@paperclipai/plugin-sdk':
         specifier: workspace:*
         version: link:../packages/plugins/sdk
