@@ -11,6 +11,7 @@ import {
   Boxes,
   Repeat,
   Settings,
+  Radio,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarSection } from "./SidebarSection";
@@ -80,6 +81,7 @@ export function Sidebar() {
             <span className="truncate">New Issue</span>
           </button>
           <SidebarNavItem to="/dashboard" label="Dashboard" icon={LayoutDashboard} liveCount={liveRunCount} />
+          <SidebarNavItem to="/live" label="Live Ops" icon={Radio} />
           <SidebarNavItem
             to="/inbox"
             label="Inbox"
