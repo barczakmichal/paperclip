@@ -80,7 +80,7 @@ export function ActiveAgentsPanel({
   });
 
   return (
-    <div>
+    <div className="bg-card border border-border rounded-lg p-4">
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </h3>
@@ -134,7 +134,7 @@ const AgentRunCard = memo(function AgentRunCard({
 }) {
   return (
     <div className={cn(
-      "flex h-[320px] flex-col overflow-hidden rounded-xl border shadow-sm",
+      "flex h-[320px] flex-col overflow-hidden rounded-xl border shadow-sm hover:bg-accent/40",
       isActive
         ? "border-cyan-500/25 bg-cyan-500/[0.04] shadow-[0_16px_40px_rgba(6,182,212,0.08)]"
         : "border-border bg-background/70",
