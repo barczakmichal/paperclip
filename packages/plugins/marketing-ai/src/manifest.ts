@@ -156,7 +156,19 @@ const manifest: PaperclipPluginManifestV1 = {
   ],
   ui: {
     slots: [
-      // UI slots added in C2.
+      {
+        type: "page",
+        id: "marketing-ai-page",
+        displayName: "Marketing",
+        exportName: "MarketingPluginPage",
+        routePath: "marketing",
+      },
+      {
+        type: "sidebar",
+        id: "marketing-ai-sidebar",
+        displayName: "Marketing",
+        exportName: "MarketingSidebarLink",
+      },
     ],
   },
 };
