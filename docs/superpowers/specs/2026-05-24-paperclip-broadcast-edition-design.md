@@ -106,7 +106,7 @@ Plik: `ui/src/broadcast/tokens.css`. Wprowadza nowe CSS variables nad istniejąc
 }
 ```
 
-**Strategia migracji tokenów:** `data-theme="broadcast"` jest **domyślnym** trybem w Paperclipie po implementacji. Istniejące zmienne dostają nowe wartości (overide), ale nazwy zostają — wszystkie istniejące komponenty automatycznie odbierają nowy look bez przepisywania. Nowe tokeny (`--grad-*`, `--glow-*`, gamification) są używane tylko przez nowe komponenty cinematic.
+**Strategia migracji tokenów:** `data-theme="broadcast"` jest **domyślnym** trybem w Paperclipie po Fazie A2 (w A1 jeszcze za feature flagiem — patrz sekcja 12). Istniejące zmienne dostają nowe wartości (overide), ale nazwy zostają — wszystkie istniejące komponenty automatycznie odbierają nowy look bez przepisywania. Nowe tokeny (`--grad-*`, `--glow-*`, gamification) są używane tylko przez nowe komponenty cinematic.
 
 ### 5.2. Komponenty cinematic (nowe)
 
@@ -193,25 +193,35 @@ Jedna duża karta `AgentBroadcastCard variant="hero"` centralnie + `ThoughtStrea
 
 ### 6.3. Stream danych
 
-**Backend rozszerzenie:**
+**Backend rozszerzenie — tabela `heartbeat_runs` (NIE `heartbeat_run_events`):**
 
-Tabela `heartbeat_events` dostaje 3 nowe kolumny (migracja Drizzle):
+Live Ops potrzebuje **bieżącego stanu per-agent**, nie pełnej historii eventów. Najefektywniej trzymać aktualne wartości w wierszu runu, aktualizowane przy każdym evencie. Per-event historia zostaje w `heartbeat_run_events.payload` jsonb (już istnieje, bez migracji).
+
+Migracja Drizzle rozszerzy `heartbeat_runs`:
 
 ```sql
-ALTER TABLE heartbeat_events
+ALTER TABLE heartbeat_runs
   ADD COLUMN current_thought TEXT,
   ADD COLUMN current_tool VARCHAR(128),
-  ADD COLUMN cost_delta_usd NUMERIC(10,4);
+  ADD COLUMN current_cost_cents BIGINT NOT NULL DEFAULT 0,
+  ADD COLUMN current_thought_updated_at TIMESTAMPTZ;
 ```
 
-- `current_thought` — ostatnia istotna linia z LLM message (filtr: pomijaj `tool_use`, `system`; bierz tylko `assistant: text`). Truncate do 240 znaków.
-- `current_tool` — nazwa tool'a aktualnie wykonywanego (z eventów `tool_use_start` / `tool_use_end`).
-- `cost_delta_usd` — koszt eventu w USD (do wyliczenia agregacji rzeczywistego kosztu).
+- `current_thought` — ostatnia istotna linia z LLM message (filtr: pomijaj `tool_use`, `system`, bierz tylko `assistant: text`). Truncate do 240 znaków. Updated przy każdym evencie typu `assistant_message`.
+- `current_tool` — nazwa toola aktualnie wykonywanego. Set przy `tool_use_start`, clear (NULL) przy `tool_use_end`.
+- `current_cost_cents` — kumulatywny koszt runu w 1/100 USD (NUMERIC nie używamy bo prosta inkrementacja). Inkrementowany przy każdym evencie z usage data.
+- `current_thought_updated_at` — timestamp last update; UI wycisza karty agentów z >60s stale thought.
+
+Index: `idx_heartbeat_runs_company_status_started` na `(company_id, status, started_at desc)` dla szybkiego `SELECT FROM heartbeat_runs WHERE company_id=? AND status='running'`.
+
+**Service layer:**
+
+Istniejący handler eventów (gdzieś w `server/src/services/heartbeat-*`) dostaje rozszerzenie: przy zapisie do `heartbeat_run_events` także updatuje pola na `heartbeat_runs` zgodnie z eventType. Operacja w transakcji.
 
 **Frontend:**
 
-- `useLiveOpsAgents()` hook — polluje `heartbeatsApi.liveAgentsForCompany(companyId)` co 2s (lub używa SSE jeśli istnieje endpoint; jeśli nie, pierwsza iteracja na poll, druga iteracja dodaje SSE)
-- Każda karta ma własny `useLiveRunTranscripts(runId)` (istniejący hook) — bierze ostatnie myśli i tooli.
+- `useLiveOpsAgents(companyId)` hook — pollluje nowy endpoint `GET /api/companies/:id/live-agents` co 2s; endpoint zwraca: dla każdego agenta firmy → najnowszy `heartbeat_run` (jeśli status `running` / `queued`) z polami current_*
+- Każda karta ma opcjonalny `useLiveRunTranscripts(runId)` (istniejący hook) dla rozszerzonej historii w `variant="hero"` / `/live/:agentId`
 
 ### 6.4. Komponenty B
 
@@ -284,7 +294,7 @@ Każdy tool ma JSON schema input + output, plugin SDK rejestruje je. Agent woła
 | `marketing.propose_campaign` | `{ platform: 'meta'\|'google', goal: 'sales'\|'awareness'\|'leads', product_ids: [], budget_daily_pln, duration_days, audience_brief }` | `{ campaign_proposal: {...}, ad_sets: [...], estimated_reach }` | zapisuje proposal do DB jako `campaign_proposal` |
 | `marketing.generate_creative` | `{ proposal_id, format: 'single_image'\|'carousel', headline_count?, body_count? }` | `{ creatives: [{ id, image_url, headlines[], bodies[], cta }] }` | wywołuje LLM (copy) + image-composer (obraz/y); zapisuje do `creative` table |
 | `marketing.submit_for_approval` | `{ proposal_id, creative_ids[], comments? }` | `{ approval_id, status: 'pending' }` | tworzy `Approval` typu `marketing_campaign` w core Paperclip |
-| `marketing.fetch_metrics` | `{ campaign_id, since?, until? }` | `{ spend, impressions, clicks, ctr, conversions, roas }` | call do Meta/Google Insights |
+| `marketing.fetch_metrics` | `{ campaign_id, since?, until? }` | `{ spend_account_currency, spend_pln, currency, impressions, clicks, ctr, conversions, conversion_value_pln, roas }` | call do Meta/Google Insights; konwersja przez NBP fixing rate dla raportowania zunifikowanego w PLN |
 | `marketing.pause_campaign` | `{ campaign_id, reason }` | `{ status: 'paused' }` | call do platformy + log |
 
 ### 7.3. Approval flow
@@ -300,12 +310,14 @@ Każdy tool ma JSON schema input + output, plugin SDK rejestruje je. Agent woła
 6. **Request Revision**: payload z komentarzem wraca do agenta jako transcript message; agent może wywołać `marketing.propose_campaign(...)` ponownie z poprawkami
 7. **Reject**: status proposal `rejected`, kreacje zachowane w archiwum (asset library do reuse)
 
-### 7.4. OAuth
+### 7.4. OAuth + secrets
 
-- Meta: standard OAuth2 (Business Login), redirect URI `http://localhost:3100/api/plugins/marketing-ai/oauth/meta/callback`, scopes `ads_management`, `ads_read`, `business_management`. Token zapisany w secrets store Paperclipa (istnieje system secrets).
-- Google Ads: OAuth2 + developer token. Refresh token zapisywany w secrets. Manager account ID jako config.
+Secrets storage: Paperclip ma już zaimplementowany system w `server/src/secrets/` (`local-encrypted-provider.ts`, `provider-registry.ts`) z tabelami `company_secrets` + `company_secret_versions` i pluginowym handlerem `server/src/services/plugin-secrets-handler.ts`. Plugin Marketing AI używa go bez dodatkowej infrastruktury.
 
-Konfiguracja pluginu w UI (settings) ma stronę "Marketing AI" gdzie użytkownik klika "Connect Meta" / "Connect Google", przechodzi flow, widzi status `connected ✓`.
+- **Meta**: standard OAuth2 (Business Login), redirect URI `http://localhost:3100/api/plugins/marketing-ai/oauth/meta/callback`, scopes `ads_management`, `ads_read`, `business_management`. Access token + long-lived token + ad account ID zapisane jako 3 sekrety pod kluczami `marketing-ai/meta/access_token`, `marketing-ai/meta/long_lived_token`, `marketing-ai/meta/ad_account_id` w `company_secrets` (encrypted at rest).
+- **Google Ads**: OAuth2 + developer token. Refresh token, customer ID (manager), klient developer token jako sekrety `marketing-ai/google/refresh_token`, `marketing-ai/google/customer_id`, `marketing-ai/google/developer_token`.
+
+Konfiguracja pluginu w UI (settings) ma stronę "Marketing AI" gdzie użytkownik klika **Connect Meta** / **Connect Google**, przechodzi OAuth flow w popup, widzi status `connected ✓` + last refresh time + przyciski **Reconnect** / **Disconnect** (Disconnect kasuje sekrety).
 
 ### 7.5. Generator kreacji (creative pipeline)
 
@@ -347,8 +359,10 @@ zapisz CreativeRow + return do agenta
         │
         ▼  (rozszerzenie tabeli — sekcja 6.3)
 ┌─────────────────────────────────────────────────────────────┐
-│  heartbeat_events                                          │
-│  + current_thought, current_tool, cost_delta_usd          │
+│  heartbeat_runs (updated per event)                        │
+│  + current_thought, current_tool,                          │
+│    current_cost_cents, current_thought_updated_at         │
+│  heartbeat_run_events (history, bez zmian schemy)         │
 └─────────────────────────────────────────────────────────────┘
         │
         ├─────► (poll 2s) Live Ops View — karty agentów
@@ -384,7 +398,10 @@ zapisz CreativeRow + return do agenta
 
 ## 10. Governance i koszty
 
-- **Cost cap per agent**: każdy agent ma `monthly_budget_usd` (już istnieje w Paperclip). Marketing AI rozszerza o `monthly_ad_spend_pln` — limit ile wolno wydać na reklamach w tygodniu/miesiącu. Jeśli kampania approved przekroczyłaby cap → blokada w handlerze approval.
+- **Cost cap, dwa poziomy:**
+  - **Per-agent**: każdy agent ma już `monthly_budget_usd` w Paperclipie — to limit na tokeny LLM, zostaje bez zmian.
+  - **Per-company, marketing-specific**: Marketing AI dodaje `marketing_monthly_cap_pln` jako property na `Company` (jeden cap na firmę, bo single tenant; obejmuje sumę wydatków na Meta + Google razem). Egzekwowany w `approval/handler.ts` przed publish. Formuła: `spent_mtd + projected_remaining <= cap`, gdzie `spent_mtd` = suma `spend_pln` z `marketing.fetch_metrics` (cache 1h) dla wszystkich live kampanii firmy w bieżącym miesiącu, a `projected_remaining` = sum across all live + proposed campaigns of `daily_budget_pln * days_until_month_end`. Jeśli wynik >cap → approval kończy się błędem `MarketingCapExceededError` z komunikatem ile brakuje.
+  - **Daily soft alert**: dzienne sprawdzenie spend vs cap; jeśli >80% miesięcznego capu — alert na dashboard (toast + LiveOpsApprovalsFooter banner), nie blokuje, ale ostrzega.
 - **Audit log**: każda akcja Marketing AI (proposal, generate, submit, approve, publish, pause) zapisana w `marketing_audit_log` z user_id (kto approved), agent_id, timestamp, payload diff. Eksport CSV w UI.
 - **Secrets**: Meta + Google + OpenAI klucze w istniejącym secrets store Paperclipa (encrypted at rest), nigdy w plain text, nigdy w logach.
 
@@ -406,22 +423,33 @@ zapisz CreativeRow + return do agenta
 
 Wszystko w jednym specu, ale implementacja w 3 fazach z osobnymi PR-ami:
 
-### Faza A — Broadcast Theme (tydzień 1-2)
-- [ ] Tokeny `ui/src/broadcast/tokens.css` + włącz jako default
-- [ ] Komponenty cinematic (11 z sekcji 5.2) + dodać do `/design-guide`
-- [ ] Reskin frontowych komponentów (lista w 5.4)
-- [ ] Reduced-motion pass
-- **Deliverable**: Paperclip wygląda inaczej, pełny reskin, /design-guide aktualny
+### Faza A — Broadcast Theme (tydzień 1-3, podzielona na A1 + A2)
 
-### Faza B — Live Ops View (tydzień 3)
-- [ ] Migracja Drizzle (rozszerzenie `heartbeat_events`)
+Pełen reskin ~45 komponentów (sekcja 5.4) nie zmieści się w 1-2 tygodniach jednego deweloperskiego sprint. Dzielimy:
+
+**Faza A1 (tydzień 1-2): Tokeny + cinematic + hero screens**
+- [ ] Tokeny `ui/src/broadcast/tokens.css`
+- [ ] Komponenty cinematic (11 z sekcji 5.2) + sekcja w `/design-guide`
+- [ ] Reskin **10 hero ekranów** używanych w demo: `Sidebar`, `Layout`, `BreadcrumbBar`, `CompanySwitcher`, `MetricCard`, `AgentBroadcastCard` zastosowane w `Agents` list, `IssueRow`, `KanbanBoard`, `ApprovalCard`, `LiveRunWidget`
+- [ ] `data-theme="broadcast"` aplikowany ale za feature flagiem (URL param `?broadcast=1` lub localStorage) — pozwala testować bez ryzyka wpływu na codzienną pracę
+- [ ] Reduced-motion pass
+- **Deliverable A1**: można puścić demo broadcastu w trybie testowym
+
+**Faza A2 (tydzień 3): Reszta komponentów + włączenie jako default**
+- [ ] Pozostałe ~35 komponentów z sekcji 5.4 (Finance*, Goal*, Project*, MobileBottomNav, FilterBar, Comment*, …)
+- [ ] Settings page reskin (poziom A2, nie pełny cinematic — tokeny + zaktualizowane prymitywy shadcn)
+- [ ] Włącz `data-theme="broadcast"` jako default po pełnym smoke teście (toggle "classic" zostaje schowany za feature flag, na wypadek emergency rollback)
+- **Deliverable A2**: cały Paperclip wygląda spójnie cinematic
+
+### Faza B — Live Ops View (tydzień 4)
+- [ ] Migracja Drizzle (rozszerzenie `heartbeat_runs` o pola current_*)
 - [ ] Backend: enrich heartbeat events z current_thought / current_tool / cost_delta
 - [ ] Frontend: `/live`, `/live/:agentId`, sidebar entry
 - [ ] Broadcast mode toggle (hero variant)
 - [ ] Settings: opcja "Live Ops jako domyślny widok firmy"
 - **Deliverable**: można puścić 4 agentów i widać ich live, broadcast mode działa
 
-### Faza C — Marketing AI Plugin (tydzień 4-6)
+### Faza C — Marketing AI Plugin (tydzień 5-7)
 - [ ] Skeleton pluginu w `packages/plugins/marketing-ai/`
 - [ ] Adaptery: meta-ads/auth + meta-ads/campaigns (najpierw create + insights), google-ads analogicznie
 - [ ] Creative pipeline: brief + copy + image-composer (Shopify pull + GPT-Image-1)
@@ -438,7 +466,7 @@ Wszystko w jednym specu, ale implementacja w 3 fazach z osobnymi PR-ami:
 - **OQ-2**: Storage kreacji — file system Paperclipa (default `~/.paperclip/instances/default/data/creatives/`)? Czy S3-compatible? Default: file system, migracja do S3 jeśli kiedyś multi-tenant.
 - **OQ-3**: Brand kit w `Company` table — jako JSON column czy osobna tabela `brand_kits` z relacją? Default: JSON column (`brand_kit_json`), prostsze, zawsze tylko jeden brand per firma.
 - **OQ-4**: Sklep wędkarski — Shopify czy inna platforma? Decyzja użytkownika (poza scope specu), ale plugin musi mieć abstrakcję `ShopCatalog` z konkretną implementacją Shopify w pierwszej iteracji.
-- **OQ-5**: Cinematic theme jako jedyny czy z toggle "classic"? Default: cinematic = jedyny. Jeśli okaże się męczący w codziennej pracy, dodać toggle w fazie 1.5.
+- **OQ-5**: ~~Cinematic theme jako jedyny czy z toggle "classic"?~~ **Rozstrzygnięte**: cinematic jako jedyny po Fazie A2. Faza A1 trzyma feature flag (URL/localStorage) na okres testów, A2 promuje do default. "Classic" zostaje technicznie dostępny jeszcze 1 release pod feature flagiem na wypadek emergency rollback, potem kasujemy stare tokeny.
 
 ## 14. Dependencies (nowe)
 
@@ -457,9 +485,10 @@ OpenAI Images API używa istniejącego `openai` package (jeśli nie ma, dodaj `o
 
 ## 15. Migration plan
 
-- **Drizzle migration**: 1 nowa migracja dla `heartbeat_events` rozszerzenia (faza B), 1 migracja dla `campaign_proposal`, `creative`, `marketing_audit_log` (faza C), 1 migracja dla `brand_kit_json` na `companies` (faza C).
-- **No-downtime**: wszystkie zmiany są aditywne, brak DROP/RENAME istniejących kolumn.
-- **Rollback**: każda migracja ma `down()` cofający; dane fazy C mogą być archiwizowane przed rollbackiem.
+- **Faza B**: 1 migracja Drizzle rozszerzająca `heartbeat_runs` o `current_thought`, `current_tool`, `current_cost_cents`, `current_thought_updated_at` + 1 nowy index. Brak zmian w `heartbeat_run_events`.
+- **Faza C**: 1 migracja tworząca tabele `campaign_proposals`, `creatives`, `marketing_audit_log` + 1 migracja dodająca `brand_kit_json` i `marketing_monthly_cap_pln` na `companies`.
+- **No-downtime**: wszystkie zmiany są aditywne, brak DROP/RENAME istniejących kolumn. Nowe kolumny na `heartbeat_runs` mają sensowne defaulty (NULL / 0).
+- **Rollback**: każda migracja ma `down()` cofający; przed rollbackiem Fazy C dane kampanii eksportowane do CSV (skrypt `scripts/marketing-export-archive.ts`).
 
 ## 16. Out of scope (explicit)
 
