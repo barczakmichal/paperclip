@@ -33,6 +33,10 @@ export const heartbeatRuns = pgTable(
     externalRunId: text("external_run_id"),
     processPid: integer("process_pid"),
     processStartedAt: timestamp("process_started_at", { withTimezone: true }),
+    currentThought: text("current_thought"),
+    currentTool: text("current_tool"),
+    currentCostCents: bigint("current_cost_cents", { mode: "number" }).notNull().default(0),
+    currentThoughtUpdatedAt: timestamp("current_thought_updated_at", { withTimezone: true }),
     retryOfRunId: uuid("retry_of_run_id").references((): AnyPgColumn => heartbeatRuns.id, {
       onDelete: "set null",
     }),
@@ -45,6 +49,11 @@ export const heartbeatRuns = pgTable(
     companyAgentStartedIdx: index("heartbeat_runs_company_agent_started_idx").on(
       table.companyId,
       table.agentId,
+      table.startedAt,
+    ),
+    companyStatusStartedIdx: index("heartbeat_runs_company_status_started_idx").on(
+      table.companyId,
+      table.status,
       table.startedAt,
     ),
   }),
