@@ -136,6 +136,12 @@ import { environmentService } from "./environments.js";
 import { environmentRuntimeService } from "./environment-runtime.js";
 import { environmentRunOrchestrator } from "./environment-run-orchestrator.js";
 import type { PluginWorkerManager } from "./plugin-worker-manager.js";
+import {
+  getLogParserFor,
+  initialParserState,
+  type ParserState,
+  type ParsedSignal,
+} from "./heartbeat-log-parser/index.js";
 
 const MAX_LIVE_LOG_CHUNK_BYTES = 8 * 1024;
 const MAX_PERSISTED_LOG_CHUNK_CHARS = 64 * 1024;
@@ -399,6 +405,10 @@ function leaseReleaseStatusForRunStatus(
 ): Extract<EnvironmentLeaseStatus, "released" | "expired" | "failed"> {
   return status === "failed" || status === "timed_out" ? "failed" : "released";
 }
+
+// Per-run ephemeral parser state for Live Ops log enrichment.
+// Cleared when a run finishes (lifecycle: succeeded/failed/cancelled).
+const parserStatesByRunId = new Map<string, ParserState>();
 
 export function applyPersistedExecutionWorkspaceConfig(input: {
   config: Record<string, unknown>;
@@ -3162,6 +3172,66 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     return Number(row?.maxSeq ?? 0) + 1;
   }
 
+  async function applyLiveOpsSignals(
+    runId: string,
+    companyId: string,
+    agentId: string,
+    signals: ParsedSignal[],
+    getSeq: () => number,
+  ): Promise<void> {
+    if (signals.length === 0) return;
+
+    for (const sig of signals) {
+      await db.insert(heartbeatRunEvents).values({
+        companyId,
+        runId,
+        agentId,
+        seq: getSeq(),
+        eventType: "llm.signal",
+        payload: {
+          kind: sig.kind,
+          ...(sig.text !== undefined ? { text: sig.text } : {}),
+          ...(sig.toolName !== undefined ? { toolName: sig.toolName } : {}),
+          ...(sig.costUsd !== undefined ? { costUsd: sig.costUsd } : {}),
+        },
+      });
+    }
+
+    const updates: Partial<typeof heartbeatRuns.$inferInsert> = {};
+    let costDeltaCents = 0;
+    let touched = false;
+
+    for (const sig of signals) {
+      if (sig.kind === "thought" && sig.text) {
+        updates.currentThought = sig.text.slice(0, 240);
+        updates.currentThoughtUpdatedAt = new Date();
+        touched = true;
+      } else if (sig.kind === "tool_start" && sig.toolName) {
+        updates.currentTool = sig.toolName;
+        touched = true;
+      } else if (sig.kind === "tool_end") {
+        updates.currentTool = null;
+        touched = true;
+      } else if (sig.kind === "cost" && typeof sig.costUsd === "number") {
+        costDeltaCents += Math.round(sig.costUsd * 100);
+      }
+    }
+
+    if (touched) {
+      await db
+        .update(heartbeatRuns)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(heartbeatRuns.id, runId));
+    }
+    if (costDeltaCents !== 0) {
+      await db.execute(sql`
+        UPDATE heartbeat_runs
+        SET current_cost_cents = current_cost_cents + ${costDeltaCents}
+        WHERE id = ${runId}
+      `);
+    }
+  }
+
   async function persistRunProcessMetadata(
     runId: string,
     meta: { pid: number; processGroupId: number | null; startedAt: string },
@@ -5664,6 +5734,21 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             truncated: payloadChunk.length !== sanitizedChunk.length,
           },
         });
+
+        // Live Ops: parse stdout chunk for LLM signals (thought / tool_start / tool_end / cost)
+        if (stream === "stdout") {
+          try {
+            const parser = getLogParserFor(agent.adapterType);
+            const prev = parserStatesByRunId.get(run.id) ?? initialParserState;
+            const { signals, next } = parser.parse(chunk, prev);
+            parserStatesByRunId.set(run.id, next);
+            if (signals.length > 0) {
+              await applyLiveOpsSignals(run.id, run.companyId, run.agentId, signals, () => seq++);
+            }
+          } catch (err) {
+            logger.warn({ err, runId: run.id }, "live-ops parser failed");
+          }
+        }
       };
       if (runScopedMentionedSkillKeys.length > 0) {
         await onLog(
@@ -6155,6 +6240,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           });
           await releaseRuntimeServicesForRun(run.id).catch(() => undefined);
           activeRunExecutions.delete(run.id);
+          parserStatesByRunId.delete(run.id);
           await startNextQueuedRunForAgent(run.agentId);
         }
   }
