@@ -1172,10 +1172,11 @@ export function IssuesList({
   let remainingRowsToRender = viewState.viewMode === "list" ? renderedIssueRowLimit : Number.POSITIVE_INFINITY;
 
   return (
-    <div ref={rootRef} className="space-y-4">
+    <div ref={rootRef} className="space-y-4 bg-background">
       {progressSummary ? (
         <SubIssueProgressSummaryStrip summary={progressSummary} issueLinkState={issueLinkState} />
       ) : null}
+
 
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 sm:gap-3">
