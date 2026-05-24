@@ -9,3 +9,4 @@ export { PlatformBadge, type PlatformBadgeProps, type AdPlatform } from "./Platf
 export { CostTicker, type CostTickerProps, type CostCurrency } from "./CostTicker";
 export { ThoughtStream, type ThoughtStreamProps, type ThoughtLine, type ThoughtKind } from "./ThoughtStream";
 export { MissionCard, type MissionCardProps } from "./MissionCard";
+export { AgentBroadcastCard, type AgentBroadcastCardProps, type AgentBroadcastVariant } from "./AgentBroadcastCard";
