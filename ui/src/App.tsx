@@ -1,5 +1,6 @@
 import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
+import { useBroadcastTheme } from "@/broadcast/hooks/useBroadcastTheme";
 import { Button } from "@/components/ui/button";
 import { Layout } from "./components/Layout";
 import { OnboardingWizard } from "./components/OnboardingWizard";
@@ -302,6 +303,7 @@ function NoCompaniesStartPage() {
 }
 
 export function App() {
+  useBroadcastTheme();
   return (
     <>
       <Routes>
