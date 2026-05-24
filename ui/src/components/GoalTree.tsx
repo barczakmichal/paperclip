@@ -50,7 +50,7 @@ function GoalNode({ goal, children, allGoals, depth, goalLink, onSelect }: GoalN
   );
 
   const classes = cn(
-    "flex items-center gap-2 px-3 py-1.5 text-sm transition-colors cursor-pointer hover:bg-accent/50",
+    "flex items-center gap-2 px-3 py-1.5 text-sm transition-colors cursor-pointer hover:bg-accent/40",
   );
 
   return (
@@ -73,7 +73,7 @@ function GoalNode({ goal, children, allGoals, depth, goalLink, onSelect }: GoalN
         </div>
       )}
       {hasChildren && expanded && (
-        <div>
+        <div className="border-l border-border/40 ml-5">
           {children.map((child) => (
             <GoalNode
               key={child.id}
