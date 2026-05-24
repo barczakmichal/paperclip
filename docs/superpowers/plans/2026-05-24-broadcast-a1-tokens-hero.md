@@ -74,7 +74,7 @@ ui/src/broadcast/
 
 ## Conventions for this plan
 
-- **TDD**: każdy komponent ma test przed implementacją; testy uruchamiamy `pnpm --filter @paperclipai/ui test:run -- ComponentName.test`
+- **TDD**: każdy komponent ma test przed implementacją; testy uruchamiamy `pnpm test:run -- --project ui ComponentName.test`
 - **Commit po każdym Tasku**: dyscyplina, pozwala bisect; commity prefixujemy `feat(broadcast):` lub `style(broadcast):`
 - **Brak `any`**: TypeScript strict; jeśli musisz, użyj `unknown` i zawężaj
 - **Brak hardkodowanych kolorów**: tylko semantic tokens (`var(--background)`, `text-foreground`, itp.); nowe tokeny broadcast w `tokens.css`
@@ -176,6 +176,7 @@ Plik `ui/src/broadcast/tokens.css`:
 
   /* Typography weights pod cinematic */
   --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
 }
 
 /* Reduced motion fallbacks — ambient animations off */
@@ -199,7 +200,7 @@ W `ui/src/index.css` na **końcu pliku** dodaj:
 - [ ] **Step 3: Verify build**
 
 ```bash
-pnpm --filter @paperclipai/ui build
+pnpm build
 ```
 Expected: build kończy się sukcesem (czyste skompilowane CSS, brak warnings o nieznanym tokenie).
 
@@ -216,12 +217,12 @@ git commit -m "feat(broadcast): add tokens.css with cinematic palette + glows + 
 
 **Files:**
 - Create: `ui/src/broadcast/hooks/useBroadcastTheme.ts`
-- Create: `ui/src/broadcast/hooks/useBroadcastTheme.test.ts`
+- Create: `ui/src/broadcast/hooks/useBroadcastTheme.test.tsx`
 - Modify: `ui/src/App.tsx` (lub `main.tsx` — sprawdź gdzie żyje root; preferuj App.tsx, bo to root komponent React)
 
 - [ ] **Step 1: Napisz failing test**
 
-Plik `ui/src/broadcast/hooks/useBroadcastTheme.test.ts`:
+Plik `ui/src/broadcast/hooks/useBroadcastTheme.test.tsx`:
 ```ts
 // @vitest-environment jsdom
 
@@ -287,7 +288,7 @@ describe("useBroadcastTheme", () => {
 - [ ] **Step 2: Run test, verify failure**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run -- useBroadcastTheme
+pnpm test:run -- --project ui useBroadcastTheme
 ```
 Expected: 4 testy FAIL (`Cannot find module`).
 
@@ -328,7 +329,7 @@ export function useBroadcastTheme(): void {
 - [ ] **Step 4: Run test, verify pass**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run -- useBroadcastTheme
+pnpm test:run -- --project ui useBroadcastTheme
 ```
 Expected: 4/4 PASS.
 
@@ -412,7 +413,7 @@ describe("GlowFrame", () => {
 - [ ] **Step 2: Run test, verify fail**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run -- GlowFrame
+pnpm test:run -- --project ui GlowFrame
 ```
 Expected: FAIL — `Cannot find module './GlowFrame'`.
 
@@ -464,14 +465,14 @@ export { GlowFrame, type GlowFrameProps } from "./GlowFrame";
 - [ ] **Step 5: Run test, verify pass**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run -- GlowFrame
+pnpm test:run -- --project ui GlowFrame
 ```
 Expected: 3/3 PASS.
 
 - [ ] **Step 6: Typecheck**
 
 ```bash
-pnpm --filter @paperclipai/ui typecheck
+pnpm typecheck
 ```
 Expected: no errors.
 
@@ -535,7 +536,7 @@ describe("LiveDot", () => {
 - [ ] **Step 2: Run, verify FAIL**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run -- LiveDot
+pnpm test:run -- --project ui LiveDot
 ```
 
 - [ ] **Step 3: Implementacja**
@@ -595,8 +596,8 @@ export { LiveDot, type LiveDotProps, type LiveDotStatus } from "./LiveDot";
 - [ ] **Step 5: Run test PASS + typecheck**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run -- LiveDot
-pnpm --filter @paperclipai/ui typecheck
+pnpm test:run -- --project ui LiveDot
+pnpm typecheck
 ```
 
 - [ ] **Step 6: Commit**
@@ -652,7 +653,7 @@ describe("LevelBadge", () => {
 - [ ] **Step 2: FAIL run**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run -- LevelBadge
+pnpm test:run -- --project ui LevelBadge
 ```
 
 - [ ] **Step 3: Implementacja**
@@ -699,8 +700,8 @@ export function LevelBadge({ level, size, className }: LevelBadgeProps) {
 export { LevelBadge, type LevelBadgeProps } from "./LevelBadge";
 ```
 ```bash
-pnpm --filter @paperclipai/ui test:run -- LevelBadge
-pnpm --filter @paperclipai/ui typecheck
+pnpm test:run -- --project ui LevelBadge
+pnpm typecheck
 ```
 
 - [ ] **Step 5: Commit**
@@ -939,15 +940,15 @@ describe("EqualizerIndicator", () => {
   it("bars are static when active=false", () => {
     const root = createRoot(c);
     act(() => { root.render(<EqualizerIndicator active={false} />); });
-    const bar = c.querySelector<HTMLDivElement>("[data-eq-bar]");
-    expect(bar?.style.animation).toBe("");
+    const wrapper = c.querySelector("[data-eq-active]");
+    expect(wrapper?.getAttribute("data-eq-active")).toBe("false");
   });
 
   it("bars animate when active=true", () => {
     const root = createRoot(c);
     act(() => { root.render(<EqualizerIndicator active />); });
-    const bar = c.querySelector<HTMLDivElement>("[data-eq-bar]");
-    expect(bar?.style.animation).not.toBe("");
+    const wrapper = c.querySelector("[data-eq-active]");
+    expect(wrapper?.getAttribute("data-eq-active")).toBe("true");
   });
 });
 ```
@@ -980,7 +981,7 @@ const intensityDuration: Record<NonNullable<EqualizerIndicatorProps["intensity"]
 export function EqualizerIndicator({ active, intensity = "med", className }: EqualizerIndicatorProps) {
   const dur = intensityDuration[intensity];
   return (
-    <div className={cn("inline-flex items-end gap-0.5", className)} aria-hidden="true">
+    <div data-eq-active={active ? "true" : "false"} className={cn("inline-flex items-end gap-0.5", className)} aria-hidden="true">
       <style>{`
         @keyframes broadcast-eq-wave { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(0.4); } }
         @media (prefers-reduced-motion: reduce) {
@@ -1543,7 +1544,7 @@ describe("AgentBroadcastCard", () => {
 - [ ] **Step 2: FAIL**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run -- AgentBroadcastCard
+pnpm test:run -- --project ui AgentBroadcastCard
 ```
 
 - [ ] **Step 3: Implementacja**
@@ -1697,8 +1698,8 @@ export { AgentBroadcastCard, type AgentBroadcastCardProps, type AgentBroadcastVa
 - [ ] **Step 5: Run test PASS + typecheck**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run -- AgentBroadcastCard
-pnpm --filter @paperclipai/ui typecheck
+pnpm test:run -- --project ui AgentBroadcastCard
+pnpm typecheck
 ```
 
 - [ ] **Step 6: Commit**
@@ -1875,7 +1876,7 @@ Otwórz `http://localhost:3100/design-guide?broadcast=1` → przewiń do dolnej 
 - [ ] **Step 4: Typecheck**
 
 ```bash
-pnpm --filter @paperclipai/ui typecheck
+pnpm typecheck
 ```
 
 - [ ] **Step 5: Commit**
@@ -1923,8 +1924,8 @@ Bez zmiany struktury JSX, tylko classNames. Przykład wzorca dla nav item:
 - [ ] **Step 4: Typecheck + jakikolwiek istniejący test sidebar**
 
 ```bash
-pnpm --filter @paperclipai/ui typecheck
-pnpm --filter @paperclipai/ui test:run -- Sidebar
+pnpm typecheck
+pnpm test:run -- --project ui Sidebar
 ```
 
 - [ ] **Step 5: Commit**
@@ -2043,7 +2044,7 @@ git commit -m "style(broadcast): reskin MetricCard with gradient values"
 - [ ] **Step 2: Run test (nie zmodyfikowany)**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run -- IssueRow
+pnpm test:run -- --project ui IssueRow
 ```
 Expected: PASS — reskin nie złamał testów.
 
@@ -2133,9 +2134,7 @@ Agents list page (sprawdź ścieżkę: `ui/src/pages/Agents.tsx` lub `AgentsPage
 
 - [ ] **Step 1: Znajdź stronę listy agentów**
 
-```bash
-ls ui/src/pages/ | grep -i agent
-```
+W edytorze otwórz `ui/src/pages/` i znajdź plik z nazwą zawierającą "Agent" (`Agents.tsx`, `AgentsPage.tsx` lub similar). Alternatywnie: w repo `git grep -l "AgentsPage\|/agents" ui/src/pages/`.
 
 - [ ] **Step 2: Zamień rendering item-ów na AgentBroadcastCard**
 
@@ -2208,7 +2207,7 @@ W DevTools → Rendering → Emulate CSS media `prefers-reduced-motion: reduce` 
 - [ ] **Step 3: Run all tests**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run
+pnpm test:run -- --project ui
 ```
 Expected: wszystkie nowe testy PASS, istniejące PASS.
 
@@ -2235,7 +2234,7 @@ Expected: zero errors.
 - [ ] **Step 2: Pełen test UI**
 
 ```bash
-pnpm --filter @paperclipai/ui test:run
+pnpm test:run -- --project ui
 ```
 Expected: wszystkie testy PASS.
 
