@@ -6,3 +6,4 @@ export { StreakBadge, type StreakBadgeProps } from "./StreakBadge";
 export { XPBar, type XPBarProps } from "./XPBar";
 export { EqualizerIndicator, type EqualizerIndicatorProps } from "./EqualizerIndicator";
 export { PlatformBadge, type PlatformBadgeProps, type AdPlatform } from "./PlatformBadge";
+export { CostTicker, type CostTickerProps, type CostCurrency } from "./CostTicker";
