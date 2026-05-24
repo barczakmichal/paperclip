@@ -1,0 +1,32 @@
+{
+  "name": "@paperclipai/plugin-marketing-ai",
+  "version": "0.1.0",
+  "description": "Marketing AI plugin for Paperclip — Meta Ads + Google Ads integration with AI creative generation",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./server-routes": "./server-routes/index.ts"
+  },
+  "paperclipPlugin": {
+    "manifest": "./dist/manifest.js",
+    "worker": "./dist/worker.js",
+    "ui": "./dist/ui/"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@paperclipai/plugin-sdk": "workspace:*",
+    "@paperclipai/shared": "workspace:*",
+    "facebook-nodejs-business-sdk": "^20.0.0",
+    "google-ads-api": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.0.8",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
