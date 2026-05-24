@@ -48,6 +48,17 @@ export function CompanySettings() {
     setLogoUrl(selectedCompany.logoUrl ?? "");
   }, [selectedCompany]);
 
+  const [liveOpsDefault, setLiveOpsDefault] = useState(
+    () => typeof window !== "undefined" && localStorage.getItem("paperclip_live_ops_default") === "1",
+  );
+
+  function handleLiveOpsDefaultToggle(v: boolean) {
+    setLiveOpsDefault(v);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("paperclip_live_ops_default", v ? "1" : "0");
+    }
+  }
+
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSnippet, setInviteSnippet] = useState<string | null>(null);
   const [snippetCopied, setSnippetCopied] = useState(false);
@@ -494,6 +505,22 @@ export function CompanySettings() {
               </a>
             </Button>
           </div>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <div className="space-y-4">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Navigation
+        </div>
+        <div className="rounded-md border border-border px-4 py-3">
+          <ToggleField
+            label="Use Live Ops as default home view"
+            hint="When enabled, navigating to the company root redirects to /live instead of /dashboard."
+            checked={liveOpsDefault}
+            onChange={handleLiveOpsDefaultToggle}
+            toggleTestId="company-settings-live-ops-default-toggle"
+          />
         </div>
       </div>
 
