@@ -1,4 +1,5 @@
 import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "@/lib/router";
+import { useBroadcastTheme } from "@/broadcast/hooks/useBroadcastTheme";
 import { Button } from "@/components/ui/button";
 import { Layout } from "./components/Layout";
 import { OnboardingWizard } from "./components/OnboardingWizard";
@@ -43,7 +44,10 @@ import { PluginManager } from "./pages/PluginManager";
 import { PluginSettings } from "./pages/PluginSettings";
 import { AdapterManager } from "./pages/AdapterManager";
 import { PluginPage } from "./pages/PluginPage";
+import { LiveOpsPage } from "./pages/LiveOps";
+import { AgentSoloPage } from "./pages/AgentSolo";
 import { OrgChart } from "./pages/OrgChart";
+import { MarketingSettings } from "./pages/MarketingSettings";
 import { NewAgent } from "./pages/NewAgent";
 import { AuthPage } from "./pages/Auth";
 import { BoardClaimPage } from "./pages/BoardClaim";
@@ -59,7 +63,7 @@ import { shouldRedirectCompanylessRouteToOnboarding } from "./lib/onboarding-rou
 function boardRoutes() {
   return (
     <>
-      <Route index element={<Navigate to="dashboard" replace />} />
+      <Route index element={<BoardIndexRedirect />} />
       <Route path="dashboard" element={<Dashboard />} />
       <Route path="dashboard/live" element={<DashboardLive />} />
       <Route path="onboarding" element={<OnboardingRoutePage />} />
@@ -112,6 +116,8 @@ function boardRoutes() {
       <Route path="execution-workspaces/:workspaceId/issues" element={<ExecutionWorkspaceDetail />} />
       <Route path="goals" element={<Goals />} />
       <Route path="goals/:goalId" element={<GoalDetail />} />
+      <Route path="live" element={<LiveOpsPage />} />
+      <Route path="live/:agentId" element={<AgentSoloPage />} />
       <Route path="approvals" element={<Navigate to="/approvals/pending" replace />} />
       <Route path="approvals/pending" element={<Approvals />} />
       <Route path="approvals/all" element={<Approvals />} />
@@ -136,6 +142,12 @@ function boardRoutes() {
 
 function InboxRootRedirect() {
   return <Navigate to={`/inbox/${loadLastInboxTab()}`} replace />;
+}
+
+function BoardIndexRedirect() {
+  const liveOpsDefault =
+    typeof window !== "undefined" && localStorage.getItem("paperclip_live_ops_default") === "1";
+  return <Navigate to={liveOpsDefault ? "live" : "dashboard"} replace />;
 }
 
 function LegacySettingsRedirect() {
@@ -255,6 +267,7 @@ function NoCompaniesStartPage() {
 }
 
 export function App() {
+  useBroadcastTheme();
   return (
     <>
       <Routes>
@@ -278,6 +291,7 @@ export function App() {
             <Route path="plugins" element={<PluginManager />} />
             <Route path="plugins/:pluginId" element={<PluginSettings />} />
             <Route path="adapters" element={<AdapterManager />} />
+            <Route path="marketing-ai" element={<MarketingSettings />} />
           </Route>
           <Route path="companies" element={<UnprefixedBoardRedirect />} />
           <Route path="issues" element={<UnprefixedBoardRedirect />} />

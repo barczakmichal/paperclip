@@ -130,7 +130,7 @@ export function ProviderQuotaCard({
     supportsSubscriptionQuota && (quotaLoading || quotaWindows.length > 0 || quotaError != null);
 
   return (
-    <Card>
+    <Card className="border border-border rounded-lg">
       <CardHeader className="px-4 pt-4 pb-0 gap-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -152,7 +152,10 @@ export function ProviderQuotaCard({
               )}
             </CardDescription>
           </div>
-          <span className="text-xl font-bold tabular-nums shrink-0">
+          <span
+            className="text-xl font-bold tabular-nums shrink-0 bg-clip-text text-transparent"
+            style={{ backgroundImage: "var(--grad-cost)" }}
+          >
             {formatCents(totalCostCents)}
           </span>
         </div>
@@ -203,7 +206,7 @@ export function ProviderQuotaCard({
                         </span>
                         <span className="font-medium tabular-nums">{formatCents(cents)}</span>
                       </div>
-                      <div className="h-2 w-full border border-border overflow-hidden">
+                      <div className="h-2 w-full bg-muted overflow-hidden">
                         <div
                           className="h-full bg-primary/60 transition-[width] duration-150"
                           style={{ width: `${barPct}%` }}
@@ -240,7 +243,7 @@ export function ProviderQuotaCard({
               </p>
               {subSharePct > 0 && (
                 <>
-                  <div className="h-1.5 w-full border border-border overflow-hidden">
+                  <div className="h-1.5 w-full bg-muted overflow-hidden">
                     <div
                       className="h-full bg-primary/60 transition-[width] duration-150"
                       style={{ width: `${subSharePct}%` }}
@@ -284,7 +287,7 @@ export function ProviderQuotaCard({
                       </div>
                     </div>
                     {/* token share bar */}
-                    <div className="relative h-2 w-full border border-border overflow-hidden">
+                    <div className="relative h-2 w-full bg-muted overflow-hidden">
                       <div
                         className="absolute inset-y-0 left-0 bg-primary/60 transition-[width] duration-150"
                         style={{ width: `${tokenPct}%` }}
@@ -354,7 +357,7 @@ export function ProviderQuotaCard({
                             ) : null}
                           </div>
                           {qw.usedPercent != null && fillColor != null && (
-                            <div className="h-2 w-full border border-border overflow-hidden">
+                            <div className="h-2 w-full bg-muted overflow-hidden">
                               <div
                                 className={`h-full transition-[width] duration-150 ${fillColor}`}
                                 style={{ width: `${qw.usedPercent}%` }}

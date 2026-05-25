@@ -27,8 +27,8 @@ export function EntityRow({
 }: EntityRowProps) {
   const isClickable = !!(to || onClick);
   const classes = cn(
-    "flex items-center gap-3 px-4 py-2 text-sm border-b border-border last:border-b-0 transition-colors",
-    isClickable && "cursor-pointer hover:bg-accent/50",
+    "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
+    isClickable && "cursor-pointer hover:bg-accent/40",
     selected && "bg-accent/30",
     className
   );
@@ -43,7 +43,7 @@ export function EntityRow({
               {identifier}
             </span>
           )}
-          <span className="truncate">{title}</span>
+          <span className="truncate text-sm font-medium">{title}</span>
         </div>
         {subtitle && (
           <p className="text-xs text-muted-foreground truncate mt-0.5">{subtitle}</p>

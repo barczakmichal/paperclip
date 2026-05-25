@@ -42,7 +42,7 @@ export function CompanySwitcher({ open: controlledOpen, onOpenChange }: CompanyS
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="w-full justify-between px-2 py-1.5 h-auto text-left"
+          className="w-full justify-between px-2 py-1.5 h-auto text-left bg-card border border-border rounded-md hover:bg-accent/40 transition-colors"
         >
           <div className="flex items-center gap-2 min-w-0">
             {selectedCompany && (
@@ -62,7 +62,7 @@ export function CompanySwitcher({ open: controlledOpen, onOpenChange }: CompanyS
           <DropdownMenuItem
             key={company.id}
             onClick={() => setSelectedCompanyId(company.id)}
-            className={company.id === selectedCompany?.id ? "bg-accent" : ""}
+            className={company.id === selectedCompany?.id ? "bg-accent" : "hover:bg-accent/40"}
           >
             <span className={`h-2 w-2 rounded-full shrink-0 mr-2 ${statusDotColor(company.status)}`} />
             <span className="truncate">{company.name}</span>

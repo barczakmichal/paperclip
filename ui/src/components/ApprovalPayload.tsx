@@ -82,7 +82,7 @@ function SkillList({ values }: { values: unknown }) {
 
 export function HireAgentPayload({ payload }: { payload: Record<string, unknown> }) {
   return (
-    <div className="mt-3 space-y-1.5 text-sm">
+    <div className="mt-3 space-y-1.5 text-xs text-foreground bg-muted/30 border border-border rounded-md p-3">
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground w-20 sm:w-24 shrink-0 text-xs">Name</span>
         <span className="font-medium">{String(payload.name ?? "—")}</span>
@@ -112,7 +112,7 @@ export function HireAgentPayload({ payload }: { payload: Record<string, unknown>
 export function CeoStrategyPayload({ payload }: { payload: Record<string, unknown> }) {
   const plan = payload.plan ?? payload.description ?? payload.strategy ?? payload.text;
   return (
-    <div className="mt-3 space-y-1.5 text-sm">
+    <div className="mt-3 space-y-1.5 text-xs text-foreground bg-muted/30 border border-border rounded-md p-3">
       <PayloadField label="Title" value={payload.title} />
       {!!plan && (
         <div className="mt-2 rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground whitespace-pre-wrap font-mono text-xs max-h-48 overflow-y-auto">
@@ -132,7 +132,7 @@ export function BudgetOverridePayload({ payload }: { payload: Record<string, unk
   const budgetAmount = typeof payload.budgetAmount === "number" ? payload.budgetAmount : null;
   const observedAmount = typeof payload.observedAmount === "number" ? payload.observedAmount : null;
   return (
-    <div className="mt-3 space-y-1.5 text-sm">
+    <div className="mt-3 space-y-1.5 text-xs text-foreground bg-muted/30 border border-border rounded-md p-3">
       <PayloadField label="Scope" value={payload.scopeName ?? payload.scopeType} />
       <PayloadField label="Window" value={payload.windowKind} />
       <PayloadField label="Metric" value={payload.metric} />

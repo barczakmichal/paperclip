@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "@/lib/router";
+import { GlowFrame } from "@/broadcast";
 import {
   DndContext,
   DragOverlay,
@@ -66,12 +67,15 @@ function KanbanColumn({
   const isEmpty = issues.length === 0;
 
   return (
-    <div className={`flex flex-col shrink-0 transition-[width,min-width] ${isEmpty && !isOver ? "min-w-[48px] w-[48px]" : "min-w-[260px] w-[260px]"}`}>
+    <GlowFrame
+      state={isOver ? "active" : "idle"}
+      className={`flex flex-col shrink-0 gap-2 p-3 min-h-[200px] bg-card transition-[width,min-width] ${isEmpty && !isOver ? "min-w-[48px] w-[48px]" : "min-w-[260px] w-[260px]"}`}
+    >
       <div className={`flex items-center gap-2 px-2 py-2 mb-1 ${isEmpty && !isOver ? "justify-center" : ""}`}>
         <StatusIcon status={status} />
         {(!isEmpty || isOver) && (
           <>
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               {statusLabel(status)}
             </span>
             <span className="text-xs text-muted-foreground/60 ml-auto tabular-nums">
@@ -82,9 +86,7 @@ function KanbanColumn({
       </div>
       <div
         ref={setNodeRef}
-        className={`flex-1 min-h-[120px] rounded-md p-1 space-y-1 transition-colors ${
-          isOver ? "bg-accent/40" : "bg-muted/20"
-        }`}
+        className="flex-1 min-h-[120px] rounded-md p-1 space-y-1"
       >
         <SortableContext
           items={issues.map((i) => i.id)}
@@ -100,7 +102,7 @@ function KanbanColumn({
           ))}
         </SortableContext>
       </div>
-    </div>
+    </GlowFrame>
   );
 }
 
@@ -142,9 +144,9 @@ function KanbanCard({
       style={style}
       {...attributes}
       {...listeners}
-      className={`rounded-md border bg-card p-2.5 cursor-grab active:cursor-grabbing transition-shadow ${
+      className={`bg-card hover:bg-accent/30 transition-colors rounded-md border border-border p-2 shadow-sm cursor-grab active:cursor-grabbing ${
         isDragging && !isOverlay ? "opacity-30" : ""
-      } ${isOverlay ? "shadow-lg ring-1 ring-primary/20" : "hover:shadow-sm"}`}
+      } ${isOverlay ? "shadow-lg ring-1 ring-primary/20" : ""}`}
     >
       <Link
         to={`/issues/${issue.identifier ?? issue.id}`}

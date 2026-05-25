@@ -349,15 +349,15 @@ function CommentCard({
     <div
       key={comment.id}
       id={`comment-${comment.id}`}
-      className={`border p-3 overflow-hidden min-w-0 rounded-sm transition-colors duration-1000 ${
+      className={`bg-card border border-border rounded-lg p-3 space-y-2 overflow-hidden min-w-0 transition-colors duration-1000 ${
         isQueued
           ? "border-amber-300/70 bg-amber-50/70 dark:border-amber-500/40 dark:bg-amber-500/10"
           : isHighlighted
             ? "border-primary/50 bg-primary/5"
-            : "border-border"
+            : ""
       } ${isPending ? "opacity-80" : ""}`}
     >
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between gap-2">
         {comment.authorAgentId ? (
           <Link to={`/agents/${comment.authorAgentId}`} className="hover:underline">
             <Identity
@@ -998,6 +998,7 @@ export function CommentThread({
             onSubmit={handleSubmit}
             imageUploadHandler={imageUploadHandler}
             contentClassName="min-h-[60px] text-sm"
+            className="bg-background focus-visible:ring-[3px] focus-visible:ring-ring"
           />
           <div className="flex items-center justify-end gap-3">
             {(imageUploadHandler || onAttachImage) && (

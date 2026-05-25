@@ -38,6 +38,10 @@ export const heartbeatRuns = pgTable(
     lastOutputSeq: integer("last_output_seq").notNull().default(0),
     lastOutputStream: text("last_output_stream"),
     lastOutputBytes: bigint("last_output_bytes", { mode: "number" }),
+    currentThought: text("current_thought"),
+    currentTool: text("current_tool"),
+    currentCostCents: bigint("current_cost_cents", { mode: "number" }).notNull().default(0),
+    currentThoughtUpdatedAt: timestamp("current_thought_updated_at", { withTimezone: true }),
     retryOfRunId: uuid("retry_of_run_id").references((): AnyPgColumn => heartbeatRuns.id, {
       onDelete: "set null",
     }),
@@ -77,6 +81,11 @@ export const heartbeatRuns = pgTable(
       table.companyId,
       table.status,
       table.processStartedAt,
+    ),
+    companyStatusStartedIdx: index("heartbeat_runs_company_status_started_idx").on(
+      table.companyId,
+      table.status,
+      table.startedAt,
     ),
   }),
 );
