@@ -59,7 +59,7 @@ import { createPluginHostServiceCleanup } from "./services/plugin-host-service-c
 import { pluginRegistryService } from "./services/plugin-registry.js";
 import { secretService } from "./services/secrets.js";
 import { createHostClientHandlers } from "@paperclipai/plugin-sdk";
-import { registerMetaOAuthRoutes, registerGoogleOAuthRoutes } from "@paperclipai/plugin-marketing-ai/server-routes";
+import { registerMetaOAuthRoutes, registerGoogleOAuthRoutes, registerCampaignsRoute } from "@paperclipai/plugin-marketing-ai/server-routes";
 import type { BetterAuthSessionResult } from "./auth/better-auth.js";
 import { createCachedViteHtmlRenderer } from "./vite-html-renderer.js";
 
@@ -231,6 +231,7 @@ export async function createApp(
       getDeveloperToken: () => process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "",
       saveSecret,
     });
+    registerCampaignsRoute(marketingAiRouter, { db });
     api.use("/plugins/marketing-ai", marketingAiRouter);
   }
   api.use(activityRoutes(db));

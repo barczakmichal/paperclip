@@ -48,6 +48,7 @@ import { LiveOpsPage } from "./pages/LiveOps";
 import { AgentSoloPage } from "./pages/AgentSolo";
 import { OrgChart } from "./pages/OrgChart";
 import { MarketingSettings } from "./pages/MarketingSettings";
+import { Marketing } from "./pages/Marketing";
 import { NewAgent } from "./pages/NewAgent";
 import { AuthPage } from "./pages/Auth";
 import { BoardClaimPage } from "./pages/BoardClaim";
@@ -133,6 +134,7 @@ function boardRoutes() {
       <Route path="inbox/new" element={<Navigate to="/inbox/mine" replace />} />
       <Route path="u/:userSlug" element={<UserProfile />} />
       <Route path="design-guide" element={<DesignGuide />} />
+      <Route path="marketing" element={<Marketing />} />
       <Route path="instance/settings/adapters" element={<AdapterManager />} />
       <Route path=":pluginRoutePath" element={<PluginPage />} />
       <Route path="*" element={<NotFoundPage scope="board" />} />

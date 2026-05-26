@@ -8,6 +8,8 @@ export const campaignProposals = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id),
     agentId: uuid("agent_id").references(() => agents.id),
+    name: text("name").notNull().default(""),
+    description: text("description"),
     platform: text("platform").notNull(), // "meta" | "google"
     goal: text("goal").notNull(),         // "sales" | "awareness" | "leads"
     status: text("status").notNull().default("draft"),

@@ -8,6 +8,8 @@ import { campaignProposals } from "@paperclipai/db";
 import { generateBrief } from "../creative/brief-generator.js";
 
 interface ProposeCampaignParams {
+  name: string;
+  description?: string;
   platform: "meta" | "google";
   goal: "sales" | "awareness" | "leads";
   product_ids: string[];
@@ -26,6 +28,7 @@ export function registerProposeCampaignTool(ctx: PluginContext, db: Db): void {
       parametersSchema: {
         type: "object",
         required: [
+          "name",
           "platform",
           "goal",
           "product_ids",
@@ -33,6 +36,8 @@ export function registerProposeCampaignTool(ctx: PluginContext, db: Db): void {
           "duration_days",
         ],
         properties: {
+          name: { type: "string", description: "Krotka nazwa kampanii widoczna na cardzie (max ~60 znakow)." },
+          description: { type: "string", description: "Opcjonalny opis 1-2 zdania widoczny pod nazwa." },
           platform: { type: "string", enum: ["meta", "google"] },
           goal: { type: "string", enum: ["sales", "awareness", "leads"] },
           product_ids: { type: "array", items: { type: "string" } },
@@ -79,6 +84,8 @@ export function registerProposeCampaignTool(ctx: PluginContext, db: Db): void {
           .values({
             companyId: runCtx.companyId,
             agentId: runCtx.agentId,
+            name: p.name,
+            description: p.description ?? null,
             platform: p.platform,
             goal: p.goal,
             status: "draft",

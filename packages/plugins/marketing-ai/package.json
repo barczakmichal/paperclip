@@ -6,7 +6,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./server-routes": "./server-routes/index.ts"
+    "./server-routes": "./server-routes/index.ts",
+    "./ui": "./src/ui/index.ts"
   },
   "paperclipPlugin": {
     "manifest": "./dist/manifest.js",

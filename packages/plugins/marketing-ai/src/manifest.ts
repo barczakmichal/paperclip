@@ -82,8 +82,10 @@ const manifest: PaperclipPluginManifestV1 = {
         "Creates a campaign proposal with AI-generated brief. Saves to DB as draft. Does NOT publish to Meta/Google.",
       parametersSchema: {
         type: "object",
-        required: ["platform", "goal", "product_ids", "budget_daily_pln", "duration_days"],
+        required: ["name", "platform", "goal", "product_ids", "budget_daily_pln", "duration_days"],
         properties: {
+          name: { type: "string" },
+          description: { type: "string" },
           platform: { type: "string", enum: ["meta", "google"] },
           goal: { type: "string", enum: ["sales", "awareness", "leads"] },
           product_ids: { type: "array", items: { type: "string" } },
