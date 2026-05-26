@@ -10,13 +10,11 @@
  *
  * All branches write to `marketing_audit_log` via `writeAuditLog`.
  *
- * NOTE on event wiring (see report):
- * The SDK's PLUGIN_EVENT_TYPES list includes "approval.decided".
- * The server currently fires "approval.approved" / "approval.rejected" /
- * "approval.revision_requested" via logActivity, but those strings are NOT in
- * PLUGIN_EVENT_TYPES so they are not forwarded to plugins.
- * The handler listens to "approval.decided" as specified; wiring on the server
- * side to emit that event is a separate concern (outside plugin scope).
+ * Server wiring: routes/approvals.ts calls logActivity with action
+ * "approval.approved" / "approval.rejected" / "approval.revision_requested";
+ * activity-log.ts maps those to the SDK event "approval.decided" and forwards
+ * via the plugin event bus. The activity details (approvalStatus,
+ * decidedByUserId, decisionNote, type) are passed through as the event payload.
  */
 
 import { eq, inArray } from "drizzle-orm";

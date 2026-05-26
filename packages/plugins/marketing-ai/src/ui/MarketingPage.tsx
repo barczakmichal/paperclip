@@ -6,6 +6,8 @@ type CampaignStatus = "all" | "live" | "paused" | "pending_approval" | "draft";
 
 export interface CampaignRow {
   id: string;
+  name: string;
+  description?: string;
   platform: "meta" | "google";
   goal: string;
   status: string;

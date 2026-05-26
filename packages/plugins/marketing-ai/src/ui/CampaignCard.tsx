@@ -82,6 +82,8 @@ function statusToDotStatus(status: string): DotStatus {
 
 export interface CampaignRow {
   id: string;
+  name: string;
+  description?: string;
   platform: "meta" | "google";
   goal: string;
   status: string;
@@ -130,13 +132,43 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
         />
       </div>
 
+      {/* Name + description */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+        <div
+          style={{
+            fontSize: "14px",
+            fontWeight: 600,
+            color: "var(--foreground)",
+            lineHeight: 1.3,
+          }}
+        >
+          {campaign.name}
+        </div>
+        {campaign.description ? (
+          <div
+            style={{
+              fontSize: "12px",
+              color: "var(--muted-foreground)",
+              lineHeight: 1.4,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {campaign.description}
+          </div>
+        ) : null}
+      </div>
+
       {/* Goal */}
       <div
         style={{
-          fontSize: "13px",
+          fontSize: "11px",
           fontWeight: 500,
-          textTransform: "capitalize",
-          color: "var(--foreground)",
+          textTransform: "uppercase",
+          letterSpacing: "0.04em",
+          color: "var(--muted-foreground)",
         }}
       >
         {campaign.goal.replace(/_/g, " ")}

@@ -157,6 +157,10 @@ export function approvalRoutes(
         entityId: approval.id,
         details: {
           type: approval.type,
+          approvalStatus: "approved",
+          approvalId: approval.id,
+          decidedByUserId,
+          decisionNote: req.body.decisionNote ?? null,
           requestedByAgentId: approval.requestedByAgentId,
           linkedIssueIds,
         },
@@ -247,7 +251,13 @@ export function approvalRoutes(
         action: "approval.rejected",
         entityType: "approval",
         entityId: approval.id,
-        details: { type: approval.type },
+        details: {
+          type: approval.type,
+          approvalStatus: "rejected",
+          approvalId: approval.id,
+          decidedByUserId,
+          decisionNote: req.body.decisionNote ?? null,
+        },
       });
     }
 
@@ -274,7 +284,13 @@ export function approvalRoutes(
         action: "approval.revision_requested",
         entityType: "approval",
         entityId: approval.id,
-        details: { type: approval.type },
+        details: {
+          type: approval.type,
+          approvalStatus: "revision_requested",
+          approvalId: approval.id,
+          decidedByUserId,
+          decisionNote: req.body.decisionNote ?? null,
+        },
       });
 
       res.json(redactApprovalPayload(approval));

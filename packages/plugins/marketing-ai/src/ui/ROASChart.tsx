@@ -11,7 +11,7 @@ export interface ROASChartProps {
   style?: React.CSSProperties;
 }
 
-export function ROASChart({ data, width = 400, height = 120, className, style }: ROASChartProps) {
+export function ROASChart({ data, width = 800, height = 220, className, style }: ROASChartProps) {
   if (data.length === 0) {
     return (
       <div
@@ -31,7 +31,7 @@ export function ROASChart({ data, width = 400, height = 120, className, style }:
     );
   }
 
-  const pad = { top: 8, right: 12, bottom: 20, left: 36 };
+  const pad = { top: 24, right: 16, bottom: 24, left: 44 };
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
 
@@ -61,7 +61,7 @@ export function ROASChart({ data, width = 400, height = 120, className, style }:
     <svg
       viewBox={`0 0 ${width} ${height}`}
       className={className}
-      style={{ width: "100%", maxWidth: width, ...style }}
+      style={{ width: "100%", height: "auto", display: "block", ...style }}
       aria-label="ROAS over time"
       role="img"
     >
@@ -100,18 +100,32 @@ export function ROASChart({ data, width = 400, height = 120, className, style }:
         strokeLinejoin="round"
       />
 
-      {/* Data dots */}
-      {data.map((d, i) => (
-        <circle
-          key={i}
-          cx={toX(i)}
-          cy={toY(d.roas)}
-          r={3}
-          fill={lineColor}
-        >
-          <title>{`${d.date}: ROAS ${d.roas.toFixed(2)}`}</title>
-        </circle>
-      ))}
+      {/* Data dots + value labels */}
+      {data.map((d, i) => {
+        const cx = toX(i);
+        const cy = toY(d.roas);
+        const isLast = i === data.length - 1;
+        const isFirst = i === 0;
+        const labelAbove = cy > pad.top + 14;
+        return (
+          <g key={i}>
+            <circle cx={cx} cy={cy} r={3.5} fill={lineColor}>
+              <title>{`${d.date}: ROAS ${d.roas.toFixed(2)}`}</title>
+            </circle>
+            <text
+              x={cx}
+              y={labelAbove ? cy - 8 : cy + 16}
+              textAnchor={isFirst ? "start" : isLast ? "end" : "middle"}
+              fontSize={10}
+              fontWeight={600}
+              fill="currentColor"
+              opacity={0.85}
+            >
+              {d.roas.toFixed(2)}
+            </text>
+          </g>
+        );
+      })}
 
       {/* X-axis labels: first and last date */}
       {data.length > 0 && (
