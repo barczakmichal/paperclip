@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Image as ImageIcon, Megaphone, Radio, X } from "lucide-react";
+import { ArrowLeft, Check, Image as ImageIcon, Megaphone, PauseCircle, Radio, X } from "lucide-react";
 import { Link, useParams } from "@/lib/router";
 import { useCompany } from "../context/CompanyContext";
 import { marketingApi } from "../api/marketing";
@@ -94,6 +94,20 @@ export function MarketingDetail() {
       invalidate();
     },
     onError: (e: Error) => setDecisionError(e.message ?? "Reject failed"),
+  });
+
+  const [pauseReason, setPauseReason] = useState("");
+  const [pauseError, setPauseError] = useState<string | null>(null);
+  const [pauseOpen, setPauseOpen] = useState(false);
+  const pauseMutation = useMutation({
+    mutationFn: () => marketingApi.pauseCampaign(selectedCompany!.id, campaignId!, pauseReason.trim() || undefined),
+    onSuccess: () => {
+      setPauseReason("");
+      setPauseError(null);
+      setPauseOpen(false);
+      invalidate();
+    },
+    onError: (e: Error) => setPauseError(e.message ?? "Pause failed"),
   });
 
   if (!selectedCompany) {
@@ -227,9 +241,50 @@ export function MarketingDetail() {
           </Card>
         ) : null}
         {campaign.status === "live" ? (
-          <Button variant="outline" size="sm" disabled>
-            Pause campaign
-          </Button>
+          pauseOpen ? (
+            <Card className="flex max-w-3xl flex-col gap-3 border-neutral-500/30 bg-neutral-500/5 p-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Pause campaign
+              </div>
+              <textarea
+                value={pauseReason}
+                onChange={(e) => setPauseReason(e.target.value)}
+                placeholder="Reason (visible in audit log) - optional"
+                rows={2}
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => pauseMutation.mutate()}
+                  disabled={pauseMutation.isPending}
+                  className="gap-1.5"
+                >
+                  <PauseCircle className="h-3.5 w-3.5" />
+                  {pauseMutation.isPending ? "Pausing..." : "Confirm pause"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPauseOpen(false);
+                    setPauseReason("");
+                    setPauseError(null);
+                  }}
+                  disabled={pauseMutation.isPending}
+                >
+                  Cancel
+                </Button>
+              </div>
+              {pauseError ? <div className="text-xs text-red-400">{pauseError}</div> : null}
+            </Card>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setPauseOpen(true)} className="gap-1.5">
+              <PauseCircle className="h-3.5 w-3.5" />
+              Pause campaign
+            </Button>
+          )
         ) : null}
       </header>
 

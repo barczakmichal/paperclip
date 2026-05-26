@@ -139,4 +139,50 @@ export function registerCampaignsRoute(router: Router, deps: CampaignsRouteDeps)
       });
     },
   );
+
+  router.post(
+    "/companies/:companyId/campaigns/:campaignId/pause",
+    async (req: Request, res: Response) => {
+      const companyIdRaw = req.params["companyId"];
+      const campaignIdRaw = req.params["campaignId"];
+      const companyId = typeof companyIdRaw === "string" ? companyIdRaw : undefined;
+      const campaignId = typeof campaignIdRaw === "string" ? campaignIdRaw : undefined;
+      if (!companyId || !campaignId) {
+        res.status(400).json({ error: "companyId and campaignId required" });
+        return;
+      }
+
+      const reasonRaw = (req.body as { reason?: unknown })?.reason;
+      const reason = typeof reasonRaw === "string" && reasonRaw.trim().length > 0 ? reasonRaw.trim() : null;
+
+      const [row] = await deps.db
+        .select()
+        .from(campaignProposals)
+        .where(and(eq(campaignProposals.id, campaignId), eq(campaignProposals.companyId, companyId)));
+
+      if (!row) {
+        res.status(404).json({ error: "Campaign not found" });
+        return;
+      }
+      if (row.status !== "live") {
+        res.status(409).json({ error: `Campaign is not live (status: ${row.status})` });
+        return;
+      }
+
+      await deps.db
+        .update(campaignProposals)
+        .set({ status: "paused", updatedAt: new Date() })
+        .where(eq(campaignProposals.id, campaignId));
+
+      await deps.db.insert(marketingAuditLog).values({
+        companyId,
+        action: "campaign.paused",
+        entityType: "campaign_proposal",
+        entityId: campaignId,
+        payloadDiff: reason ? { reason } : null,
+      });
+
+      res.json({ ok: true, status: "paused" });
+    },
+  );
 }

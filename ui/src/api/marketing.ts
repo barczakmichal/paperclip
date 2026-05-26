@@ -63,4 +63,9 @@ export const marketingApi = {
     api.get<MarketingCampaignDetail>(
       `/plugins/marketing-ai/companies/${companyId}/campaigns/${campaignId}`,
     ),
+  pauseCampaign: (companyId: string, campaignId: string, reason?: string) =>
+    api.post<{ ok: true; status: string }>(
+      `/plugins/marketing-ai/companies/${companyId}/campaigns/${campaignId}/pause`,
+      { reason },
+    ),
 };
