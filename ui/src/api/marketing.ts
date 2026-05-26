@@ -43,6 +43,7 @@ export interface MarketingCampaignDetail {
     productIds: string[];
     briefJson: Record<string, unknown> | null;
     platformCampaignId: string | null;
+    approvalId: string | null;
     rejectionReason: string | null;
     publishedAt: string | null;
     updatedAt: string;

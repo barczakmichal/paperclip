@@ -1,8 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Image as ImageIcon, Megaphone, Radio } from "lucide-react";
-import { Link, useNavigate, useParams } from "@/lib/router";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Check, Image as ImageIcon, Megaphone, Radio, X } from "lucide-react";
+import { Link, useParams } from "@/lib/router";
 import { useCompany } from "../context/CompanyContext";
 import { marketingApi } from "../api/marketing";
+import { approvalsApi } from "../api/approvals";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "../components/EmptyState";
@@ -56,14 +58,42 @@ function relativeTime(iso: string): string {
 }
 
 export function MarketingDetail() {
-  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { selectedCompany } = useCompany();
   const { campaignId } = useParams<{ campaignId: string }>();
+  const [decisionNote, setDecisionNote] = useState("");
+  const [decisionError, setDecisionError] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["marketing.campaign", selectedCompany?.id, campaignId],
     queryFn: () => marketingApi.getCampaign(selectedCompany!.id, campaignId!),
     enabled: Boolean(selectedCompany && campaignId),
+  });
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ["marketing.campaign", selectedCompany?.id, campaignId] });
+    void queryClient.invalidateQueries({ queryKey: ["marketing.campaigns"] });
+    void queryClient.invalidateQueries({ queryKey: ["marketing.campaigns.dashboard"] });
+  };
+
+  const approveMutation = useMutation({
+    mutationFn: (approvalId: string) => approvalsApi.approve(approvalId, decisionNote.trim() || undefined),
+    onSuccess: () => {
+      setDecisionNote("");
+      setDecisionError(null);
+      invalidate();
+    },
+    onError: (e: Error) => setDecisionError(e.message ?? "Approve failed"),
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (approvalId: string) => approvalsApi.reject(approvalId, decisionNote.trim() || undefined),
+    onSuccess: () => {
+      setDecisionNote("");
+      setDecisionError(null);
+      invalidate();
+    },
+    onError: (e: Error) => setDecisionError(e.message ?? "Reject failed"),
   });
 
   if (!selectedCompany) {
@@ -158,20 +188,49 @@ export function MarketingDetail() {
           </Card>
         ) : null}
 
-        <div className="flex gap-2 pt-1">
-          {campaign.status === "pending_approval" ? (
-            <>
-              <Button size="sm" onClick={() => void navigate(`/${selectedCompany.issuePrefix}/approvals`)}>
-                Review in approvals
+        {campaign.status === "pending_approval" && campaign.approvalId ? (
+          <Card className="flex max-w-3xl flex-col gap-3 border-amber-400/30 bg-amber-400/5 p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
+              Decision required
+            </div>
+            <textarea
+              value={decisionNote}
+              onChange={(e) => setDecisionNote(e.target.value)}
+              placeholder="Optional note for the agent (visible in audit log)"
+              rows={2}
+              className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={() => approveMutation.mutate(campaign.approvalId!)}
+                disabled={approveMutation.isPending || rejectMutation.isPending}
+                className="gap-1.5"
+              >
+                <Check className="h-3.5 w-3.5" />
+                {approveMutation.isPending ? "Approving..." : "Approve & publish"}
               </Button>
-            </>
-          ) : null}
-          {campaign.status === "live" ? (
-            <Button variant="outline" size="sm" disabled>
-              Pause campaign
-            </Button>
-          ) : null}
-        </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => rejectMutation.mutate(campaign.approvalId!)}
+                disabled={approveMutation.isPending || rejectMutation.isPending}
+                className="gap-1.5"
+              >
+                <X className="h-3.5 w-3.5" />
+                {rejectMutation.isPending ? "Rejecting..." : "Reject"}
+              </Button>
+            </div>
+            {decisionError ? (
+              <div className="text-xs text-red-400">{decisionError}</div>
+            ) : null}
+          </Card>
+        ) : null}
+        {campaign.status === "live" ? (
+          <Button variant="outline" size="sm" disabled>
+            Pause campaign
+          </Button>
+        ) : null}
       </header>
 
       <section className="flex flex-col gap-2">

@@ -108,6 +108,7 @@ export function registerCampaignsRoute(router: Router, deps: CampaignsRouteDeps)
           productIds: row.productIds,
           briefJson: row.briefJson,
           platformCampaignId: row.platformCampaignId,
+          approvalId: row.approvalId,
           rejectionReason: row.rejectionReason,
           publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
           createdAt: row.createdAt.toISOString(),
