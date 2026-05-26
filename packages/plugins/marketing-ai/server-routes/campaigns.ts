@@ -1,7 +1,7 @@
 import type { Router, Request, Response } from "express";
 import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { campaignProposals } from "@paperclipai/db";
+import { campaignProposals, creatives, marketingAuditLog } from "@paperclipai/db";
 
 export interface CampaignsRouteDeps {
   db: Db;
@@ -56,6 +56,86 @@ export function registerCampaignsRoute(router: Router, deps: CampaignsRouteDeps)
       }));
 
       res.json(dto);
+    },
+  );
+
+  router.get(
+    "/companies/:companyId/campaigns/:campaignId",
+    async (req: Request, res: Response) => {
+      const companyIdRaw = req.params["companyId"];
+      const campaignIdRaw = req.params["campaignId"];
+      const companyId = typeof companyIdRaw === "string" ? companyIdRaw : undefined;
+      const campaignId = typeof campaignIdRaw === "string" ? campaignIdRaw : undefined;
+      if (!companyId || !campaignId) {
+        res.status(400).json({ error: "companyId and campaignId required" });
+        return;
+      }
+
+      const [row] = await deps.db
+        .select()
+        .from(campaignProposals)
+        .where(and(eq(campaignProposals.id, campaignId), eq(campaignProposals.companyId, companyId)));
+
+      if (!row) {
+        res.status(404).json({ error: "Campaign not found" });
+        return;
+      }
+
+      const creativeRows = await deps.db
+        .select()
+        .from(creatives)
+        .where(eq(creatives.proposalId, campaignId))
+        .orderBy(desc(creatives.createdAt));
+
+      const auditRows = await deps.db
+        .select()
+        .from(marketingAuditLog)
+        .where(and(eq(marketingAuditLog.companyId, companyId), eq(marketingAuditLog.entityId, campaignId)))
+        .orderBy(desc(marketingAuditLog.createdAt))
+        .limit(100);
+
+      res.json({
+        campaign: {
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          platform: row.platform,
+          goal: row.goal,
+          status: row.status,
+          budgetDailyPln: row.budgetDailyPln,
+          durationDays: row.durationDays,
+          audienceBrief: row.audienceBrief,
+          productIds: row.productIds,
+          briefJson: row.briefJson,
+          platformCampaignId: row.platformCampaignId,
+          rejectionReason: row.rejectionReason,
+          publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
+          createdAt: row.createdAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
+        },
+        creatives: creativeRows.map((c) => ({
+          id: c.id,
+          format: c.format,
+          status: c.status,
+          imageUrl: c.imageUrl,
+          headlines: c.headlines,
+          bodies: c.bodies,
+          descriptions: c.descriptions,
+          cta: c.cta,
+          platformAssetId: c.platformAssetId,
+          errorDetail: c.errorDetail,
+          createdAt: c.createdAt.toISOString(),
+        })),
+        auditLog: auditRows.map((a) => ({
+          id: a.id,
+          action: a.action,
+          userId: a.userId,
+          agentId: a.agentId,
+          entityType: a.entityType,
+          payloadDiff: a.payloadDiff,
+          createdAt: a.createdAt.toISOString(),
+        })),
+      });
     },
   );
 }

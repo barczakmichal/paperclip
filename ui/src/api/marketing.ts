@@ -13,6 +13,44 @@ export interface MarketingCampaign {
   roas?: number;
 }
 
+export interface MarketingCreative {
+  id: string;
+  format: string;
+  status: string;
+  imageUrl: string | null;
+  headlines: string[];
+  bodies: string[];
+  descriptions: string[];
+  cta: string | null;
+  platformAssetId: string | null;
+  errorDetail: string | null;
+  createdAt: string;
+}
+
+export interface MarketingAuditEntry {
+  id: string;
+  action: string;
+  userId: string | null;
+  agentId: string | null;
+  entityType: string | null;
+  payloadDiff: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface MarketingCampaignDetail {
+  campaign: MarketingCampaign & {
+    audienceBrief: string | null;
+    productIds: string[];
+    briefJson: Record<string, unknown> | null;
+    platformCampaignId: string | null;
+    rejectionReason: string | null;
+    publishedAt: string | null;
+    updatedAt: string;
+  };
+  creatives: MarketingCreative[];
+  auditLog: MarketingAuditEntry[];
+}
+
 export const marketingApi = {
   listCampaigns: (companyId: string, status?: string) => {
     const qs = status ? `?status=${encodeURIComponent(status)}` : "";
@@ -20,4 +58,8 @@ export const marketingApi = {
       `/plugins/marketing-ai/companies/${companyId}/campaigns${qs}`,
     );
   },
+  getCampaign: (companyId: string, campaignId: string) =>
+    api.get<MarketingCampaignDetail>(
+      `/plugins/marketing-ai/companies/${companyId}/campaigns/${campaignId}`,
+    ),
 };

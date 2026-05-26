@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Radio, Megaphone } from "lucide-react";
+import { useNavigate } from "@/lib/router";
 import { useCompany } from "../context/CompanyContext";
 import { marketingApi, type MarketingCampaign } from "../api/marketing";
 import { Card } from "@/components/ui/card";
@@ -44,14 +45,28 @@ const PLATFORM_STYLE: Record<string, { bg: string; label: string }> = {
   google: { bg: "bg-[#4285f4]", label: "GOOGLE" },
 };
 
-function CampaignCard({ c }: { c: MarketingCampaign }) {
+function CampaignCard({ c, onClick }: { c: MarketingCampaign; onClick?: () => void }) {
   const platform = PLATFORM_STYLE[c.platform] ?? { bg: "bg-neutral-700", label: c.platform.toUpperCase() };
   const dotClass = STATUS_DOT[c.status] ?? "bg-neutral-500";
   const isLive = c.status === "live";
   const roasGood = c.roas !== undefined && c.roas >= 2;
 
   return (
-    <Card className="flex flex-col gap-3 p-4 transition-colors hover:border-primary/50">
+    <Card
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (onClick && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className={cn(
+        "flex flex-col gap-3 p-4 transition-colors hover:border-primary/50",
+        onClick && "cursor-pointer",
+      )}
+    >
       <div className="flex items-center justify-between">
         <span className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-extrabold tracking-tight text-white", platform.bg)}>
           {platform.label}
@@ -97,6 +112,7 @@ function CampaignCard({ c }: { c: MarketingCampaign }) {
 }
 
 export function Marketing() {
+  const navigate = useNavigate();
   const { selectedCompany } = useCompany();
   const [filter, setFilter] = useState<StatusFilter>("all");
 
@@ -179,7 +195,11 @@ export function Marketing() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {campaigns.map((c) => (
-            <CampaignCard key={c.id} c={c} />
+            <CampaignCard
+              key={c.id}
+              c={c}
+              onClick={() => void navigate(`/${selectedCompany.issuePrefix}/marketing/${c.id}`)}
+            />
           ))}
         </div>
       )}
