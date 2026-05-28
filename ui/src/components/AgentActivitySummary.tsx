@@ -8,6 +8,14 @@ function isRunActive(run: LiveRunForIssue) {
   return run.status === "queued" || run.status === "running";
 }
 
+// Guard against raw stream-json leaking into these fields — show clean text only.
+function cleanText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  if (/^[[{]\s*"/.test(trimmed)) return null;
+  return trimmed;
+}
+
 interface AgentActivitySummaryProps {
   run: LiveRunForIssue;
   className?: string;
@@ -19,9 +27,9 @@ export const AgentActivitySummary = memo(function AgentActivitySummary({
 }: AgentActivitySummaryProps) {
   const { t } = useTranslation("agents");
   const active = isRunActive(run);
-  const thought = run.currentThought?.trim() || null;
-  const tool = run.currentTool?.trim() || null;
-  const next = run.nextAction?.trim() || null;
+  const thought = cleanText(run.currentThought);
+  const tool = cleanText(run.currentTool);
+  const next = cleanText(run.nextAction);
 
   const nowText =
     thought ?? (active ? t("waiting", "Waiting for output...") : t("noActivity", "No current activity"));
