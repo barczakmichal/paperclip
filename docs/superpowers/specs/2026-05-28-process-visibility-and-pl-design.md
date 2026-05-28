@@ -48,14 +48,28 @@ Pełne i18n 311 plików nie może być w tym samym specu co redesign UI. Inicjat
 - Skutek: `extractCompanyPrefixFromPath` przestaje traktować je jak prefix firmy; `isBoardPathWithoutPrefix` zwraca `true`; istniejący `UnprefixedBoardRedirect` (`ui/src/App.tsx`) przekieruje `/marketing` → `/<aktywna-firma>/marketing`.
 - Weryfikacja: `UnprefixedBoardRedirect` faktycznie obejmuje te ścieżki (dopisać `live` i `marketing` do listy przekierowań w `App.tsx`, jeśli jest tam jawna lista, a nie generyczne `isBoardPathWithoutPrefix`).
 
-### F0.2 Kodowanie polskich znaków z agentów (Windows)
-**Plik źródłowy:** `packages/adapter-utils/src/server-utils.ts:1703` (spawn subprocess agenta), adapter `packages/adapters/claude-local/src/server/`.
-- **Najpierw reprodukcja** (systematic-debugging): uruchomić agenta, który tworzy issue z polskim tekstem, i zaobserwować w którym punkcie bajty UTF-8 się psują. Hipoteza: stdout dziecka na Windows w code page systemowym (cp1250) zamiast UTF-8, albo prompt na stdin wysyłany bez UTF-8.
-- **Kandydaci na fix** (wybrać po reprodukcji):
-  - Ustawić środowisko dziecka: `PYTHONIOENCODING=utf-8`, `LANG`/`LC_ALL=C.UTF-8`, ewentualnie wymusić `chcp 65001` przy spawnie na Windows.
-  - Upewnić się że stdin (prompt) zapisywany jest jako UTF-8 (`Buffer.from(prompt, "utf8")`).
-  - Zweryfikować że `StringDecoder("utf8")` dostaje surowe, niezdekodowane bajty (że pipe jest binarny, nie przepuszczony przez code page).
-- **Dane już uszkodzone** (`SKL-2..7`): U+FFFD = bajty utracone, nie da się auto-naprawić. Naprawa: usunąć i pozwolić agentom odtworzyć, albo ręcznie poprawić tytuły. Decyzja w trakcie wdrożenia (najprościej: poprawić ręcznie kilka tytułów testowych).
+### F0.2 Kodowanie polskich znaków z agentów (Windows) — ZDIAGNOZOWANE: bug upstream
+
+**Reprodukcja wykonana 2026-05-28** (bezpośrednie wywołania `claude` CLI, raw bytes hexdump):
+
+| Tryb wywołania | Wynik dla „wędkarstwo" |
+|---|---|
+| `claude --print -` (plain text) | ✅ poprawny UTF-8 (`w c4 99 dkarstwo`) |
+| `claude --print - --output-format stream-json --verbose` | ❌ `w�dkarstwo` (U+FFFD) |
+| `claude --print - --output-format json` | ❌ `w�dkarstwo` |
+| stream-json + `LANG/LC_ALL/LC_CTYPE=en_US.UTF-8` | ❌ nadal `�` |
+| prompt **po angielsku**, output PL | ❌ `w�dka` — czyli korupcja po stronie WYJŚCIA, nie wejścia |
+
+**Root cause:** Claude Code CLI **v2.1.152** na tym Windows psuje znaki nie-ASCII do U+FFFD **w trybach wyjścia JSON** (`stream-json` i `json`), których adapter `claude-local` używa (`--output-format stream-json`). Plain text jest poprawny. Korupcja zachodzi WEWNĄTRZ CLI, zanim Paperclip cokolwiek odbierze (potwierdzone na surowych bajtach stdout claude, z pominięciem całego kodu Paperclip).
+
+**Wniosek:** to NIE jest bug Paperclip — nie da się go naprawić w kodzie Paperclip, zmiennych środowiskowych ani przez code page (wszystko przetestowane). Warstwa pipe (`StringDecoder("utf8")` na Bufferze) i stdin (`stdin.write` jako UTF-8) są poprawne.
+
+**Rekomendacje:**
+- Zgłosić upstream do Anthropic (Claude Code CLI, JSON output mangles non-ASCII on Windows).
+- Sprawdzić inną wersję CLI: `npm i -g @anthropic-ai/claude-code@<wersja>` — możliwe że nowsza/inna wersja naprawia (do przetestowania przez użytkownika, bo zmienia globalną instalację).
+- Workaround w adapterze (plain text zamiast JSON) niewykonalny — traci structured streaming (thoughts/tools).
+
+**Dane uszkodzone:** tytuły `SKL-2..6` naprawione ręcznie przez PATCH `/api/issues/:id` (poprawny UTF-8) 2026-05-28. `SKL-10..12` mają diakrytyki usunięte do ASCII (czytelne, niższy priorytet) — zostawione.
 
 ---
 
