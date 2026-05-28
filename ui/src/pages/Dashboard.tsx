@@ -20,7 +20,7 @@ import { ActivityRow } from "../components/ActivityRow";
 import { Identity } from "../components/Identity";
 import { timeAgo } from "../lib/timeAgo";
 import { cn, formatCents } from "../lib/utils";
-import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle } from "lucide-react";
+import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle, ArrowRight } from "lucide-react";
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
 import { MarketingDashboardTile } from "../components/MarketingDashboardTile";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
@@ -215,7 +215,18 @@ export function Dashboard() {
         </div>
       )}
 
-      <ActiveAgentsPanel companyId={selectedCompanyId!} />
+      <ActiveAgentsPanel
+        companyId={selectedCompanyId!}
+        headerAction={
+          <Link
+            to="/process"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
+          >
+            Zobacz cały proces
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        }
+      />
 
       {data && (
         <>

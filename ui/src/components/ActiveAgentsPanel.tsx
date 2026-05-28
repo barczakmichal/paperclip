@@ -28,6 +28,7 @@ interface ActiveAgentsPanelProps {
   emptyMessage?: string;
   queryScope?: string;
   showMoreLink?: boolean;
+  headerAction?: React.ReactNode;
 }
 
 export function ActiveAgentsPanel({
@@ -41,6 +42,7 @@ export function ActiveAgentsPanel({
   emptyMessage = "Brak ostatnich uruchomień agentów.",
   queryScope = "dashboard",
   showMoreLink = true,
+  headerAction,
 }: ActiveAgentsPanelProps) {
   const { data: liveRuns } = useQuery({
     queryKey: [...queryKeys.liveRuns(companyId), queryScope, { minRunCount, fetchLimit }],
@@ -66,9 +68,12 @@ export function ActiveAgentsPanel({
 
   return (
     <div className="bg-card border border-border rounded-lg p-4">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h3>
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h3>
+        {headerAction}
+      </div>
       {runs.length === 0 ? (
         <div className="rounded-xl border border-border p-4">
           <p className="text-sm text-muted-foreground">{emptyMessage}</p>
