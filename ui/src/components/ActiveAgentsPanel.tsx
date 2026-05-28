@@ -3,21 +3,15 @@ import { Link } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import type { Issue } from "@paperclipai/shared";
 import { heartbeatsApi, type LiveRunForIssue } from "../api/heartbeats";
-import type { TranscriptEntry } from "../adapters";
 import { issuesApi } from "../api/issues";
 import { queryKeys } from "../lib/queryKeys";
 import { cn, relativeTime } from "../lib/utils";
 import { ExternalLink } from "lucide-react";
 import { Identity } from "./Identity";
-import { RunChatSurface } from "./RunChatSurface";
-import { useLiveRunTranscripts } from "./transcript/useLiveRunTranscripts";
+import { AgentActivitySummary } from "./AgentActivitySummary";
 
 const MIN_DASHBOARD_RUNS = 4;
 const DASHBOARD_RUN_CARD_LIMIT = 4;
-const DASHBOARD_LOG_POLL_INTERVAL_MS = 15_000;
-const DASHBOARD_LOG_READ_LIMIT_BYTES = 64_000;
-const DASHBOARD_MAX_CHUNKS_PER_RUN = 40;
-const EMPTY_TRANSCRIPT: TranscriptEntry[] = [];
 
 function isRunActive(run: LiveRunForIssue): boolean {
   return run.status === "queued" || run.status === "running";
@@ -38,13 +32,13 @@ interface ActiveAgentsPanelProps {
 
 export function ActiveAgentsPanel({
   companyId,
-  title = "Agents",
+  title = "Agenci",
   minRunCount = MIN_DASHBOARD_RUNS,
   fetchLimit,
   cardLimit = DASHBOARD_RUN_CARD_LIMIT,
   gridClassName,
   cardClassName,
-  emptyMessage = "No recent agent runs.",
+  emptyMessage = "Brak ostatnich uruchomień agentów.",
   queryScope = "dashboard",
   showMoreLink = true,
 }: ActiveAgentsPanelProps) {
@@ -70,15 +64,6 @@ export function ActiveAgentsPanel({
     return map;
   }, [issues]);
 
-  const { transcriptByRun, hasOutputForRun } = useLiveRunTranscripts({
-    runs: visibleRuns,
-    companyId,
-    maxChunksPerRun: DASHBOARD_MAX_CHUNKS_PER_RUN,
-    logPollIntervalMs: DASHBOARD_LOG_POLL_INTERVAL_MS,
-    logReadLimitBytes: DASHBOARD_LOG_READ_LIMIT_BYTES,
-    enableRealtimeUpdates: false,
-  });
-
   return (
     <div className="bg-card border border-border rounded-lg p-4">
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -93,11 +78,8 @@ export function ActiveAgentsPanel({
           {visibleRuns.map((run) => (
             <AgentRunCard
               key={run.id}
-              companyId={companyId}
               run={run}
               issue={run.issueId ? issueById.get(run.issueId) : undefined}
-              transcript={transcriptByRun.get(run.id) ?? EMPTY_TRANSCRIPT}
-              hasOutput={hasOutputForRun(run.id)}
               isActive={isRunActive(run)}
               className={cardClassName}
             />
@@ -107,7 +89,7 @@ export function ActiveAgentsPanel({
       {showMoreLink && hiddenRunCount > 0 && (
         <div className="mt-3 flex justify-end text-xs text-muted-foreground">
           <Link to="/dashboard/live" className="hover:text-foreground hover:underline">
-            {hiddenRunCount} more active/recent run{hiddenRunCount === 1 ? "" : "s"}
+            +{hiddenRunCount} {hiddenRunCount === 1 ? "kolejne uruchomienie" : "kolejnych uruchomień"}
           </Link>
         </div>
       )}
@@ -116,19 +98,13 @@ export function ActiveAgentsPanel({
 }
 
 const AgentRunCard = memo(function AgentRunCard({
-  companyId,
   run,
   issue,
-  transcript,
-  hasOutput,
   isActive,
   className,
 }: {
-  companyId: string;
   run: LiveRunForIssue;
   issue?: Issue;
-  transcript: TranscriptEntry[];
-  hasOutput: boolean;
   isActive: boolean;
   className?: string;
 }) {
@@ -155,7 +131,7 @@ const AgentRunCard = memo(function AgentRunCard({
               <Identity name={run.agentName} size="sm" className="[&>span:last-child]:!text-[11px]" />
             </div>
             <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-              <span>{isActive ? "Live now" : run.finishedAt ? `Finished ${relativeTime(run.finishedAt)}` : `Started ${relativeTime(run.createdAt)}`}</span>
+              <span>{isActive ? "Na żywo" : run.finishedAt ? `Zakończono ${relativeTime(run.finishedAt)}` : `Start ${relativeTime(run.createdAt)}`}</span>
             </div>
           </div>
 
@@ -185,12 +161,7 @@ const AgentRunCard = memo(function AgentRunCard({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        <RunChatSurface
-          run={run}
-          transcript={transcript}
-          hasOutput={hasOutput}
-          companyId={companyId}
-        />
+        <AgentActivitySummary run={run} />
       </div>
     </div>
   );

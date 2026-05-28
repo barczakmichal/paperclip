@@ -254,6 +254,15 @@ Use in property rows, comment headers, assignee displays, and anywhere a user/ag
 
 ---
 
+## Agent Activity
+
+### AgentActivitySummary
+
+**File:** `AgentActivitySummary.tsx`
+**Usage:** Structured body for agent run cards — shows "Teraz" (currentThought), tool chip (currentTool) and "Następny krok" (nextAction) from a `LiveRunForIssue`. Used in `ActiveAgentsPanel` instead of a raw transcript. Handles empty state for finished/idle runs.
+
+---
+
 ## Property Panel Components
 
 These render inside the PropertiesPanel for different entity types:

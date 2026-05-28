@@ -55,6 +55,9 @@ export interface LiveRunForIssue {
   continuationAttempt?: number;
   lastUsefulActionAt?: string | null;
   nextAction?: string | null;
+  currentThought?: string | null;
+  currentTool?: string | null;
+  currentThoughtUpdatedAt?: string | null;
   outputSilence?: HeartbeatRun["outputSilence"];
 }
 

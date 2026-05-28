@@ -123,6 +123,8 @@ import { FilterBar, type FilterValue } from "@/components/FilterBar";
 import { InlineEditor } from "@/components/InlineEditor";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { Identity } from "@/components/Identity";
+import { AgentActivitySummary } from "@/components/AgentActivitySummary";
+import type { LiveRunForIssue } from "@/api/heartbeats";
 import { IssueReferencePill } from "@/components/IssueReferencePill";
 import {
   GlowFrame,
@@ -1478,6 +1480,56 @@ export function DesignGuide() {
               variant="hero"
             />
           </div>
+        </SubSection>
+      </Section>
+
+      <Section title="Agent Activity Summary">
+        <SubSection title="Aktywny / zakończony run">
+          {(() => {
+            const baseRun = {
+              id: "r1",
+              status: "running",
+              invocationSource: "heartbeat",
+              triggerDetail: "Stwórz zespół",
+              startedAt: new Date().toISOString(),
+              finishedAt: null,
+              createdAt: new Date().toISOString(),
+              agentId: "a1",
+              agentName: "CEO",
+              adapterType: "claude-local",
+            } as LiveRunForIssue;
+            return (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-border p-3">
+                  <AgentActivitySummary
+                    run={{
+                      ...baseRun,
+                      currentThought: "Analizuję materiały z ukończonych zadań, żeby zrozumieć z czego budujemy sklep.",
+                      currentTool: "issues.search",
+                      nextAction: "Przygotować listing 3 produktów do wgrania na Shopify.",
+                    }}
+                  />
+                </div>
+                <div className="rounded-xl border border-border p-3">
+                  <AgentActivitySummary
+                    run={{ ...baseRun, currentThought: null, currentTool: null, nextAction: null }}
+                  />
+                </div>
+                <div className="rounded-xl border border-border p-3">
+                  <AgentActivitySummary
+                    run={{
+                      ...baseRun,
+                      status: "succeeded",
+                      finishedAt: new Date().toISOString(),
+                      currentThought: "Zespół utworzony — 4 agenci przypisani do ról.",
+                      currentTool: null,
+                      nextAction: null,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
         </SubSection>
       </Section>
     </div>

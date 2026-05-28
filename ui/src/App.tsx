@@ -320,6 +320,11 @@ export function App() {
           <Route path="projects/:projectId/workspaces/:workspaceId" element={<UnprefixedBoardRedirect />} />
           <Route path="projects/:projectId/configuration" element={<UnprefixedBoardRedirect />} />
           <Route path="workspaces" element={<UnprefixedBoardRedirect />} />
+          <Route path="live" element={<UnprefixedBoardRedirect />} />
+          <Route path="live/:agentId" element={<UnprefixedBoardRedirect />} />
+          <Route path="marketing" element={<UnprefixedBoardRedirect />} />
+          <Route path="marketing/:campaignId" element={<UnprefixedBoardRedirect />} />
+          <Route path="process" element={<UnprefixedBoardRedirect />} />
           <Route path="execution-workspaces/:workspaceId" element={<UnprefixedBoardRedirect />} />
           <Route path="execution-workspaces/:workspaceId/configuration" element={<UnprefixedBoardRedirect />} />
           <Route path="execution-workspaces/:workspaceId/runtime-logs" element={<UnprefixedBoardRedirect />} />
