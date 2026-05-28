@@ -64,5 +64,16 @@
   "noAssigneesFound": "Nie znaleziono przypisanych.",
   "send": "Wyślij",
   "posting": "Publikowanie...",
-  "jumpToLatest": "Przejdź do najnowszych"
+  "jumpToLatest": "Przejdź do najnowszych",
+  "working": "Pracuje",
+  "worked": "Pracował",
+  "forDuration": "przez {{duration}}",
+  "ranCommands_one": "uruchomił {{count}} polecenie",
+  "ranCommands_few": "uruchomił {{count}} polecenia",
+  "ranCommands_many": "uruchomił {{count}} poleceń",
+  "ranCommands_other": "uruchomił {{count}} poleceń",
+  "calledTools_one": "wywołał {{count}} narzędzie",
+  "calledTools_few": "wywołał {{count}} narzędzia",
+  "calledTools_many": "wywołał {{count}} narzędzi",
+  "calledTools_other": "wywołał {{count}} narzędzi"
 }

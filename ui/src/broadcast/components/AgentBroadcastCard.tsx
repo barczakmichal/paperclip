@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { GlowFrame } from "./GlowFrame";
 import { LiveDot, type LiveDotStatus } from "./LiveDot";
@@ -50,6 +51,7 @@ export function AgentBroadcastCard({
   className,
   onClick,
 }: AgentBroadcastCardProps) {
+  const { t } = useTranslation("agentBroadcastCard");
   const showHeroDecor = variant === "hero";
   const showThoughts = (variant === "full" || variant === "hero") && thoughts && thoughts.length > 0;
   const showLevel = (variant === "full" || variant === "hero") && level !== undefined;
@@ -76,7 +78,7 @@ export function AgentBroadcastCard({
             {showLevel && <LevelBadge level={level!} size="xs" />}
           </div>
           <div className="flex items-center gap-2">
-            <LiveDot status={status} label={status} pulse />
+            <LiveDot status={status} label={t(status, status)} pulse />
             {showStreak && <StreakBadge days={streakDays!} size="xs" />}
           </div>
         </div>
