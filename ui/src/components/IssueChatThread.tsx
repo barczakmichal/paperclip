@@ -3067,7 +3067,7 @@ const IssueChatComposer = forwardRef<IssueChatComposerHandle, IssueChatComposerP
         ) : null}
 
         <Button size="sm" disabled={!canSubmit} onClick={() => void handleSubmit()}>
-          {submitting ? "Posting..." : "Send"}
+          {submitting ? t("posting", "Posting...") : t("send", "Send")}
         </Button>
       </div>
     </div>
@@ -3130,6 +3130,7 @@ export function IssueChatThread({
   composerRef,
   onRefreshLatestComments,
 }: IssueChatThreadProps) {
+  const { t } = useTranslation("issueChatThread");
   const location = useLocation();
   const lastScrolledHashRef = useRef<string | null>(null);
   const virtualizedThreadRef = useRef<VirtualizedIssueChatThreadListHandle | null>(null);
@@ -3653,7 +3654,7 @@ export function IssueChatThread({
               onClick={handleJumpToLatest}
               className="text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
-              Jump to latest
+              {t("jumpToLatest", "Jump to latest")}
             </button>
           </div>
         ) : null}

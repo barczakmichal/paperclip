@@ -61,5 +61,8 @@
   "attachFile": "Załącz plik",
   "noAssignee": "Brak przypisanego",
   "searchAssignees": "Szukaj przypisanych...",
-  "noAssigneesFound": "Nie znaleziono przypisanych."
+  "noAssigneesFound": "Nie znaleziono przypisanych.",
+  "send": "Wyślij",
+  "posting": "Publikowanie...",
+  "jumpToLatest": "Przejdź do najnowszych"
 }
