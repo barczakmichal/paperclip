@@ -1,0 +1,10 @@
+{
+  "breadcrumb": "Nie znaleziono",
+  "companyNotFoundTitle": "Nie znaleziono firmy",
+  "pageNotFoundTitle": "Nie znaleziono strony",
+  "companyNotFoundDescription": "Żadna firma nie pasuje do prefiksu \"{{prefix}}\".",
+  "pageNotFoundDescription": "Ta ścieżka nie istnieje.",
+  "requestedPath": "Żądana ścieżka:",
+  "openDashboard": "Otwórz pulpit",
+  "goHome": "Strona główna"
+}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Radio, Megaphone } from "lucide-react";
 import { useNavigate } from "@/lib/router";
 import { useCompany } from "../context/CompanyContext";
@@ -12,22 +13,22 @@ import { cn } from "../lib/utils";
 
 type StatusFilter = "all" | "live" | "pending_approval" | "paused" | "draft";
 
-const FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "live", label: "Live" },
-  { value: "pending_approval", label: "Awaiting approval" },
-  { value: "paused", label: "Paused" },
-  { value: "draft", label: "Draft" },
+const FILTERS: { value: StatusFilter; labelKey: string; labelDefault: string }[] = [
+  { value: "all", labelKey: "filterAll", labelDefault: "All" },
+  { value: "live", labelKey: "filterLive", labelDefault: "Live" },
+  { value: "pending_approval", labelKey: "filterAwaitingApproval", labelDefault: "Awaiting approval" },
+  { value: "paused", labelKey: "filterPaused", labelDefault: "Paused" },
+  { value: "draft", labelKey: "filterDraft", labelDefault: "Draft" },
 ];
 
-const STATUS_LABEL: Record<string, string> = {
-  live: "Live",
-  pending_approval: "Awaiting approval",
-  paused: "Paused",
-  draft: "Draft",
-  rejected: "Rejected",
-  rejected_by_platform: "Rejected by platform",
-  expired: "Expired",
+const STATUS_LABEL: Record<string, { key: string; default: string }> = {
+  live: { key: "statusLive", default: "Live" },
+  pending_approval: { key: "statusAwaitingApproval", default: "Awaiting approval" },
+  paused: { key: "statusPaused", default: "Paused" },
+  draft: { key: "statusDraft", default: "Draft" },
+  rejected: { key: "statusRejected", default: "Rejected" },
+  rejected_by_platform: { key: "statusRejectedByPlatform", default: "Rejected by platform" },
+  expired: { key: "statusExpired", default: "Expired" },
 };
 
 const STATUS_DOT: Record<string, string> = {
@@ -46,10 +47,12 @@ const PLATFORM_STYLE: Record<string, { bg: string; label: string }> = {
 };
 
 function CampaignCard({ c, onClick }: { c: MarketingCampaign; onClick?: () => void }) {
+  const { t } = useTranslation("marketingPage");
   const platform = PLATFORM_STYLE[c.platform] ?? { bg: "bg-neutral-700", label: c.platform.toUpperCase() };
   const dotClass = STATUS_DOT[c.status] ?? "bg-neutral-500";
   const isLive = c.status === "live";
   const roasGood = c.roas !== undefined && c.roas >= 2;
+  const statusLabel = STATUS_LABEL[c.status];
 
   return (
     <Card
@@ -74,7 +77,7 @@ function CampaignCard({ c, onClick }: { c: MarketingCampaign; onClick?: () => vo
         <span className="inline-flex items-center gap-1.5">
           <span className={cn("h-1.5 w-1.5 rounded-full", dotClass, isLive && "animate-pulse")} />
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            {STATUS_LABEL[c.status] ?? c.status}
+            {statusLabel ? t(statusLabel.key, statusLabel.default) : c.status}
           </span>
         </span>
       </div>
@@ -95,7 +98,7 @@ function CampaignCard({ c, onClick }: { c: MarketingCampaign; onClick?: () => vo
       <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
         <span>
           <span className="font-semibold text-foreground">{Number(c.budgetDailyPln).toFixed(0)} PLN</span>
-          /day
+          {t("perDaySuffix", "/day")}
         </span>
         <span>{c.durationDays}d</span>
         {c.roas !== undefined ? (
@@ -112,6 +115,7 @@ function CampaignCard({ c, onClick }: { c: MarketingCampaign; onClick?: () => vo
 }
 
 export function Marketing() {
+  const { t } = useTranslation("marketingPage");
   const navigate = useNavigate();
   const { selectedCompany } = useCompany();
   const [filter, setFilter] = useState<StatusFilter>("all");
@@ -135,7 +139,7 @@ export function Marketing() {
     return (
       <EmptyState
         icon={Megaphone}
-        message="Marketing AI requires an active company workspace."
+        message={t("requiresWorkspace", "Marketing AI requires an active company workspace.")}
       />
     );
   }
@@ -145,11 +149,11 @@ export function Marketing() {
       <header className="flex items-center justify-between">
         <h1 className="flex items-center gap-2 text-lg font-bold">
           <Megaphone className="h-5 w-5" />
-          Marketing
+          {t("title", "Marketing")}
         </h1>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Radio className="h-3.5 w-3.5" />
-          <span className="uppercase tracking-wider">Broadcast</span>
+          <span className="uppercase tracking-wider">{t("broadcast", "Broadcast")}</span>
         </div>
       </header>
 
@@ -165,7 +169,7 @@ export function Marketing() {
               onClick={() => setFilter(f.value)}
               className="h-7 text-xs"
             >
-              {f.label}
+              {t(f.labelKey, f.labelDefault)}
               {f.value === "all" || count > 0 ? (
                 <span className={cn("ml-1.5 text-[10px]", active ? "opacity-80" : "text-muted-foreground")}>{count}</span>
               ) : null}
@@ -179,8 +183,10 @@ export function Marketing() {
       ) : error ? (
         <EmptyState
           icon={Megaphone}
-          message={`Could not load campaigns: ${String((error as Error).message ?? error)}`}
-          action="Retry"
+          message={t("loadError", "Could not load campaigns: {{error}}", {
+            error: String((error as Error).message ?? error),
+          })}
+          action={t("retry", "Retry")}
           onAction={() => void refetch()}
         />
       ) : campaigns.length === 0 ? (
@@ -188,8 +194,10 @@ export function Marketing() {
           icon={Megaphone}
           message={
             filter === "all"
-              ? "No campaigns yet. Marketing AI agents will propose them here once configured."
-              : `No campaigns with status "${STATUS_LABEL[filter] ?? filter}".`
+              ? t("emptyAll", "No campaigns yet. Marketing AI agents will propose them here once configured.")
+              : t("emptyFiltered", 'No campaigns with status "{{status}}".', {
+                  status: STATUS_LABEL[filter] ? t(STATUS_LABEL[filter].key, STATUS_LABEL[filter].default) : filter,
+                })
           }
         />
       ) : (

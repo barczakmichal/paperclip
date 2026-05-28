@@ -1,0 +1,11 @@
+{
+  "showProperties": "Pokaż właściwości",
+  "breadcrumbGoals": "Cele",
+  "breadcrumbGoal": "Cel",
+  "descriptionPlaceholder": "Dodaj opis...",
+  "tabSubGoals": "Podcele ({{n}})",
+  "tabProjects": "Projekty ({{n}})",
+  "subGoal": "Podcel",
+  "noSubGoals": "Brak podcelów.",
+  "noLinkedProjects": "Brak powiązanych projektów."
+}

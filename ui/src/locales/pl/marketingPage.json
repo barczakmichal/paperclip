@@ -1,0 +1,22 @@
+{
+  "filterAll": "Wszystkie",
+  "filterLive": "Aktywne",
+  "filterAwaitingApproval": "Oczekuje na akceptację",
+  "filterPaused": "Wstrzymane",
+  "filterDraft": "Szkic",
+  "statusLive": "Aktywna",
+  "statusAwaitingApproval": "Oczekuje na akceptację",
+  "statusPaused": "Wstrzymana",
+  "statusDraft": "Szkic",
+  "statusRejected": "Odrzucona",
+  "statusRejectedByPlatform": "Odrzucona przez platformę",
+  "statusExpired": "Wygasła",
+  "perDaySuffix": "/dzień",
+  "requiresWorkspace": "Marketing AI wymaga aktywnego obszaru roboczego firmy.",
+  "title": "Marketing",
+  "broadcast": "Broadcast",
+  "loadError": "Nie udało się wczytać kampanii: {{error}}",
+  "retry": "Ponów",
+  "emptyAll": "Brak kampanii. Agenci Marketing AI zaproponują je tutaj po skonfigurowaniu.",
+  "emptyFiltered": "Brak kampanii o statusie \"{{status}}\"."
+}

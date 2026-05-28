@@ -1,4 +1,5 @@
 import { useParams } from "@/lib/router";
+import { useTranslation } from "react-i18next";
 import { useCompany } from "../context/CompanyContext";
 import { useLiveOpsAgents } from "@/hooks/useLiveOpsAgents";
 import { AgentBroadcastCard, ThoughtStream, type LiveDotStatus } from "@/broadcast";
@@ -12,13 +13,14 @@ function mapStatus(status: string): LiveDotStatus {
 }
 
 export function AgentSoloPage() {
+  const { t } = useTranslation("agentSoloPage");
   const { agentId } = useParams<{ agentId: string }>();
   const { selectedCompanyId } = useCompany();
   const { data: agents = [] } = useLiveOpsAgents(selectedCompanyId);
   const agent = agents.find((a) => a.agentId === agentId);
 
   if (!agent) {
-    return <div className="p-6 text-muted-foreground">Agent not found</div>;
+    return <div className="p-6 text-muted-foreground">{t("agentNotFound", "Agent not found")}</div>;
   }
 
   return (

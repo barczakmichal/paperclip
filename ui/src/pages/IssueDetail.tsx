@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type Ref } from "react";
+import { useTranslation } from "react-i18next";
 import { pickTextColorForPillBg } from "@/lib/color-contrast";
 import { Link, useLocation, useNavigate, useNavigationType, useParams } from "@/lib/router";
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query";
@@ -399,6 +400,7 @@ function IssueDetailLoadingState({
 }: {
   headerSeed: ReturnType<typeof readIssueDetailHeaderSeed>;
 }) {
+  const { t } = useTranslation("issueDetailPage");
   const identifier = headerSeed?.identifier ?? headerSeed?.id.slice(0, 8) ?? null;
 
   return (
@@ -417,7 +419,7 @@ function IssueDetailLoadingState({
               {headerSeed.originKind === "routine_execution" && headerSeed.originId ? (
                 <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 shrink-0">
                   <Repeat className="h-3 w-3" />
-                  Routine
+                  {t("routine", "Routine")}
                 </span>
               ) : null}
               {headerSeed.projectId ? (
@@ -430,7 +432,7 @@ function IssueDetailLoadingState({
               ) : (
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground opacity-50 px-1 -mx-1 py-0.5">
                   <Hexagon className="h-3 w-3 shrink-0" />
-                  No project
+                  {t("noProject", "No project")}
                 </span>
               )}
             </>
@@ -497,6 +499,7 @@ function InboxMobileToolbar({
   onHide,
 }: InboxMobileToolbarProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation("issueDetailPage");
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -514,7 +517,7 @@ function InboxMobileToolbar({
             navigate(backHref);
           }
         }}
-        aria-label="Back to inbox"
+        aria-label={t("backToInbox", "Back to inbox")}
       >
         <ArrowLeft className="h-5 w-5" />
       </Button>
@@ -526,7 +529,7 @@ function InboxMobileToolbar({
             size="icon-sm"
             onClick={onArchive}
             disabled={archivePending}
-            aria-label="Archive from inbox"
+            aria-label={t("archiveFromInbox", "Archive from inbox")}
           >
             <Archive className="h-5 w-5" />
           </Button>
@@ -534,7 +537,7 @@ function InboxMobileToolbar({
 
         <Popover open={menuOpen} onOpenChange={setMenuOpen}>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="More actions">
+            <Button variant="ghost" size="icon-sm" aria-label={t("moreActions", "More actions")}>
               <MoreVertical className="h-5 w-5" />
             </Button>
           </PopoverTrigger>
@@ -544,14 +547,14 @@ function InboxMobileToolbar({
               onClick={() => { onCopy(); setMenuOpen(false); }}
             >
               <Copy className="h-3 w-3" />
-              Copy as markdown
+              {t("copyAsMarkdown", "Copy as markdown")}
             </button>
             <button
               className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50"
               onClick={() => { onProperties(); setMenuOpen(false); }}
             >
               <SlidersHorizontal className="h-3 w-3" />
-              Properties
+              {t("properties", "Properties")}
             </button>
             {issueIdProp && (
               <button
@@ -559,7 +562,7 @@ function InboxMobileToolbar({
                 onClick={() => { onHide(); setMenuOpen(false); }}
               >
                 <EyeOff className="h-3 w-3" />
-                Hide this issue
+                {t("hideThisIssueLower", "Hide this issue")}
               </button>
             )}
           </PopoverContent>
@@ -672,6 +675,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
   onSubmitInteractionAnswers,
   onCancelInteraction,
 }: IssueDetailChatTabProps) {
+  const { t } = useTranslation("issueDetailPage");
   const { data: activity } = useQuery({
     queryKey: queryKeys.issues.activity(issueId),
     queryFn: () => activityApi.forIssue(issueId),
@@ -816,7 +820,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
             disabled={commentsLoadingOlder}
             onClick={onLoadOlderComments}
           >
-            {commentsLoadingOlder ? "Loading earlier comments..." : "Load earlier comments"}
+            {commentsLoadingOlder ? t("loadingEarlierComments", "Loading earlier comments...") : t("loadEarlierComments", "Load earlier comments")}
           </Button>
         </div>
       ) : null}
@@ -857,8 +861,8 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
         interruptingQueuedRunId={interruptingQueuedRunId}
         stoppingRunId={pausingWorkRunId}
         onStopRun={onPauseWorkRun}
-        stopRunLabel="Pause work"
-        stoppingRunLabel="Pausing..."
+        stopRunLabel={t("pauseWork", "Pause work")}
+        stoppingRunLabel={t("pausing", "Pausing...")}
         stopRunVariant="pause"
         onAcceptInteraction={onAcceptInteraction}
         onRejectInteraction={onRejectInteraction}
@@ -905,6 +909,7 @@ function IssueDetailActivityTab({
   onApprovalAction,
   handoffFocusSignal = 0,
 }: IssueDetailActivityTabProps) {
+  const { t } = useTranslation("issueDetailPage");
   const { data: activity, isLoading: activityLoading } = useQuery({
     queryKey: queryKeys.issues.activity(issueId),
     queryFn: () => activityApi.forIssue(issueId),
@@ -1000,13 +1005,13 @@ function IssueDetailActivityTab({
     <>
       {shouldShowCostSummary && (
         <div className="mb-3 px-3 py-2 rounded-lg border border-border">
-          <div className="text-sm font-medium text-muted-foreground mb-1">Cost Summary</div>
+          <div className="text-sm font-medium text-muted-foreground mb-1">{t("costSummary", "Cost Summary")}</div>
           {!issueCostSummary.hasCost && !issueCostSummary.hasTokens && !hasIssueTreeCost ? (
-            <div className="text-xs text-muted-foreground">No cost data yet.</div>
+            <div className="text-xs text-muted-foreground">{t("noCostDataYet", "No cost data yet.")}</div>
           ) : (
             <div className="space-y-1 text-xs text-muted-foreground tabular-nums">
               <div className="flex flex-wrap gap-3">
-                <span className="font-medium text-foreground">This issue</span>
+                <span className="font-medium text-foreground">{t("thisIssue", "This issue")}</span>
                 {issueCostSummary.hasCost ? (
                   <span className="font-medium text-foreground">
                     ${issueCostSummary.cost.toFixed(4)}
@@ -1014,33 +1019,33 @@ function IssueDetailActivityTab({
                 ) : null}
                 {issueCostSummary.hasTokens ? (
                   <span>
-                    Tokens {formatTokens(issueCostSummary.totalTokens)}
+                    {t("tokensLabel", "Tokens")} {formatTokens(issueCostSummary.totalTokens)}
                     {issueCostSummary.cached > 0
-                      ? ` (in ${formatTokens(issueCostSummary.input)}, out ${formatTokens(issueCostSummary.output)}, cached ${formatTokens(issueCostSummary.cached)})`
-                      : ` (in ${formatTokens(issueCostSummary.input)}, out ${formatTokens(issueCostSummary.output)})`}
+                      ? t("tokenBreakdownCached", " (in {{in}}, out {{out}}, cached {{cached}})", { in: formatTokens(issueCostSummary.input), out: formatTokens(issueCostSummary.output), cached: formatTokens(issueCostSummary.cached) })
+                      : t("tokenBreakdown", " (in {{in}}, out {{out}})", { in: formatTokens(issueCostSummary.input), out: formatTokens(issueCostSummary.output) })}
                   </span>
                 ) : null}
                 {!issueCostSummary.hasCost && !issueCostSummary.hasTokens ? (
-                  <span>No direct cost data.</span>
+                  <span>{t("noDirectCostData", "No direct cost data.")}</span>
                 ) : null}
               </div>
               {hasIssueTreeCost && issueTreeCostSummary ? (
                 <div className="flex flex-wrap gap-3">
                   <span className="font-medium text-foreground">
-                    Including sub-issues {(issueTreeCostSummary.costCents / 100).toLocaleString(undefined, {
+                    {t("includingSubIssues", "Including sub-issues {{amount}}", { amount: (issueTreeCostSummary.costCents / 100).toLocaleString(undefined, {
                       style: "currency",
                       currency: "USD",
                       minimumFractionDigits: 4,
                       maximumFractionDigits: 4,
-                    })}
+                    }) })}
                   </span>
                   <span>
-                    Tokens {formatTokens(issueTreeCostTokens)}
+                    {t("tokensLabel", "Tokens")} {formatTokens(issueTreeCostTokens)}
                     {issueTreeCostSummary.cachedInputTokens > 0
-                      ? ` (in ${formatTokens(issueTreeCostSummary.inputTokens)}, out ${formatTokens(issueTreeCostSummary.outputTokens)}, cached ${formatTokens(issueTreeCostSummary.cachedInputTokens)})`
-                      : ` (in ${formatTokens(issueTreeCostSummary.inputTokens)}, out ${formatTokens(issueTreeCostSummary.outputTokens)})`}
+                      ? t("tokenBreakdownCached", " (in {{in}}, out {{out}}, cached {{cached}})", { in: formatTokens(issueTreeCostSummary.inputTokens), out: formatTokens(issueTreeCostSummary.outputTokens), cached: formatTokens(issueTreeCostSummary.cachedInputTokens) })
+                      : t("tokenBreakdown", " (in {{in}}, out {{out}})", { in: formatTokens(issueTreeCostSummary.inputTokens), out: formatTokens(issueTreeCostSummary.outputTokens) })}
                   </span>
-                  <span>{issueTreeCostSummary.issueCount} issue{issueTreeCostSummary.issueCount === 1 ? "" : "s"}</span>
+                  <span>{t("issueCount", "{{count}} issue", { count: issueTreeCostSummary.issueCount, defaultValue_other: "{{count}} issues" })}</span>
                 </div>
               ) : null}
             </div>
@@ -1099,6 +1104,7 @@ export function IssueDetail() {
   const { openNewIssue } = useDialogActions();
   const { openPanel, closePanel, panelVisible, setPanelVisible } = usePanel();
   const { setBreadcrumbs, setMobileToolbar } = useBreadcrumbs();
+  const { t } = useTranslation("issueDetailPage");
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const navigationType = useNavigationType();
@@ -1433,10 +1439,10 @@ export function IssueDetail() {
       options.push({ id: `agent:${agent.id}`, label: agent.name });
     }
     if (currentUserId) {
-      options.push({ id: `user:${currentUserId}`, label: "Me" });
+      options.push({ id: `user:${currentUserId}`, label: t("me", "Me") });
     }
     return options;
-  }, [agents, companyMembers?.users, currentUserId]);
+  }, [agents, companyMembers?.users, currentUserId, t]);
 
   const actualAssigneeValue = useMemo(
     () => assigneeValueFromSelection(issue ?? {}),
@@ -1457,7 +1463,7 @@ export function IssueDetail() {
     () => mergeIssueComments(comments ?? [], optimisticComments),
     [comments, optimisticComments],
   );
-  const breadcrumbTitle = issue?.title ?? issueId ?? "Issue";
+  const breadcrumbTitle = issue?.title ?? issueId ?? t("breadcrumbIssue", "Issue");
 
   const invalidateIssueDetail = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.issues.detail(issueId!) });
@@ -1596,8 +1602,8 @@ export function IssueDetail() {
         queryClient.setQueryData(queryKeys.issues.list(context.selectedCompanyId), context.previousList);
       }
       pushToast({
-        title: "Issue update failed",
-        body: err instanceof Error ? err.message : "Unable to save issue changes",
+        title: t("issueUpdateFailed", "Issue update failed"),
+        body: err instanceof Error ? err.message : t("unableToSaveIssue", "Unable to save issue changes"),
         tone: "error",
       });
     },
@@ -1613,7 +1619,7 @@ export function IssueDetail() {
       if (treeControlMode === "resume") {
         const pauseHoldId = treeControlState?.activePauseHold?.holdId;
         if (!pauseHoldId) {
-          throw new Error("No active subtree pause hold is available to resume.");
+          throw new Error(t("noActivePauseHold", "No active subtree pause hold is available to resume."));
         }
         const releasedHold = await issuesApi.releaseTreeHold(issueId!, pauseHoldId, {
           reason: treeControlReason.trim() || null,
@@ -1641,19 +1647,19 @@ export function IssueDetail() {
       const cancelCount = result.preview?.totals.activeRuns ?? 0;
       pushToast({
         title: result.kind === "release"
-          ? treeControlScope === "leaf" ? "Work resumed" : "Subtree resumed"
+          ? treeControlScope === "leaf" ? t("workResumed", "Work resumed") : t("subtreeResumed", "Subtree resumed")
           : result.hold.mode === "pause"
-            ? treeControlScope === "leaf" ? "Work paused" : "Subtree paused"
-            : `${modeLabel} applied`,
+            ? treeControlScope === "leaf" ? t("workPaused", "Work paused") : t("subtreePaused", "Subtree paused")
+            : t("modeApplied", "{{mode}} applied", { mode: modeLabel }),
         body: result.kind === "release"
-          ? (result.hold.releaseReason?.trim() || (treeControlScope === "leaf" ? "Active issue pause released." : "Active subtree pause released."))
+          ? (result.hold.releaseReason?.trim() || (treeControlScope === "leaf" ? t("activeIssuePauseReleased", "Active issue pause released.") : t("activeSubtreePauseReleased", "Active subtree pause released.")))
           : result.hold.mode === "pause"
             ? treeControlScope === "leaf"
-              ? `Work paused. ${cancelCount} run${cancelCount === 1 ? "" : "s"} cancelled.`
-              : `Subtree paused. ${cancelCount} run${cancelCount === 1 ? "" : "s"} cancelled.`
+              ? t("workPausedRunsCancelled", "Work paused. {{count}} run cancelled.", { count: cancelCount, defaultValue_other: "Work paused. {{count}} runs cancelled." })
+              : t("subtreePausedRunsCancelled", "Subtree paused. {{count}} run cancelled.", { count: cancelCount, defaultValue_other: "Subtree paused. {{count}} runs cancelled." })
             : result.hold.reason?.trim()
               ? result.hold.reason
-              : "Subtree control applied.",
+              : t("subtreeControlApplied", "Subtree control applied."),
       });
       setTreeControlOpen(false);
       setTreeControlReason("");
@@ -1683,8 +1689,8 @@ export function IssueDetail() {
     },
     onError: (err) => {
       pushToast({
-        title: "Unable to apply subtree control",
-        body: err instanceof Error ? err.message : "Please try again.",
+        title: t("unableToApplySubtreeControl", "Unable to apply subtree control"),
+        body: err instanceof Error ? err.message : t("pleaseTryAgain", "Please try again."),
         tone: "error",
       });
     },
@@ -1702,10 +1708,10 @@ export function IssueDetail() {
     onSuccess: async (result) => {
       const cancelCount = result.preview?.totals.activeRuns ?? 0;
       pushToast({
-        title: "Work paused",
+        title: t("workPaused", "Work paused"),
         body: cancelCount > 0
-          ? `Work paused. ${cancelCount} run${cancelCount === 1 ? "" : "s"} cancelled.`
-          : "Work paused. This issue is held until resume.",
+          ? t("workPausedRunsCancelled", "Work paused. {{count}} run cancelled.", { count: cancelCount, defaultValue_other: "Work paused. {{count}} runs cancelled." })
+          : t("workPausedHeld", "Work paused. This issue is held until resume."),
         tone: "success",
       });
       await Promise.all([
@@ -1722,8 +1728,8 @@ export function IssueDetail() {
     },
     onError: (err) => {
       pushToast({
-        title: "Unable to pause work",
-        body: err instanceof Error ? err.message : "Please try again.",
+        title: t("unableToPauseWork", "Unable to pause work"),
+        body: err instanceof Error ? err.message : t("pleaseTryAgain", "Please try again."),
         tone: "error",
       });
     },
@@ -1742,8 +1748,8 @@ export function IssueDetail() {
     },
     onError: (err) => {
       pushToast({
-        title: "Issue update failed",
-        body: err instanceof Error ? err.message : "Unable to save sub-issue changes",
+        title: t("issueUpdateFailed", "Issue update failed"),
+        body: err instanceof Error ? err.message : t("unableToSaveSubIssue", "Unable to save sub-issue changes"),
         tone: "error",
       });
     },
@@ -1771,14 +1777,14 @@ export function IssueDetail() {
         queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(resolvedCompanyId) });
       }
       pushToast({
-        title: variables.action === "approve" ? "Approval approved" : "Approval rejected",
+        title: variables.action === "approve" ? t("approvalApproved", "Approval approved") : t("approvalRejected", "Approval rejected"),
         tone: "success",
       });
     },
     onError: (err, variables) => {
       pushToast({
-        title: variables.action === "approve" ? "Approval failed" : "Rejection failed",
-        body: err instanceof Error ? err.message : "Unable to update approval",
+        title: variables.action === "approve" ? t("approvalFailed", "Approval failed") : t("rejectionFailed", "Rejection failed"),
+        body: err instanceof Error ? err.message : t("unableToUpdateApproval", "Unable to update approval"),
         tone: "error",
       });
     },
@@ -1839,8 +1845,8 @@ export function IssueDetail() {
           return;
         } catch (err) {
           pushToast({
-            title: "Cancel failed",
-            body: err instanceof Error ? err.message : "Unable to cancel the queued comment",
+            title: t("cancelFailed", "Cancel failed"),
+            body: err instanceof Error ? err.message : t("unableToCancelQueuedComment", "Unable to cancel the queued comment"),
             tone: "error",
           });
         }
@@ -1873,8 +1879,8 @@ export function IssueDetail() {
         queryClient.setQueryData(queryKeys.issues.detail(issueId!), context.previousIssue);
       }
       pushToast({
-        title: "Comment failed",
-        body: err instanceof Error ? err.message : "Unable to post comment",
+        title: t("commentFailed", "Comment failed"),
+        body: err instanceof Error ? err.message : t("unableToPostComment", "Unable to post comment"),
         tone: "error",
       });
     },
@@ -1911,17 +1917,17 @@ export function IssueDetail() {
         : 0;
       pushToast({
         title: interaction.kind === "request_confirmation"
-          ? "Request confirmed"
+          ? t("requestConfirmed", "Request confirmed")
           : skippedCount > 0
-          ? `Accepted ${createdCount} draft${createdCount === 1 ? "" : "s"} and skipped ${skippedCount}`
-          : "Suggested tasks accepted",
+          ? t("acceptedAndSkipped", "Accepted {{count}} draft and skipped {{skipped}}", { count: createdCount, skipped: skippedCount, defaultValue_other: "Accepted {{count}} drafts and skipped {{skipped}}" })
+          : t("suggestedTasksAccepted", "Suggested tasks accepted"),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Accept failed",
-        body: err instanceof Error ? err.message : "Unable to accept the suggested tasks",
+        title: t("acceptFailed", "Accept failed"),
+        body: err instanceof Error ? err.message : t("unableToAcceptTasks", "Unable to accept the suggested tasks"),
         tone: "error",
       });
     },
@@ -1934,14 +1940,14 @@ export function IssueDetail() {
       invalidateIssueDetail();
       invalidateIssueCollections();
       pushToast({
-        title: interaction.kind === "request_confirmation" ? "Request declined" : "Suggestion rejected",
+        title: interaction.kind === "request_confirmation" ? t("requestDeclined", "Request declined") : t("suggestionRejected", "Suggestion rejected"),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Reject failed",
-        body: err instanceof Error ? err.message : "Unable to reject the suggested tasks",
+        title: t("rejectFailed", "Reject failed"),
+        body: err instanceof Error ? err.message : t("unableToRejectTasks", "Unable to reject the suggested tasks"),
         tone: "error",
       });
     },
@@ -1959,14 +1965,14 @@ export function IssueDetail() {
       invalidateIssueDetail();
       invalidateIssueCollections();
       pushToast({
-        title: "Answers submitted",
+        title: t("answersSubmitted", "Answers submitted"),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Submit failed",
-        body: err instanceof Error ? err.message : "Unable to submit answers",
+        title: t("submitFailed", "Submit failed"),
+        body: err instanceof Error ? err.message : t("unableToSubmitAnswers", "Unable to submit answers"),
         tone: "error",
       });
     },
@@ -1980,14 +1986,14 @@ export function IssueDetail() {
       invalidateIssueDetail();
       invalidateIssueCollections();
       pushToast({
-        title: "Question cancelled",
+        title: t("questionCancelled", "Question cancelled"),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Cancel failed",
-        body: err instanceof Error ? err.message : "Unable to cancel the question",
+        title: t("cancelFailed", "Cancel failed"),
+        body: err instanceof Error ? err.message : t("unableToCancelQuestion", "Unable to cancel the question"),
         tone: "error",
       });
     },
@@ -2064,8 +2070,8 @@ export function IssueDetail() {
           return;
         } catch (err) {
           pushToast({
-            title: "Cancel failed",
-            body: err instanceof Error ? err.message : "Unable to cancel the queued comment",
+            title: t("cancelFailed", "Cancel failed"),
+            body: err instanceof Error ? err.message : t("unableToCancelQueuedComment", "Unable to cancel the queued comment"),
             tone: "error",
           });
         }
@@ -2100,8 +2106,8 @@ export function IssueDetail() {
         queryClient.setQueryData(queryKeys.issues.detail(issueId!), context.previousIssue);
       }
       pushToast({
-        title: "Comment failed",
-        body: err instanceof Error ? err.message : "Unable to post comment",
+        title: t("commentFailed", "Comment failed"),
+        body: err instanceof Error ? err.message : t("unableToPostComment", "Unable to post comment"),
         tone: "error",
       });
     },
@@ -2172,8 +2178,8 @@ export function IssueDetail() {
       invalidateIssueDetail();
       invalidateIssueRunState();
       pushToast({
-        title: "Interrupt requested",
-        body: "The active run is stopping so queued comments can continue next.",
+        title: t("interruptRequested", "Interrupt requested"),
+        body: t("interruptRequestedBody", "The active run is stopping so queued comments can continue next."),
         tone: "success",
       });
     },
@@ -2186,8 +2192,8 @@ export function IssueDetail() {
         setLocallyQueuedCommentRunIds(context.previousLocalQueuedCommentRunIds);
       }
       pushToast({
-        title: "Interrupt failed",
-        body: err instanceof Error ? err.message : "Unable to interrupt the active run",
+        title: t("interruptFailed", "Interrupt failed"),
+        body: err instanceof Error ? err.message : t("unableToInterruptRun", "Unable to interrupt the active run"),
         tone: "error",
       });
     },
@@ -2208,15 +2214,15 @@ export function IssueDetail() {
       invalidateIssueThreadLazily();
       invalidateIssueCollections();
       pushToast({
-        title: "Queued comment canceled",
-        body: "The queued message was restored to the composer.",
+        title: t("queuedCommentCanceled", "Queued comment canceled"),
+        body: t("queuedCommentRestored", "The queued message was restored to the composer."),
         tone: "success",
       });
     },
     onError: (err) => {
       pushToast({
-        title: "Cancel failed",
-        body: err instanceof Error ? err.message : "Unable to cancel the queued comment",
+        title: t("cancelFailed", "Cancel failed"),
+        body: err instanceof Error ? err.message : t("unableToCancelQueuedComment", "Unable to cancel the queued comment"),
         tone: "error",
       });
     },
@@ -2234,8 +2240,8 @@ export function IssueDetail() {
       if (cancelledCommentBody) {
         restoreQueuedCommentDraft(cancelledCommentBody);
         pushToast({
-          title: "Queued comment canceled",
-          body: "The queued message was restored to the composer.",
+          title: t("queuedCommentCanceled", "Queued comment canceled"),
+          body: t("queuedCommentRestored", "The queued message was restored to the composer."),
           tone: "success",
         });
       }
@@ -2290,11 +2296,11 @@ export function IssueDetail() {
         title:
           variables.sharingPreferenceAtSubmit === "prompt"
             ? variables.allowSharing
-              ? "Feedback saved. Future votes will share"
-              : "Feedback saved. Future votes will stay local"
+              ? t("feedbackSavedWillShare", "Feedback saved. Future votes will share")
+              : t("feedbackSavedStayLocal", "Feedback saved. Future votes will stay local")
             : variables.allowSharing
-              ? "Feedback saved and sharing enabled"
-              : "Feedback saved",
+              ? t("feedbackSavedSharingEnabled", "Feedback saved and sharing enabled")
+              : t("feedbackSaved", "Feedback saved"),
         tone: "success",
       });
     },
@@ -2303,8 +2309,8 @@ export function IssueDetail() {
         queryClient.setQueryData(queryKeys.issues.feedbackVotes(issueId!), context.previousVotes);
       }
       pushToast({
-        title: "Failed to save feedback",
-        body: err instanceof Error ? err.message : "Unknown error",
+        title: t("failedToSaveFeedback", "Failed to save feedback"),
+        body: err instanceof Error ? err.message : t("unknownError", "Unknown error"),
         tone: "error",
       });
     },
@@ -2312,7 +2318,7 @@ export function IssueDetail() {
 
   const uploadAttachment = useMutation({
     mutationFn: async (file: File) => {
-      if (!selectedCompanyId) throw new Error("No company selected");
+      if (!selectedCompanyId) throw new Error(t("noCompanySelected", "No company selected"));
       return issuesApi.uploadAttachment(selectedCompanyId, issueId!, file);
     },
     onSuccess: () => {
@@ -2321,7 +2327,7 @@ export function IssueDetail() {
       invalidateIssueDetail();
     },
     onError: (err) => {
-      setAttachmentError(err instanceof Error ? err.message : "Upload failed");
+      setAttachmentError(err instanceof Error ? err.message : t("uploadFailed", "Upload failed"));
     },
   });
 
@@ -2346,7 +2352,7 @@ export function IssueDetail() {
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.documents(issueId!) });
     },
     onError: (err) => {
-      setAttachmentError(err instanceof Error ? err.message : "Document import failed");
+      setAttachmentError(err instanceof Error ? err.message : t("documentImportFailed", "Document import failed"));
     },
   });
 
@@ -2358,7 +2364,7 @@ export function IssueDetail() {
       invalidateIssueDetail();
     },
     onError: (err) => {
-      setAttachmentError(err instanceof Error ? err.message : "Delete failed");
+      setAttachmentError(err instanceof Error ? err.message : t("deleteFailed", "Delete failed"));
     },
   });
 
@@ -2367,12 +2373,12 @@ export function IssueDetail() {
     onSuccess: () => {
       invalidateIssueCollections();
       navigate(sourceBreadcrumb.href.startsWith("/inbox") ? sourceBreadcrumb.href : "/inbox", { replace: true });
-      pushToast({ title: "Issue archived from inbox", tone: "success" });
+      pushToast({ title: t("issueArchivedFromInbox", "Issue archived from inbox"), tone: "success" });
     },
     onError: (err) => {
       pushToast({
-        title: "Archive failed",
-        body: err instanceof Error ? err.message : "Unable to archive this issue from the inbox",
+        title: t("archiveFailed", "Archive failed"),
+        body: err instanceof Error ? err.message : t("unableToArchiveFromInbox", "Unable to archive this issue from the inbox"),
         tone: "error",
       });
     },
@@ -2627,7 +2633,7 @@ export function IssueDetail() {
     const md = `# ${issue.identifier}: ${title}\n\n${body}`.trimEnd();
     await navigator.clipboard.writeText(md);
     setCopied(true);
-    pushToast({ title: "Copied to clipboard", tone: "success" });
+    pushToast({ title: t("copiedToClipboard", "Copied to clipboard"), tone: "success" });
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -2814,10 +2820,10 @@ export function IssueDetail() {
     const badges = new Map<string, string>();
     for (const child of childIssues) {
       if (!heldIssueIds.has(child.id)) continue;
-      badges.set(child.id, "Paused");
+      badges.set(child.id, t("pausedBadge", "Paused"));
     }
     return badges;
-  }, [childIssues, heldIssueIds]);
+  }, [childIssues, heldIssueIds, t]);
   const activePauseHoldRoot = useMemo(() => {
     if (!activePauseHold) return null;
     if (activePauseHold.rootIssueId === issue?.id) return issue ?? null;
@@ -2880,15 +2886,15 @@ export function IssueDetail() {
   const treeControlPrimaryButtonLabel =
     treeControlMode === "pause"
       ? treeControlScope === "leaf"
-        ? "Pause work"
-        : "Pause and stop work"
+        ? t("pauseWork", "Pause work")
+        : t("pauseAndStopWork", "Pause and stop work")
       : treeControlMode === "cancel"
-        ? `Cancel ${previewAffectedIssueCount} issues`
+        ? t("cancelNIssues", "Cancel {{n}} issues", { n: previewAffectedIssueCount })
       : treeControlMode === "restore"
-          ? `Restore ${previewAffectedIssueCount} issues`
+          ? t("restoreNIssues", "Restore {{n}} issues", { n: previewAffectedIssueCount })
           : treeControlScope === "leaf"
-            ? "Resume work"
-            : "Resume subtree";
+            ? t("resumeWork", "Resume work")
+            : t("resumeSubtree", "Resume subtree");
   const treePreviewAffectedIssueRows = treePreviewDisplayIssues.map((candidate) => ({
     candidate,
     issue: {
@@ -2912,8 +2918,8 @@ export function IssueDetail() {
   const pausedComposerHint = activePauseHold
     ? (
       issue.assigneeAgentId
-        ? `Sending this comment will wake ${agentMap.get(issue.assigneeAgentId)?.name ?? "the assignee"} for triage while the subtree remains paused.`
-        : "Assign an agent to wake them for triage while the subtree remains paused."
+        ? t("composerHintWake", "Sending this comment will wake {{name}} for triage while the subtree remains paused.", { name: agentMap.get(issue.assigneeAgentId)?.name ?? t("theAssignee", "the assignee") })
+        : t("composerHintAssign", "Assign an agent to wake them for triage while the subtree remains paused.")
     )
     : null;
   const composerHint = pausedComposerHint;
@@ -2942,10 +2948,10 @@ export function IssueDetail() {
         )}
       >
         <Paperclip className="h-3.5 w-3.5 mr-1.5" />
-        {uploadAttachment.isPending || importMarkdownDocument.isPending ? "Uploading..." : (
+        {uploadAttachment.isPending || importMarkdownDocument.isPending ? t("uploading", "Uploading...") : (
           <>
-            <span className="hidden sm:inline">Upload attachment</span>
-            <span className="sm:hidden">Upload</span>
+            <span className="hidden sm:inline">{t("uploadAttachment", "Upload attachment")}</span>
+            <span className="sm:hidden">{t("upload", "Upload")}</span>
           </>
         )}
       </Button>
@@ -2984,7 +2990,7 @@ export function IssueDetail() {
       {issue.hiddenAt && (
         <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <EyeOff className="h-4 w-4 shrink-0" />
-          This issue is hidden
+          {t("issueHidden", "This issue is hidden")}
         </div>
       )}
       {activePauseHold && (
@@ -2993,19 +2999,19 @@ export function IssueDetail() {
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">
-                  {childIssues.length === 0 ? "Paused by board." : "Subtree pause is active."}
+                  {childIssues.length === 0 ? t("pausedByBoard", "Paused by board.") : t("subtreePauseActive", "Subtree pause is active.")}
                 </span>
                 <span className="text-xs text-amber-900/80 dark:text-amber-100/80">
                   {childIssues.length === 0
-                    ? "Issue execution is held until resume. Human comments can still wake the assignee for triage."
-                    : "Root and descendant execution is held until resume. Human comments can still wake assignees for triage."}
+                    ? t("pausedLeafHelp", "Issue execution is held until resume. Human comments can still wake the assignee for triage.")
+                    : t("pausedSubtreeHelp", "Root and descendant execution is held until resume. Human comments can still wake assignees for triage.")}
                 </span>
               </div>
               <div className="text-xs text-amber-900/80 dark:text-amber-100/80">
                 {childIssues.length === 0
-                  ? "1 issue held"
-                  : `${heldDescendantCount} descendant${heldDescendantCount === 1 ? "" : "s"} held`}
-                {activeRootPauseHold?.createdAt ? ` · started ${relativeTime(activeRootPauseHold.createdAt)}` : ""}
+                  ? t("oneIssueHeld", "1 issue held")
+                  : t("descendantsHeld", "{{count}} descendant held", { count: heldDescendantCount, defaultValue_other: "{{count}} descendants held" })}
+                {activeRootPauseHold?.createdAt ? t("startedSuffix", " · started {{time}}", { time: relativeTime(activeRootPauseHold.createdAt) }) : ""}
               </div>
               {canShowSubtreeControls || canResumeLeafWork ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -3017,7 +3023,7 @@ export function IssueDetail() {
                       setTreeControlOpen(true);
                     }}
                   >
-                    {childIssues.length === 0 ? "Resume work" : "Resume subtree"}
+                    {childIssues.length === 0 ? t("resumeWork", "Resume work") : t("resumeSubtree", "Resume subtree")}
                   </Button>
                   <Button
                     variant="outline"
@@ -3028,7 +3034,7 @@ export function IssueDetail() {
                       setTreeControlOpen(true);
                     }}
                   >
-                    View affected ({childIssues.length === 0 ? 1 : heldDescendantCount})
+                    {t("viewAffected", "View affected ({{n}})", { n: childIssues.length === 0 ? 1 : heldDescendantCount })}
                   </Button>
                   {canShowSubtreeControls ? (
                     <Button
@@ -3041,7 +3047,7 @@ export function IssueDetail() {
                         setTreeControlOpen(true);
                       }}
                     >
-                      Cancel subtree...
+                      {t("cancelSubtree", "Cancel subtree...")}
                     </Button>
                   ) : null}
                 </div>
@@ -3049,7 +3055,7 @@ export function IssueDetail() {
             </div>
           ) : (
             <div className="text-xs">
-              This issue is paused by ancestor{" "}
+              {t("pausedByAncestor", "This issue is paused by ancestor")}{" "}
               {activePauseHoldRoot?.identifier ? (
                 <Link to={createIssueDetailPath(activePauseHoldRoot.identifier)} className="underline">
                   {activePauseHoldRoot.identifier}
@@ -3057,7 +3063,7 @@ export function IssueDetail() {
               ) : (
                 activePauseHold.rootIssueId.slice(0, 8)
               )}
-              . Resume from the root issue to deliver deferred work.
+              {t("resumeFromRoot", ". Resume from the root issue to deliver deferred work.")}
             </div>
           )}
         </div>
@@ -3082,7 +3088,7 @@ export function IssueDetail() {
                 <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400" />
               </span>
-              Live
+              {t("live", "Live")}
             </span>
           )}
 
@@ -3092,7 +3098,7 @@ export function IssueDetail() {
               className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 border border-violet-500/30 px-2 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 shrink-0 hover:bg-violet-500/20 transition-colors"
             >
               <Repeat className="h-3 w-3" />
-              Routine
+              {t("routine", "Routine")}
             </Link>
           )}
 
@@ -3103,10 +3109,10 @@ export function IssueDetail() {
           {issue.originKind === "issue_productivity_review" ? (
             <span
               className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300 shrink-0"
-              title="This task is a productivity review."
+              title={t("productivityReviewTitle", "This task is a productivity review.")}
             >
               <Eye className="h-3 w-3" />
-              Productivity review
+              {t("productivityReview", "Productivity review")}
             </span>
           ) : null}
 
@@ -3121,7 +3127,7 @@ export function IssueDetail() {
           ) : (
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground opacity-50 px-1 -mx-1 py-0.5">
               <Hexagon className="h-3 w-3 shrink-0" />
-              No project
+              {t("noProject", "No project")}
             </span>
           )}
 
@@ -3152,7 +3158,7 @@ export function IssueDetail() {
                 variant="ghost"
                 size="icon-xs"
                 onClick={copyIssueToClipboard}
-                title="Copy issue as markdown"
+                title={t("copyIssueAsMarkdown", "Copy issue as markdown")}
               >
                 {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
               </Button>
@@ -3160,7 +3166,7 @@ export function IssueDetail() {
                 variant="ghost"
                 size="icon-xs"
                 onClick={() => setMobilePropsOpen(true)}
-                title="Properties"
+                title={t("properties", "Properties")}
               >
                 <SlidersHorizontal className="h-4 w-4" />
               </Button>
@@ -3176,8 +3182,8 @@ export function IssueDetail() {
                   if (!archivePending && issue?.id) archiveFromInbox.mutate(issue.id);
                 }}
                 disabled={archivePending}
-                title="Archive from inbox"
-                aria-label="Archive from inbox"
+                title={t("archiveFromInbox", "Archive from inbox")}
+                aria-label={t("archiveFromInbox", "Archive from inbox")}
               >
                 <Archive className="h-4 w-4" />
               </Button>
@@ -3186,7 +3192,7 @@ export function IssueDetail() {
               variant="ghost"
               size="icon-xs"
               onClick={copyIssueToClipboard}
-              title="Copy issue as markdown"
+              title={t("copyIssueAsMarkdown", "Copy issue as markdown")}
             >
               {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
             </Button>
@@ -3198,7 +3204,7 @@ export function IssueDetail() {
                 panelVisible ? "opacity-0 pointer-events-none w-0 overflow-hidden" : "opacity-100",
               )}
               onClick={() => setPanelVisible(true)}
-              title="Show properties"
+              title={t("showProperties", "Show properties")}
             >
               <SlidersHorizontal className="h-4 w-4" />
             </Button>
@@ -3209,8 +3215,8 @@ export function IssueDetail() {
                   variant="ghost"
                   size="icon-xs"
                   className="shrink-0"
-                  aria-label="More issue actions"
-                  title="More issue actions"
+                  aria-label={t("moreIssueActions", "More issue actions")}
+                  title={t("moreIssueActions", "More issue actions")}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
@@ -3233,7 +3239,7 @@ export function IssueDetail() {
                   }}
                 >
                   <PauseCircle className="h-3 w-3" />
-                  Pause work...
+                  {t("pauseWorkMenu", "Pause work...")}
                 </button>
               ) : null}
               {canResumeLeafWork ? (
@@ -3247,7 +3253,7 @@ export function IssueDetail() {
                   }}
                 >
                   <PlayCircle className="h-3 w-3" />
-                  Resume work
+                  {t("resumeWork", "Resume work")}
                 </button>
               ) : null}
               {canShowSubtreeControls ? (
@@ -3262,7 +3268,7 @@ export function IssueDetail() {
                     }}
                   >
                     <PauseCircle className="h-3 w-3" />
-                    Pause subtree...
+                    {t("pauseSubtree", "Pause subtree...")}
                   </button>
                   {canResumeSubtree ? (
                     <button
@@ -3275,7 +3281,7 @@ export function IssueDetail() {
                       }}
                     >
                       <PlayCircle className="h-3 w-3" />
-                      Resume subtree
+                      {t("resumeSubtree", "Resume subtree")}
                     </button>
                   ) : null}
                   <button
@@ -3288,7 +3294,7 @@ export function IssueDetail() {
                     }}
                   >
                     <XCircle className="h-3 w-3" />
-                    Cancel subtree...
+                    {t("cancelSubtree", "Cancel subtree...")}
                   </button>
                   {canRestoreSubtree ? (
                     <button
@@ -3302,7 +3308,7 @@ export function IssueDetail() {
                       }}
                     >
                       <Repeat className="h-3 w-3" />
-                      Restore subtree...
+                      {t("restoreSubtree", "Restore subtree...")}
                     </button>
                   ) : null}
                 </>
@@ -3318,7 +3324,7 @@ export function IssueDetail() {
                 }}
               >
                 <EyeOff className="h-3 w-3" />
-                Hide this Issue
+                {t("hideThisIssue", "Hide this Issue")}
               </button>
             </PopoverContent>
             </Popover>
@@ -3337,7 +3343,7 @@ export function IssueDetail() {
           onSave={(description) => updateIssue.mutateAsync({ description })}
           as="p"
           className="text-[15px] leading-7 text-foreground"
-          placeholder="Add a description..."
+          placeholder={t("addDescription", "Add a description...")}
           multiline
           foldable
           mentions={mentionOptions}
@@ -3395,7 +3401,7 @@ export function IssueDetail() {
       {showRichSubIssuesSection ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-medium text-muted-foreground">Sub-issues</h3>
+            <h3 className="text-sm font-medium text-muted-foreground">{t("subIssues", "Sub-issues")}</h3>
           </div>
           <IssuesList
             issues={childIssues}
@@ -3411,7 +3417,7 @@ export function IssueDetail() {
             searchFilters={{ descendantOf: issue.id, includeBlockedBy: true }}
             searchWithinLoadedIssues
             baseCreateIssueDefaults={buildSubIssueDefaultsForViewer(issue, currentUserId)}
-            createIssueLabel="Sub-issue"
+            createIssueLabel={t("subIssue", "Sub-issue")}
             defaultSortField="workflow"
             showProgressSummary
             onUpdateIssue={handleChildIssueUpdate}
@@ -3421,7 +3427,7 @@ export function IssueDetail() {
         <div className="flex flex-wrap items-center justify-end gap-2 min-w-0">
           <Button variant="outline" size="sm" onClick={openNewSubIssue} className="shrink-0 shadow-none">
             <Plus className="mr-1.5 h-3.5 w-3.5" />
-            New Sub-issue
+            {t("newSubIssue", "New Sub-issue")}
           </Button>
         </div>
       )}
@@ -3472,7 +3478,7 @@ export function IssueDetail() {
         onDrop={(evt) => void handleAttachmentDrop(evt)}
       >
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-medium text-muted-foreground">Attachments</h3>
+          <h3 className="text-sm font-medium text-muted-foreground">{t("attachments", "Attachments")}</h3>
           {attachmentUploadButton}
         </div>
 
@@ -3504,7 +3510,7 @@ export function IssueDetail() {
                     className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/60"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <p className="text-xs text-white font-medium">Delete?</p>
+                    <p className="text-xs text-white font-medium">{t("deleteQuestion", "Delete?")}</p>
                     <div className="flex gap-1.5">
                       <button
                         type="button"
@@ -3516,7 +3522,7 @@ export function IssueDetail() {
                         }}
                         disabled={deleteAttachment.isPending}
                       >
-                        Yes
+                        {t("yes", "Yes")}
                       </button>
                       <button
                         type="button"
@@ -3526,7 +3532,7 @@ export function IssueDetail() {
                           setConfirmDeleteId(null);
                         }}
                       >
-                        No
+                        {t("no", "No")}
                       </button>
                     </div>
                   </div>
@@ -3538,7 +3544,7 @@ export function IssueDetail() {
                       e.stopPropagation();
                       setConfirmDeleteId(attachment.id);
                     }}
-                    title="Delete attachment"
+                    title={t("deleteAttachment", "Delete attachment")}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -3567,7 +3573,7 @@ export function IssueDetail() {
                     className="text-muted-foreground hover:text-destructive"
                     onClick={() => deleteAttachment.mutate(attachment.id)}
                     disabled={deleteAttachment.isPending}
-                    title="Delete attachment"
+                    title={t("deleteAttachment", "Delete attachment")}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -3601,15 +3607,15 @@ export function IssueDetail() {
         <TabsList variant="line" className="w-full justify-start gap-1">
           <TabsTrigger value="chat" className="gap-1.5">
             <MessageSquare className="h-3.5 w-3.5" />
-            Chat
+            {t("tabChat", "Chat")}
           </TabsTrigger>
           <TabsTrigger value="activity" className="gap-1.5">
             <ActivityIcon className="h-3.5 w-3.5" />
-            Activity
+            {t("tabActivity", "Activity")}
           </TabsTrigger>
           <TabsTrigger value="related-work" className="gap-1.5">
             <ListTree className="h-3.5 w-3.5" />
-            Related work
+            {t("tabRelatedWork", "Related work")}
           </TabsTrigger>
           {issuePluginTabItems.map((item) => (
             <TabsTrigger key={item.value} value={item.value}>
@@ -3722,18 +3728,18 @@ export function IssueDetail() {
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4">
             {treeControlMode === "cancel" ? (
               <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-                Cancelling a subtree is destructive. Non-terminal issues will be marked cancelled, and running or queued work will be interrupted where possible.
+                {t("cancelSubtreeWarning", "Cancelling a subtree is destructive. Non-terminal issues will be marked cancelled, and running or queued work will be interrupted where possible.")}
               </div>
             ) : null}
 
             <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">
-                Reason (optional)
+                {t("reasonOptional", "Reason (optional)")}
               </label>
               <Textarea
                 value={treeControlReason}
                 onChange={(event) => setTreeControlReason(event.target.value)}
-                placeholder="Explain why this subtree control is being applied..."
+                placeholder={t("reasonPlaceholder", "Explain why this subtree control is being applied...")}
                 className="min-h-[88px]"
               />
             </div>
@@ -3749,11 +3755,11 @@ export function IssueDetail() {
                     onChange={(event) => setTreeControlWakeAgentsOnResume(event.target.checked)}
                   />
                   <span>
-                    <span className="block font-medium">Wake affected agents ({previewAffectedAgentCount})</span>
+                    <span className="block font-medium">{t("wakeAffectedAgents", "Wake affected agents ({{n}})", { n: previewAffectedAgentCount })}</span>
                     <span className="text-xs text-muted-foreground">
                       {previewAffectedAgentCount === 0
-                        ? "No assigned agents are eligible to wake from this preview."
-                        : "Wake assigned agents after this operation completes."}
+                        ? t("noEligibleAgents", "No assigned agents are eligible to wake from this preview.")
+                        : t("wakeAgentsAfter", "Wake assigned agents after this operation completes.")}
                     </span>
                   </span>
                 </label>
@@ -3780,7 +3786,7 @@ export function IssueDetail() {
                   checked={treeControlCancelConfirmed}
                   onChange={(event) => setTreeControlCancelConfirmed(event.target.checked)}
                 />
-                <span>I understand this will cancel {previewAffectedIssueCount} issues.</span>
+                <span>{t("cancelConfirmCheckbox", "I understand this will cancel {{n}} issues.", { n: previewAffectedIssueCount })}</span>
               </label>
             ) : null}
 
@@ -3802,7 +3808,7 @@ export function IssueDetail() {
                       void refetchTreeControlPreview();
                     }}
                   >
-                    Retry preview
+                    {t("retryPreview", "Retry preview")}
                   </Button>
                 </div>
               ) : treeControlPreview ? (
@@ -3834,7 +3840,7 @@ export function IssueDetail() {
                             </span>
                             <span className="min-w-0 flex-1 truncate">{candidate.title}</span>
                             {candidate.skipped && candidate.skipReason === "terminal_status" ? (
-                              <span className="shrink-0 text-xs text-muted-foreground">Complete</span>
+                              <span className="shrink-0 text-xs text-muted-foreground">{t("complete", "Complete")}</span>
                             ) : null}
                           </Link>
                         </div>
@@ -3843,20 +3849,20 @@ export function IssueDetail() {
                   ) : null}
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">Preview unavailable.</p>
+                <p className="text-xs text-muted-foreground">{t("previewUnavailable", "Preview unavailable.")}</p>
               )}
             </div>
           </div>
           <DialogFooter className="border-t border-border/60 bg-background px-6 py-4">
             <Button variant="outline" onClick={() => setTreeControlOpen(false)} disabled={executeTreeControl.isPending}>
-              Close
+              {t("close", "Close")}
             </Button>
             <Button
               onClick={() => executeTreeControl.mutate()}
               disabled={executeTreeControl.isPending || !canApplyTreeControl}
               variant={treeControlMode === "cancel" ? "destructive" : "default"}
             >
-              {executeTreeControl.isPending ? "Applying..." : treeControlPrimaryButtonLabel}
+              {executeTreeControl.isPending ? t("applying", "Applying...") : treeControlPrimaryButtonLabel}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3866,7 +3872,7 @@ export function IssueDetail() {
       <Sheet open={mobilePropsOpen} onOpenChange={setMobilePropsOpen}>
         <SheetContent side="bottom" className="max-h-[85dvh] pb-[env(safe-area-inset-bottom)]">
           <SheetHeader>
-            <SheetTitle className="text-sm">Properties</SheetTitle>
+            <SheetTitle className="text-sm">{t("properties", "Properties")}</SheetTitle>
           </SheetHeader>
           <ScrollArea className="flex-1 overflow-y-auto">
             <div className="px-4 pb-4">

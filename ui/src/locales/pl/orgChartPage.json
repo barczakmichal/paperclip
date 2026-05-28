@@ -1,0 +1,11 @@
+{
+  "breadcrumb": "Schemat organizacyjny",
+  "selectCompany": "Wybierz firmę, aby zobaczyć schemat organizacyjny.",
+  "empty": "Brak zdefiniowanej hierarchii organizacyjnej.",
+  "importCompany": "Importuj firmę",
+  "exportCompany": "Eksportuj firmę",
+  "zoomIn": "Przybliż",
+  "zoomOut": "Oddal",
+  "fitToScreen": "Dopasuj do ekranu",
+  "fitChartToScreen": "Dopasuj schemat do ekranu"
+}

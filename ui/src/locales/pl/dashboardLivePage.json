@@ -1,0 +1,12 @@
+{
+  "breadcrumbDashboard": "Pulpit",
+  "breadcrumbLiveRuns": "Aktywne uruchomienia",
+  "createCompany": "Utwórz firmę, aby zobaczyć aktywne uruchomienia.",
+  "selectCompany": "Wybierz firmę, aby zobaczyć aktywne uruchomienia.",
+  "dashboardLink": "Pulpit",
+  "heading": "Aktywne uruchomienia agentów",
+  "subheading": "Najpierw aktywne uruchomienia, a po nich ostatnio zakończone.",
+  "showingUpTo": "Pokazuję do {{count}}",
+  "panelTitle": "Aktywne / ostatnie",
+  "panelEmpty": "Brak aktywnych lub ostatnich uruchomień agentów."
+}
