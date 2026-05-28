@@ -152,6 +152,13 @@ async function buildClaudeRuntimeConfig(input: ClaudeExecutionInput): Promise<Cl
     typeof envConfig.PAPERCLIP_API_KEY === "string" && envConfig.PAPERCLIP_API_KEY.trim().length > 0;
   const env: Record<string, string> = { ...buildPaperclipEnv(agent) };
   env.PAPERCLIP_RUN_ID = runId;
+  // Force UTF-8 in the agent's own tool shells (bash/curl). On Windows the
+  // default ANSI codepage (cp1252) mangles UTF-8 bytes the agent posts back to
+  // the API (e.g. Polish "ę" -> "Ä™"); a UTF-8 locale keeps those bytes intact.
+  if (!envConfig.LANG && !env.LANG) env.LANG = "C.UTF-8";
+  if (!envConfig.LC_ALL && !env.LC_ALL) env.LC_ALL = "C.UTF-8";
+  if (!envConfig.LC_CTYPE && !env.LC_CTYPE) env.LC_CTYPE = "C.UTF-8";
+  if (!envConfig.PYTHONUTF8 && !env.PYTHONUTF8) env.PYTHONUTF8 = "1";
 
   const wakeTaskId =
     (typeof context.taskId === "string" && context.taskId.trim().length > 0 && context.taskId.trim()) ||
