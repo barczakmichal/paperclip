@@ -1,0 +1,17 @@
+{
+  "helpful": "Pomocne",
+  "needsWork": "Wymaga poprawy",
+  "whatCouldBeBetter": "Co mogło być lepsze?",
+  "addShortNote": "Dodaj krótką notatkę",
+  "dismiss": "Odrzuć",
+  "saving": "Zapisywanie...",
+  "saveNote": "Zapisz notatkę",
+  "dialogTitle": "Zapisz preferencję udostępniania opinii",
+  "dialogDescription": "Wybierz, czy ocenione wyniki AI mogą być udostępniane Paperclip Labs. Ta odpowiedź staje się domyślna dla przyszłych głosów w górę i w dół.",
+  "voteSavedLocally": "Ten głos jest zawsze zapisywany lokalnie.",
+  "chooseSharing": "Wybierz <0>Zawsze zezwalaj</0>, aby udostępniać ten głos i przyszłe ocenione wyniki AI. Wybierz <1>Nie zezwalaj</1>, aby zachować ten głos i przyszłe głosy lokalnie.",
+  "changeLater": "Możesz to później zmienić w Ustawienia instancji > Ogólne.",
+  "readTerms": "Przeczytaj nasz regulamin",
+  "dontAllow": "Nie zezwalaj",
+  "alwaysAllow": "Zawsze zezwalaj"
+}

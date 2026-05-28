@@ -1,0 +1,22 @@
+{
+  "filtersCount": "Filtry: {{count}}",
+  "filter": "Filtruj",
+  "filters": "Filtry",
+  "clear": "Wyczyść",
+  "quickFilters": "Szybkie filtry",
+  "status": "Status",
+  "priority": "Priorytet",
+  "assignee": "Przypisany",
+  "noAssignee": "Brak przypisania",
+  "me": "Ja",
+  "creator": "Twórca",
+  "removeCreator": "Usuń twórcę {{label}}",
+  "searchCreators": "Szukaj twórców...",
+  "noCreatorsMatch": "Brak pasujących twórców.",
+  "project": "Projekt",
+  "labels": "Etykiety",
+  "workspace": "Przestrzeń robocza",
+  "visibility": "Widoczność",
+  "liveRunsOnly": "Tylko przebiegi na żywo",
+  "hideRoutineRuns": "Ukryj przebiegi rutynowe"
+}

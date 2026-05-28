@@ -1,0 +1,10 @@
+{
+  "setupRequiredTitle": "Wymagana konfiguracja instancji",
+  "setupRequiredActiveInvite": "Nie istnieje jeszcze administrator instancji. Zaproszenie bootstrap jest już aktywne. Sprawdź logi startowe Paperclip, aby znaleźć URL zaproszenia pierwszego administratora, lub uruchom to polecenie, aby je odświeżyć:",
+  "setupRequiredNoInvite": "Nie istnieje jeszcze administrator instancji. Uruchom to polecenie w środowisku Paperclip, aby wygenerować URL zaproszenia pierwszego administratora:",
+  "noAccessTitle": "Brak dostępu do firmy",
+  "noAccessBody1": "To konto jest zalogowane, ale nie ma aktywnego członkostwa w firmie ani dostępu administratora instancji w tej instancji Paperclip.",
+  "noAccessBody2": "Użyj zaproszenia do firmy lub zaloguj się na konto, które już należy do tej organizacji.",
+  "loading": "Ładowanie...",
+  "failedToLoad": "Nie udało się załadować stanu aplikacji"
+}

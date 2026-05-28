@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { approvalsApi } from "@/api/approvals";
 import { ApprovalCard } from "./ApprovalCard";
 
@@ -7,6 +8,7 @@ export interface LiveOpsApprovalsFooterProps {
 }
 
 export function LiveOpsApprovalsFooter({ companyId }: LiveOpsApprovalsFooterProps) {
+  const { t } = useTranslation("liveOpsApprovalsFooter");
   const queryClient = useQueryClient();
 
   const { data } = useQuery({
@@ -36,7 +38,7 @@ export function LiveOpsApprovalsFooter({ companyId }: LiveOpsApprovalsFooterProp
   return (
     <div className="border-t border-border bg-card/30 px-4 py-3">
       <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
-        Pending approvals
+        {t("pendingApprovals", "Pending approvals")}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {pending.map((approval) => (

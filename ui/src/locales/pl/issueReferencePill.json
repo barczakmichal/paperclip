@@ -1,0 +1,4 @@
+{
+  "issueAria": "Zgłoszenie: {{title}}",
+  "issueLabelAria": "Zgłoszenie {{label}}: {{title}}"
+}

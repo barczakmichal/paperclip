@@ -1,0 +1,18 @@
+{
+  "skills": "Umiejętności",
+  "name": "Nazwa",
+  "role": "Rola",
+  "title": "Tytuł",
+  "icon": "Ikona",
+  "capabilities": "Możliwości",
+  "adapter": "Adapter",
+  "scope": "Zakres",
+  "window": "Okno",
+  "metric": "Metryka",
+  "limitObserved": "Limit {{limit}} · Zaobserwowano {{observed}}",
+  "summary": "Podsumowanie",
+  "recommendedAction": "Rekomendowane działanie",
+  "onApproval": "Po zatwierdzeniu",
+  "risks": "Ryzyka",
+  "proposedComment": "Proponowany komentarz"
+}

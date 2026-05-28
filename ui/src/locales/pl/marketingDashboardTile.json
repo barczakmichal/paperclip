@@ -1,0 +1,10 @@
+{
+  "marketing": "Marketing",
+  "open": "Otwórz",
+  "loading": "Ładowanie...",
+  "noCampaigns": "Brak kampanii. Agenci AI zaproponują je tutaj.",
+  "live": "Na żywo",
+  "awaiting": "Oczekujące",
+  "dailyBudget": "Budżet dzienny",
+  "pausedDraftSummary": "{{paused}} wstrzymanych · {{draft}} szkiców"
+}

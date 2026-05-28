@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Link } from "@/lib/router";
 import { GlowFrame } from "@/broadcast";
 import {
@@ -33,8 +35,9 @@ const boardStatuses = [
   "cancelled",
 ];
 
-function statusLabel(status: string): string {
-  return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+function statusLabel(status: string, t: TFunction): string {
+  const fallback = status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return t(`status_${status}`, fallback);
 }
 
 interface Agent {
@@ -62,6 +65,7 @@ function KanbanColumn({
   agents?: Agent[];
   liveIssueIds?: Set<string>;
 }) {
+  const { t } = useTranslation("kanbanBoard");
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
   const isEmpty = issues.length === 0;
@@ -76,7 +80,7 @@ function KanbanColumn({
         {(!isEmpty || isOver) && (
           <>
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              {statusLabel(status)}
+              {statusLabel(status, t)}
             </span>
             <span className="text-xs text-muted-foreground/60 ml-auto tabular-nums">
               {issues.length}

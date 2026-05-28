@@ -1,4 +1,5 @@
 import { isValidElement, useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, ExternalLink, Github } from "lucide-react";
 import Markdown, { defaultUrlTransform, type Components, type Options } from "react-markdown";
@@ -34,6 +35,7 @@ function MarkdownIssueLink({
   issuePathId: string;
   children: ReactNode;
 }) {
+  const { t } = useTranslation("markdownBody");
   const { data } = useQuery({
     queryKey: queryKeys.issues.detail(issuePathId),
     queryFn: () => issuesApi.get(issuePathId),
@@ -43,7 +45,7 @@ function MarkdownIssueLink({
   const identifier = data?.identifier ?? issuePathId;
   const title = data?.title ?? identifier;
   const status = data?.status;
-  const issueLabel = title !== identifier ? `Issue ${identifier}: ${title}` : `Issue ${identifier}`;
+  const issueLabel = title !== identifier ? t("issueLabelTitle", "Issue {{identifier}}: {{title}}", { identifier, title }) : t("issueLabel", "Issue {{identifier}}", { identifier });
 
   return (
     <Link
@@ -190,6 +192,7 @@ function CodeBlock({
   children: ReactNode;
   preProps: React.HTMLAttributes<HTMLPreElement>;
 }) {
+  const { t } = useTranslation("markdownBody");
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
   const preRef = useRef<HTMLPreElement>(null);
@@ -229,7 +232,7 @@ function CodeBlock({
     }, 1500);
   }, [children]);
 
-  const label = failed ? "Copy failed" : copied ? "Copied!" : "Copy";
+  const label = failed ? t("copyFailed", "Copy failed") : copied ? t("copied", "Copied!") : t("copy", "Copy");
 
   return (
     <div className="paperclip-markdown-codeblock">
@@ -243,7 +246,7 @@ function CodeBlock({
       <button
         type="button"
         onClick={handleCopy}
-        aria-label="Copy code"
+        aria-label={t("copyCode", "Copy code")}
         title={label}
         className="paperclip-markdown-codeblock-copy"
         data-copied={copied || undefined}
@@ -261,6 +264,7 @@ function CodeBlock({
 }
 
 function MermaidDiagramBlock({ source, darkMode }: { source: string; darkMode: boolean }) {
+  const { t } = useTranslation("markdownBody");
   const renderId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -288,14 +292,14 @@ function MermaidDiagramBlock({ source, darkMode }: { source: string; darkMode: b
         const message =
           err instanceof Error && err.message
             ? err.message
-            : "Failed to render Mermaid diagram.";
+            : t("failedToRenderMermaid", "Failed to render Mermaid diagram.");
         setError(message);
       });
 
     return () => {
       active = false;
     };
-  }, [darkMode, renderId, source]);
+  }, [darkMode, renderId, source, t]);
 
   return (
     <div className="paperclip-mermaid">
@@ -304,7 +308,7 @@ function MermaidDiagramBlock({ source, darkMode }: { source: string; darkMode: b
       ) : (
         <>
           <p className={cn("paperclip-mermaid-status", error && "paperclip-mermaid-status-error")}>
-            {error ? `Unable to render Mermaid diagram: ${error}` : "Rendering Mermaid diagram..."}
+            {error ? t("unableToRenderMermaid", "Unable to render Mermaid diagram: {{error}}", { error }) : t("renderingMermaid", "Rendering Mermaid diagram...")}
           </p>
           <pre className="paperclip-mermaid-source">
             <code className="language-mermaid">{source}</code>

@@ -1,0 +1,23 @@
+{
+  "boardFallback": "Tablica",
+  "signedIn": "Zalogowano",
+  "localWorkspaceBoard": "Lokalna tablica przestrzeni roboczej",
+  "badgeAccount": "Konto",
+  "badgeLocal": "Lokalne",
+  "openAccountMenu": "Otwórz menu konta",
+  "paperclipVersion": "Paperclip v{{version}}",
+  "viewProfile": "Zobacz profil",
+  "viewProfileDesc": "Otwórz rejestr swojej aktywności, zadań i zużycia.",
+  "editProfile": "Edytuj profil",
+  "editProfileDesc": "Zaktualizuj swoją nazwę wyświetlaną i awatar.",
+  "instanceSettings": "Ustawienia instancji",
+  "instanceSettingsDesc": "Wróć do ostatnio otwartej strony ustawień.",
+  "documentation": "Dokumentacja",
+  "documentationDesc": "Otwórz dokumentację Paperclip w nowej karcie.",
+  "switchToLight": "Przełącz na tryb jasny",
+  "switchToDark": "Przełącz na tryb ciemny",
+  "toggleAppearanceDesc": "Przełącz wygląd aplikacji.",
+  "signingOut": "Wylogowywanie...",
+  "signOut": "Wyloguj się",
+  "endBrowserSession": "Zakończ tę sesję przeglądarki."
+}

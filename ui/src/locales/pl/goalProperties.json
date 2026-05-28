@@ -1,0 +1,9 @@
+{
+  "status": "Status",
+  "level": "Poziom",
+  "owner": "Właściciel",
+  "none": "Brak",
+  "parentGoal": "Cel nadrzędny",
+  "created": "Utworzono",
+  "updated": "Zaktualizowano"
+}

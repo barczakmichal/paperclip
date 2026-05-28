@@ -1,0 +1,19 @@
+{
+  "authenticationFailed": "Uwierzytelnianie nie powiodło się",
+  "loading": "Ładowanie…",
+  "signInTitle": "Zaloguj się do Paperclip",
+  "signUpTitle": "Utwórz konto Paperclip",
+  "signInSubtitle": "Użyj adresu e-mail i hasła, aby uzyskać dostęp do tej instancji.",
+  "signUpSubtitle": "Utwórz konto dla tej instancji. Potwierdzenie e-mail nie jest wymagane w v1.",
+  "fillRequiredFields": "Wypełnij wszystkie wymagane pola.",
+  "nameLabel": "Imię",
+  "emailLabel": "E-mail",
+  "passwordLabel": "Hasło",
+  "working": "Trwa przetwarzanie…",
+  "signInButton": "Zaloguj się",
+  "createAccountButton": "Utwórz konto",
+  "needAccount": "Potrzebujesz konta?",
+  "haveAccount": "Masz już konto?",
+  "createOne": "Utwórz konto",
+  "signInLink": "Zaloguj się"
+}

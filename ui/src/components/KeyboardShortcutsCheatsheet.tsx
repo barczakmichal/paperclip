@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface ShortcutEntry {
@@ -10,42 +12,44 @@ interface ShortcutSection {
   shortcuts: ShortcutEntry[];
 }
 
-const sections: ShortcutSection[] = [
-  {
-    title: "Inbox",
-    shortcuts: [
-      { keys: ["j"], label: "Move down" },
-      { keys: ["↓"], label: "Move down" },
-      { keys: ["k"], label: "Move up" },
-      { keys: ["↑"], label: "Move up" },
-      { keys: ["←"], label: "Collapse selected group" },
-      { keys: ["→"], label: "Expand selected group" },
-      { keys: ["Enter"], label: "Open selected item" },
-      { keys: ["a"], label: "Archive item" },
-      { keys: ["y"], label: "Archive item" },
-      { keys: ["r"], label: "Mark as read" },
-      { keys: ["U"], label: "Mark as unread" },
-    ],
-  },
-  {
-    title: "Issue detail",
-    shortcuts: [
-      { keys: ["y"], label: "Quick-archive back to inbox" },
-      { keys: ["g", "i"], label: "Go to inbox" },
-      { keys: ["g", "c"], label: "Focus comment composer" },
-    ],
-  },
-  {
-    title: "Global",
-    shortcuts: [
-      { keys: ["/"], label: "Search current page or quick search" },
-      { keys: ["c"], label: "New issue" },
-      { keys: ["["], label: "Toggle sidebar" },
-      { keys: ["]"], label: "Toggle panel" },
-      { keys: ["?"], label: "Show keyboard shortcuts" },
-    ],
-  },
-];
+function buildSections(t: TFunction): ShortcutSection[] {
+  return [
+    {
+      title: t("inbox", "Inbox"),
+      shortcuts: [
+        { keys: ["j"], label: t("moveDown", "Move down") },
+        { keys: ["↓"], label: t("moveDown", "Move down") },
+        { keys: ["k"], label: t("moveUp", "Move up") },
+        { keys: ["↑"], label: t("moveUp", "Move up") },
+        { keys: ["←"], label: t("collapseGroup", "Collapse selected group") },
+        { keys: ["→"], label: t("expandGroup", "Expand selected group") },
+        { keys: ["Enter"], label: t("openItem", "Open selected item") },
+        { keys: ["a"], label: t("archiveItem", "Archive item") },
+        { keys: ["y"], label: t("archiveItem", "Archive item") },
+        { keys: ["r"], label: t("markRead", "Mark as read") },
+        { keys: ["U"], label: t("markUnread", "Mark as unread") },
+      ],
+    },
+    {
+      title: t("issueDetail", "Issue detail"),
+      shortcuts: [
+        { keys: ["y"], label: t("quickArchive", "Quick-archive back to inbox") },
+        { keys: ["g", "i"], label: t("goToInbox", "Go to inbox") },
+        { keys: ["g", "c"], label: t("focusComposer", "Focus comment composer") },
+      ],
+    },
+    {
+      title: t("global", "Global"),
+      shortcuts: [
+        { keys: ["/"], label: t("searchPage", "Search current page or quick search") },
+        { keys: ["c"], label: t("newIssue", "New issue") },
+        { keys: ["["], label: t("toggleSidebar", "Toggle sidebar") },
+        { keys: ["]"], label: t("togglePanel", "Toggle panel") },
+        { keys: ["?"], label: t("showShortcuts", "Show keyboard shortcuts") },
+      ],
+    },
+  ];
+}
 
 function KeyCap({ children }: { children: string }) {
   return (
@@ -56,6 +60,8 @@ function KeyCap({ children }: { children: string }) {
 }
 
 export function KeyboardShortcutsCheatsheetContent() {
+  const { t } = useTranslation("keyboardShortcutsCheatsheet");
+  const sections = buildSections(t);
   return (
     <>
       <div className="divide-y divide-border border-t border-border">
@@ -74,7 +80,7 @@ export function KeyboardShortcutsCheatsheetContent() {
                   <div className="flex items-center gap-1">
                     {shortcut.keys.map((key, i) => (
                       <span key={key} className="flex items-center gap-1">
-                        {i > 0 && <span className="text-xs text-muted-foreground">then</span>}
+                        {i > 0 && <span className="text-xs text-muted-foreground">{t("then", "then")}</span>}
                         <KeyCap>{key}</KeyCap>
                       </span>
                     ))}
@@ -87,7 +93,7 @@ export function KeyboardShortcutsCheatsheetContent() {
       </div>
       <div className="border-t border-border px-5 py-3">
         <p className="text-xs text-muted-foreground">
-          Press <KeyCap>Esc</KeyCap> to close &middot; Shortcuts are disabled in text fields
+          {t("pressPrefix", "Press")} <KeyCap>Esc</KeyCap> {t("toCloseSuffix", "to close · Shortcuts are disabled in text fields")}
         </p>
       </div>
     </>
@@ -101,11 +107,12 @@ export function KeyboardShortcutsCheatsheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useTranslation("keyboardShortcutsCheatsheet");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md gap-0 p-0 overflow-hidden" showCloseButton={false}>
         <DialogHeader className="px-5 pt-5 pb-3">
-          <DialogTitle className="text-base">Keyboard shortcuts</DialogTitle>
+          <DialogTitle className="text-base">{t("title", "Keyboard shortcuts")}</DialogTitle>
         </DialogHeader>
         <KeyboardShortcutsCheatsheetContent />
       </DialogContent>

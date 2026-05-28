@@ -1,0 +1,17 @@
+{
+  "resumeAgent": "Wznów agenta",
+  "pauseAgent": "Wstrzymaj agenta",
+  "updating": "Aktualizowanie...",
+  "budgetPaused": "Wstrzymany przez budżet",
+  "agentPausedByBudget": "Agent wstrzymany przez budżet",
+  "live": "{{count}} na żywo",
+  "openActionsFor": "Otwórz akcje dla {{name}}",
+  "editAgent": "Edytuj agenta",
+  "agentPausedByBudgetLimits": "Agent został wstrzymany przez limity budżetu",
+  "agentPaused": "Agent wstrzymany",
+  "agentResumed": "Agent wznowiony",
+  "couldNotPauseAgent": "Nie udało się wstrzymać agenta",
+  "couldNotResumeAgent": "Nie udało się wznowić agenta",
+  "agents": "Agenci",
+  "newAgent": "Nowy agent"
+}

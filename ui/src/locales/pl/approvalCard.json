@@ -1,0 +1,11 @@
+{
+  "requestedBy": "Zgłoszone przez",
+  "createdAgo": "Wniosek o zatwierdzenie utworzony {{time}}",
+  "awaitingApproval": "oczekuje na zatwierdzenie",
+  "decisionNote": "Notatka decyzji.",
+  "approving": "Zatwierdzanie...",
+  "approve": "Zatwierdź",
+  "rejecting": "Odrzucanie...",
+  "reject": "Odrzuć",
+  "viewDetails": "Zobacz szczegóły"
+}

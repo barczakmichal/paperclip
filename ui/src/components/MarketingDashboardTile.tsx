@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Megaphone, Radio } from "lucide-react";
 import { Link } from "@/lib/router";
 import { marketingApi, type MarketingCampaign } from "../api/marketing";
@@ -20,6 +21,7 @@ function aggregateBudget(rows: MarketingCampaign[]): number {
 }
 
 export function MarketingDashboardTile({ companyId }: Props) {
+  const { t } = useTranslation("marketingDashboardTile");
   const { data: campaigns = [], isLoading } = useQuery({
     queryKey: ["marketing.campaigns.dashboard", companyId],
     queryFn: () => marketingApi.listCampaigns(companyId),
@@ -37,31 +39,31 @@ export function MarketingDashboardTile({ companyId }: Props) {
       <header className="flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <Megaphone className="h-3.5 w-3.5" />
-          Marketing
+          {t("marketing", "Marketing")}
         </h2>
         <Link to="/marketing" className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground">
           <Radio className="h-3 w-3" />
-          Open
+          {t("open", "Open")}
         </Link>
       </header>
 
       {isLoading ? (
-        <div className="mt-4 text-xs text-muted-foreground">Loading...</div>
+        <div className="mt-4 text-xs text-muted-foreground">{t("loading", "Loading...")}</div>
       ) : campaigns.length === 0 ? (
         <div className="mt-4 text-xs text-muted-foreground">
-          No campaigns yet. AI agents will propose them here.
+          {t("noCampaigns", "No campaigns yet. AI agents will propose them here.")}
         </div>
       ) : (
         <>
           <div className="mt-3 grid grid-cols-3 gap-2">
-            <Metric value={live.length} label="Live" accent="text-cyan-400" />
-            <Metric value={pending.length} label="Awaiting" accent="text-amber-400" />
-            <Metric value={`${dailyBudget.toFixed(0)} PLN`} label="Daily budget" />
+            <Metric value={live.length} label={t("live", "Live")} accent="text-cyan-400" />
+            <Metric value={pending.length} label={t("awaiting", "Awaiting")} accent="text-amber-400" />
+            <Metric value={`${dailyBudget.toFixed(0)} PLN`} label={t("dailyBudget", "Daily budget")} />
           </div>
 
           {(paused.length > 0 || draft.length > 0) ? (
             <div className="mt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-              {paused.length} paused · {draft.length} draft
+              {t("pausedDraftSummary", "{{paused}} paused · {{draft}} draft", { paused: paused.length, draft: draft.length })}
             </div>
           ) : null}
 

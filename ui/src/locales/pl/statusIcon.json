@@ -1,0 +1,14 @@
+{
+  "blocked": "Zablokowane",
+  "waitingOnActiveSubIssue": "Zablokowane · oczekuje na aktywne podzadanie {{identifier}}",
+  "waitingOnOneActiveSubIssue": "Zablokowane · oczekuje na 1 aktywne podzadanie",
+  "waitingOnActiveSubIssues": "Zablokowane · oczekuje na {{count}} aktywnych podzadań",
+  "coveredByActiveDependency": "Zablokowane · pokryte przez aktywną zależność {{identifier}}",
+  "coveredByOneActiveDependency": "Zablokowane · pokryte przez 1 aktywną zależność",
+  "coveredByActiveDependencies": "Zablokowane · pokryte przez {{count}} aktywnych zależności",
+  "reviewStalledOn": "Zablokowane · przegląd utknął na {{identifier}}",
+  "reviewStalledNoNextStep": "Zablokowane · przegląd utknął bez jasnego kolejnego kroku",
+  "reviewsStalledNoNextStep": "Zablokowane · {{count}} przeglądów utknęło bez jasnego kolejnego kroku",
+  "unresolvedBlockerNeedsAttention": "Zablokowane · {{count}} nierozwiązana blokada wymaga uwagi",
+  "unresolvedBlockersNeedAttention": "Zablokowane · {{count}} nierozwiązanych blokad wymaga uwagi"
+}

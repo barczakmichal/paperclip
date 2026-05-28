@@ -1,0 +1,13 @@
+{
+  "noRunsYet": "Brak uruchomień",
+  "noIssues": "Brak zadań",
+  "runsTooltip": "{{day}}: {{count}} uruchomień",
+  "issuesTooltip": "{{day}}: {{count}} zadań",
+  "statusTodo": "Do zrobienia",
+  "statusInProgress": "W toku",
+  "statusInReview": "W przeglądzie",
+  "statusDone": "Gotowe",
+  "statusBlocked": "Zablokowane",
+  "statusCancelled": "Anulowane",
+  "statusBacklog": "Backlog"
+}

@@ -1,0 +1,10 @@
+{
+  "unknownManager": "Nieznany przełożony (nieaktualne ID)",
+  "reportsTo": "Podlega {{name}}",
+  "reportsToTerminated": "Podlega {{name}} (zakończony)",
+  "disabledEmptyLabel": "Podlega: brak (CEO)",
+  "chooseLabel": "Podlega...",
+  "noManager": "Brak przełożonego",
+  "currentTerminated": "Obecnie: {{name}} (zakończony)",
+  "savedManagerMissing": "Zapisany przełożony nie istnieje w tej firmie. Wybierz nowego przełożonego lub wyczyść."
+}

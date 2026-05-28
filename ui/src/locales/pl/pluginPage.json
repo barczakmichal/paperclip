@@ -1,0 +1,8 @@
+{
+  "pluginsBreadcrumb": "Wtyczki",
+  "selectCompany": "Wybierz firmę, aby wyświetlić tę stronę.",
+  "loading": "Ładowanie…",
+  "multiplePluginsRoutePrefix": "Wiele wtyczek deklaruje trasę",
+  "multiplePluginsRouteSuffix": "Użyj trasy z identyfikatorem wtyczki, dopóki konflikt nie zostanie rozwiązany.",
+  "back": "Wstecz"
+}

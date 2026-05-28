@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, ExternalLink, MailPlus } from "lucide-react";
 import { accessApi } from "@/api/access";
@@ -10,32 +11,41 @@ import { useToast } from "@/context/ToastContext";
 import { Link } from "@/lib/router";
 import { queryKeys } from "@/lib/queryKeys";
 
-const inviteRoleOptions = [
-  {
-    value: "viewer",
-    label: "Viewer",
-    description: "Can view company work and follow along without operational permissions.",
-    gets: "No built-in grants.",
-  },
-  {
-    value: "operator",
-    label: "Operator",
-    description: "Recommended for people who need to help run work without managing access.",
-    gets: "Can assign tasks.",
-  },
-  {
-    value: "admin",
-    label: "Admin",
-    description: "Recommended for operators who need to invite people, create agents, and approve joins.",
-    gets: "Can create agents, invite users, assign tasks, and approve join requests.",
-  },
-  {
-    value: "owner",
-    label: "Owner",
-    description: "Full company access, including membership and permission management.",
-    gets: "Everything in Admin, plus managing members and permission grants.",
-  },
-] as const;
+type InviteRoleOption = {
+  value: "viewer" | "operator" | "admin" | "owner";
+  label: string;
+  description: string;
+  gets: string;
+};
+
+function buildInviteRoleOptions(t: (key: string, defaultValue: string) => string): InviteRoleOption[] {
+  return [
+    {
+      value: "viewer",
+      label: t("roleViewerLabel", "Viewer"),
+      description: t("roleViewerDescription", "Can view company work and follow along without operational permissions."),
+      gets: t("roleViewerGets", "No built-in grants."),
+    },
+    {
+      value: "operator",
+      label: t("roleOperatorLabel", "Operator"),
+      description: t("roleOperatorDescription", "Recommended for people who need to help run work without managing access."),
+      gets: t("roleOperatorGets", "Can assign tasks."),
+    },
+    {
+      value: "admin",
+      label: t("roleAdminLabel", "Admin"),
+      description: t("roleAdminDescription", "Recommended for operators who need to invite people, create agents, and approve joins."),
+      gets: t("roleAdminGets", "Can create agents, invite users, assign tasks, and approve join requests."),
+    },
+    {
+      value: "owner",
+      label: t("roleOwnerLabel", "Owner"),
+      description: t("roleOwnerDescription", "Full company access, including membership and permission management."),
+      gets: t("roleOwnerGets", "Everything in Admin, plus managing members and permission grants."),
+    },
+  ];
+}
 
 const INVITE_HISTORY_PAGE_SIZE = 5;
 
@@ -45,6 +55,8 @@ function isInviteHistoryRow(value: unknown): value is Awaited<ReturnType<typeof 
 }
 
 export function CompanyInvites() {
+  const { t } = useTranslation("companyInvitesPage");
+  const inviteRoleOptions = useMemo(() => buildInviteRoleOptions(t), [t]);
   const { selectedCompany, selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const { pushToast } = useToast();
@@ -72,8 +84,8 @@ export function CompanyInvites() {
     }
 
     pushToast({
-      title: "Clipboard unavailable",
-      body: "Copy the invite URL manually from the field below.",
+      title: t("clipboardUnavailable", "Clipboard unavailable"),
+      body: t("clipboardUnavailableBody", "Copy the invite URL manually from the field below."),
       tone: "warn",
     });
     return false;
@@ -81,11 +93,11 @@ export function CompanyInvites() {
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: selectedCompany?.name ?? "Company", href: "/dashboard" },
-      { label: "Settings", href: "/company/settings" },
-      { label: "Invites" },
+      { label: selectedCompany?.name ?? t("companyFallback", "Company"), href: "/dashboard" },
+      { label: t("settingsBreadcrumb", "Settings"), href: "/company/settings" },
+      { label: t("invitesBreadcrumb", "Invites") },
     ]);
-  }, [selectedCompany?.name, setBreadcrumbs]);
+  }, [selectedCompany?.name, setBreadcrumbs, t]);
 
   const inviteHistoryQueryKey = queryKeys.access.invites(selectedCompanyId ?? "", "all", INVITE_HISTORY_PAGE_SIZE);
   const invitesQuery = useInfiniteQuery({
@@ -121,15 +133,15 @@ export function CompanyInvites() {
 
       await queryClient.invalidateQueries({ queryKey: inviteHistoryQueryKey });
       pushToast({
-        title: "Invite created",
-        body: copied ? "Invite ready below and copied to clipboard." : "Invite ready below.",
+        title: t("toastInviteCreated", "Invite created"),
+        body: copied ? t("toastInviteReadyCopied", "Invite ready below and copied to clipboard.") : t("toastInviteReady", "Invite ready below."),
         tone: "success",
       });
     },
     onError: (error) => {
       pushToast({
-        title: "Failed to create invite",
-        body: error instanceof Error ? error.message : "Unknown error",
+        title: t("toastInviteCreateFailed", "Failed to create invite"),
+        body: error instanceof Error ? error.message : t("unknownError", "Unknown error"),
         tone: "error",
       });
     },
@@ -139,32 +151,32 @@ export function CompanyInvites() {
     mutationFn: (inviteId: string) => accessApi.revokeInvite(inviteId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: inviteHistoryQueryKey });
-      pushToast({ title: "Invite revoked", tone: "success" });
+      pushToast({ title: t("toastInviteRevoked", "Invite revoked"), tone: "success" });
     },
     onError: (error) => {
       pushToast({
-        title: "Failed to revoke invite",
-        body: error instanceof Error ? error.message : "Unknown error",
+        title: t("toastInviteRevokeFailed", "Failed to revoke invite"),
+        body: error instanceof Error ? error.message : t("unknownError", "Unknown error"),
         tone: "error",
       });
     },
   });
 
   if (!selectedCompanyId) {
-    return <div className="text-sm text-muted-foreground">Select a company to manage invites.</div>;
+    return <div className="text-sm text-muted-foreground">{t("selectCompany", "Select a company to manage invites.")}</div>;
   }
 
   if (invitesQuery.isLoading) {
-    return <div className="text-sm text-muted-foreground">Loading invites…</div>;
+    return <div className="text-sm text-muted-foreground">{t("loading", "Loading invites…")}</div>;
   }
 
   if (invitesQuery.error) {
     const message =
       invitesQuery.error instanceof ApiError && invitesQuery.error.status === 403
-        ? "You do not have permission to manage company invites."
+        ? t("noPermission", "You do not have permission to manage company invites.")
         : invitesQuery.error instanceof Error
           ? invitesQuery.error.message
-          : "Failed to load invites.";
+          : t("loadFailed", "Failed to load invites.");
     return <div className="text-sm text-destructive">{message}</div>;
   }
 
@@ -173,23 +185,23 @@ export function CompanyInvites() {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <MailPlus className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">Company Invites</h1>
+          <h1 className="text-lg font-semibold">{t("title", "Company Invites")}</h1>
         </div>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          Create human invite links for company access. New invite links are copied to your clipboard when they are generated.
+          {t("subtitle", "Create human invite links for company access. New invite links are copied to your clipboard when they are generated.")}
         </p>
       </div>
 
       <section className="space-y-4 rounded-xl border border-border p-5">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Create invite</h2>
+          <h2 className="text-sm font-semibold">{t("createInviteHeading", "Create invite")}</h2>
           <p className="text-sm text-muted-foreground">
-            Generate a human invite link and choose the default access it should request.
+            {t("createInviteSubtitle", "Generate a human invite link and choose the default access it should request.")}
           </p>
         </div>
 
         <fieldset className="space-y-3">
-          <legend className="text-sm font-medium">Choose a role</legend>
+          <legend className="text-sm font-medium">{t("chooseRole", "Choose a role")}</legend>
           <div className="rounded-xl border border-border">
             {inviteRoleOptions.map((option, index) => {
               const checked = humanRole === option.value;
@@ -211,7 +223,7 @@ export function CompanyInvites() {
                       <span className="text-sm font-medium">{option.label}</span>
                       {option.value === "operator" ? (
                         <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                          Default
+                          {t("defaultBadge", "Default")}
                         </span>
                       ) : null}
                     </span>
@@ -225,30 +237,30 @@ export function CompanyInvites() {
         </fieldset>
 
         <div className="rounded-lg border border-border px-4 py-3 text-sm text-muted-foreground">
-          Each invite link is single-use. The first successful use consumes the link and creates or reuses the matching join request before approval.
+          {t("singleUseNotice", "Each invite link is single-use. The first successful use consumes the link and creates or reuses the matching join request before approval.")}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={() => createInviteMutation.mutate()} disabled={createInviteMutation.isPending}>
-            {createInviteMutation.isPending ? "Creating…" : "Create invite"}
+            {createInviteMutation.isPending ? t("creating", "Creating…") : t("createInviteButton", "Create invite")}
           </Button>
-          <span className="text-sm text-muted-foreground">Invite history below keeps the audit trail.</span>
+          <span className="text-sm text-muted-foreground">{t("auditTrailNote", "Invite history below keeps the audit trail.")}</span>
         </div>
 
         {latestInviteUrl ? (
           <div className="space-y-3 rounded-lg border border-border px-4 py-4">
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-medium">Latest invite link</div>
+                <div className="text-sm font-medium">{t("latestInviteLink", "Latest invite link")}</div>
                 {latestInviteCopied ? (
                   <div className="inline-flex items-center gap-1 text-xs font-medium text-foreground">
                     <Check className="h-3.5 w-3.5" />
-                    Copied
+                    {t("copied", "Copied")}
                   </div>
                 ) : null}
               </div>
               <div className="text-sm text-muted-foreground">
-                This URL includes the current Paperclip domain returned by the server.
+                {t("urlIncludesDomain", "This URL includes the current Paperclip domain returned by the server.")}
               </div>
             </div>
             <button
@@ -265,7 +277,7 @@ export function CompanyInvites() {
               <Button size="sm" variant="outline" asChild>
                 <a href={latestInviteUrl} target="_blank" rel="noreferrer">
                   <ExternalLink className="h-4 w-4" />
-                  Open invite
+                  {t("openInvite", "Open invite")}
                 </a>
               </Button>
             </div>
@@ -276,19 +288,19 @@ export function CompanyInvites() {
       <section className="rounded-xl border border-border">
         <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div className="space-y-1">
-            <h2 className="text-sm font-semibold">Invite history</h2>
+            <h2 className="text-sm font-semibold">{t("inviteHistoryHeading", "Invite history")}</h2>
             <p className="text-sm text-muted-foreground">
-              Review invite status, role, inviter, and any linked join request.
+              {t("inviteHistorySubtitle", "Review invite status, role, inviter, and any linked join request.")}
             </p>
           </div>
           <Link to="/inbox/requests" className="text-sm underline underline-offset-4">
-            Open join request queue
+            {t("openJoinQueue", "Open join request queue")}
           </Link>
         </div>
 
         {inviteHistory.length === 0 ? (
           <div className="border-t border-border px-5 py-8 text-sm text-muted-foreground">
-            No invites have been created for this company yet.
+            {t("noInvites", "No invites have been created for this company yet.")}
           </div>
         ) : (
           <div className="border-t border-border">
@@ -296,12 +308,12 @@ export function CompanyInvites() {
               <table className="min-w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="px-5 py-3 font-medium text-muted-foreground">State</th>
-                    <th className="px-5 py-3 font-medium text-muted-foreground">Role</th>
-                    <th className="px-5 py-3 font-medium text-muted-foreground">Invited by</th>
-                    <th className="px-5 py-3 font-medium text-muted-foreground">Created</th>
-                    <th className="px-5 py-3 font-medium text-muted-foreground">Join request</th>
-                    <th className="px-5 py-3 text-right font-medium text-muted-foreground">Action</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t("colState", "State")}</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t("colRole", "Role")}</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t("colInvitedBy", "Invited by")}</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t("colCreated", "Created")}</th>
+                    <th className="px-5 py-3 font-medium text-muted-foreground">{t("colJoinRequest", "Join request")}</th>
+                    <th className="px-5 py-3 text-right font-medium text-muted-foreground">{t("colAction", "Action")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -314,7 +326,7 @@ export function CompanyInvites() {
                       </td>
                       <td className="px-5 py-3 align-top">{invite.humanRole ?? "—"}</td>
                       <td className="px-5 py-3 align-top">
-                        <div>{invite.invitedByUser?.name || invite.invitedByUser?.email || "Unknown inviter"}</div>
+                        <div>{invite.invitedByUser?.name || invite.invitedByUser?.email || t("unknownInviter", "Unknown inviter")}</div>
                         {invite.invitedByUser?.email && invite.invitedByUser.name ? (
                           <div className="text-xs text-muted-foreground">{invite.invitedByUser.email}</div>
                         ) : null}
@@ -325,7 +337,7 @@ export function CompanyInvites() {
                       <td className="px-5 py-3 align-top">
                         {invite.relatedJoinRequestId ? (
                           <Link to="/inbox/requests" className="underline underline-offset-4">
-                            Review request
+                            {t("reviewRequest", "Review request")}
                           </Link>
                         ) : (
                           <span className="text-muted-foreground">—</span>
@@ -339,10 +351,10 @@ export function CompanyInvites() {
                             onClick={() => revokeMutation.mutate(invite.id)}
                             disabled={revokeMutation.isPending}
                           >
-                            Revoke
+                            {t("revoke", "Revoke")}
                           </Button>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Inactive</span>
+                          <span className="text-xs text-muted-foreground">{t("inactive", "Inactive")}</span>
                         )}
                       </td>
                     </tr>
@@ -358,7 +370,7 @@ export function CompanyInvites() {
                   onClick={() => invitesQuery.fetchNextPage()}
                   disabled={invitesQuery.isFetchingNextPage}
                 >
-                  {invitesQuery.isFetchingNextPage ? "Loading more…" : "View more"}
+                  {invitesQuery.isFetchingNextPage ? t("loadingMore", "Loading more…") : t("viewMore", "View more")}
                 </Button>
               </div>
             ) : null}

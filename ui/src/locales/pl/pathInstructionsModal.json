@@ -1,0 +1,19 @@
+{
+  "title": "Jak uzyskać pełną ścieżkę",
+  "descriptionPrefix": "Wklej bezwzględną ścieżkę (np.",
+  "descriptionSuffix": ") do pola tekstowego.",
+  "choose": "Wybierz",
+  "macStep1": "Otwórz Finder i przejdź do folderu.",
+  "macStep2": "Kliknij folder prawym przyciskiem (lub Control-klik).",
+  "macStep3": "Przytrzymaj klawisz Option (⌥) — \"Kopiuj\" zmieni się na \"Kopiuj jako ścieżkę\".",
+  "macStep4": "Kliknij \"Kopiuj jako ścieżkę\", a następnie wklej tutaj.",
+  "macTip": "Możesz też otworzyć Terminal, wpisać cd, przeciągnąć folder do okna terminala i nacisnąć Enter. Następnie wpisz pwd, aby zobaczyć pełną ścieżkę.",
+  "windowsStep1": "Otwórz Eksplorator plików i przejdź do folderu.",
+  "windowsStep2": "Kliknij pasek adresu u góry — pojawi się pełna ścieżka.",
+  "windowsStep3": "Skopiuj ścieżkę, a następnie wklej tutaj.",
+  "windowsTip": "Alternatywnie przytrzymaj Shift i kliknij folder prawym przyciskiem, a następnie wybierz \"Kopiuj jako ścieżkę\".",
+  "linuxStep1": "Otwórz terminal i przejdź do katalogu poleceniem cd.",
+  "linuxStep2": "Uruchom pwd, aby wyświetlić pełną ścieżkę.",
+  "linuxStep3": "Skopiuj wynik i wklej tutaj.",
+  "linuxTip": "W większości menedżerów plików Ctrl+L odsłania pełną ścieżkę w pasku adresu."
+}

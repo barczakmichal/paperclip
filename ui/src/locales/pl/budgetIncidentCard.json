@@ -1,0 +1,16 @@
+{
+  "stateResolved": "Rozwiązane",
+  "stateDismissed": "Odrzucone",
+  "stateEscalated": "Eskalowane",
+  "statePendingApproval": "Oczekuje na zatwierdzenie",
+  "stateOpen": "Otwarte",
+  "hardStop": "{{scope}} — twarde zatrzymanie",
+  "spendingReached": "Wydatki osiągnęły {{observed}} przy limicie {{limit}}.",
+  "pausedProject": "Wykonanie projektu jest wstrzymane. Nowa praca w tym projekcie nie ruszy, dopóki nie rozwiążesz incydentu budżetowego.",
+  "pausedScope": "Ten zakres jest wstrzymany. Nowe heartbeaty nie ruszą, dopóki nie rozwiążesz incydentu budżetowego.",
+  "newBudgetLabel": "Nowy budżet (USD)",
+  "applying": "Stosowanie...",
+  "raiseAndResume": "Zwiększ budżet i wznów",
+  "mustExceed": "Nowy budżet musi przekraczać aktualnie zaobserwowane wydatki.",
+  "keepPaused": "Pozostaw wstrzymane"
+}

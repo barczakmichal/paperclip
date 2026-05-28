@@ -1,0 +1,22 @@
+{
+  "runRoutine": "Uruchom rutynę",
+  "dialogDescription": "Wybierz agenta i opcjonalny projekt dla tego jednego uruchomienia. Domyślne ustawienia rutyny są wstępnie wypełnione i nie zostaną zmienione.",
+  "agentRequired": "Agent *",
+  "agent": "Agent",
+  "selectAnAgent": "Wybierz agenta",
+  "searchAgents": "Szukaj agentów...",
+  "noAgentsFound": "Nie znaleziono agentów.",
+  "project": "Projekt",
+  "noProject": "Brak projektu",
+  "searchProjects": "Szukaj projektów...",
+  "noProjectsFound": "Nie znaleziono projektów.",
+  "noValue": "Brak wartości",
+  "true": "Prawda",
+  "false": "Fałsz",
+  "chooseAValue": "Wybierz wartość",
+  "defaultAgentRequired": "Dla tego uruchomienia wymagany jest domyślny agent.",
+  "missing": "Brakuje: {{fields}}",
+  "chooseExistingWorkspace": "Wybierz istniejącą przestrzeń roboczą przed uruchomieniem.",
+  "cancel": "Anuluj",
+  "running": "Uruchamianie..."
+}

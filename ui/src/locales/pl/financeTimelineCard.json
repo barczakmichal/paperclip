@@ -1,0 +1,9 @@
+{
+  "empty": "Brak zdarzeń finansowych w tym okresie.",
+  "title": "Ostatnie zdarzenia finansowe",
+  "description": "Doładowania, opłaty, uznania, zobowiązania i inne opłaty spoza żądań.",
+  "invoice": "faktura {{id}}",
+  "region": "region {{region}}",
+  "tier": "poziom {{tier}}",
+  "estimated": "szacowane"
+}

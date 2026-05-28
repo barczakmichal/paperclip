@@ -1,0 +1,14 @@
+{
+  "actorBoard": "zarząd",
+  "actorAgent": "agent",
+  "actorSystem": "system",
+  "revisionLabel": "wersja {{number}} — {{time}} • {{actor}}",
+  "diffPrefix": "Porównanie —",
+  "old": "Stara",
+  "new": "Nowa",
+  "selectRevision": "Wybierz wersję",
+  "loadingRevisions": "Ładowanie wersji...",
+  "selectTwo": "Wybierz dwie wersje do porównania.",
+  "sameRevision": "Obie strony to ta sama wersja.",
+  "content": "Treść"
+}

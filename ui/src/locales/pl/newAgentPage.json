@@ -1,0 +1,23 @@
+{
+  "agentsBreadcrumb": "Agenci",
+  "newAgentBreadcrumb": "Nowy agent",
+  "createAgentFailed": "Nie udało się utworzyć agenta",
+  "openCodeRequiresModel": "OpenCode wymaga jawnego modelu w formacie dostawca/model.",
+  "loadOpenCodeModelsFailed": "Nie udało się załadować modeli OpenCode.",
+  "openCodeModelsLoading": "Modele OpenCode wciąż się ładują. Poczekaj i spróbuj ponownie.",
+  "noOpenCodeModels": "Nie wykryto modeli OpenCode. Uruchom `opencode models` i uwierzytelnij dostawców.",
+  "openCodeModelUnavailable": "Skonfigurowany model OpenCode jest niedostępny: {{model}}",
+  "title": "Nowy agent",
+  "subtitle": "Zaawansowana konfiguracja agenta",
+  "agentNamePlaceholder": "Nazwa agenta",
+  "titlePlaceholder": "Tytuł (np. VP ds. Inżynierii)",
+  "companySkillsHeading": "Umiejętności firmy",
+  "companySkillsDescription": "Opcjonalne umiejętności z biblioteki firmy. Wbudowane umiejętności środowiska wykonawczego Paperclip są dodawane automatycznie.",
+  "noOptionalSkills": "Nie zainstalowano jeszcze żadnych opcjonalnych umiejętności firmy.",
+  "willBeCeo": "To będzie CEO",
+  "cancel": "Anuluj",
+  "testing": "Testowanie...",
+  "testAgent": "Testuj agenta",
+  "creating": "Tworzenie…",
+  "createAgent": "Utwórz agenta"
+}

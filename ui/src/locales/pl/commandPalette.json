@@ -1,0 +1,17 @@
+{
+  "searchPlaceholder": "Szukaj zadań, agentów, projektów...",
+  "noResults": "Nie znaleziono wyników.",
+  "actions": "Akcje",
+  "createNewIssue": "Utwórz nowe zadanie",
+  "createNewAgent": "Utwórz nowego agenta",
+  "createNewProject": "Utwórz nowy projekt",
+  "pages": "Strony",
+  "dashboard": "Pulpit",
+  "inbox": "Skrzynka",
+  "issues": "Zadania",
+  "projects": "Projekty",
+  "goals": "Cele",
+  "agents": "Agenci",
+  "costs": "Koszty",
+  "activity": "Aktywność"
+}

@@ -1,0 +1,11 @@
+{
+  "status": "Status",
+  "role": "Rola",
+  "title": "Tytuł",
+  "adapter": "Adapter",
+  "session": "Sesja",
+  "lastError": "Ostatni błąd",
+  "lastHeartbeat": "Ostatni heartbeat",
+  "reportsTo": "Podlega",
+  "created": "Utworzono"
+}

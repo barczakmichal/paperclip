@@ -1,0 +1,10 @@
+{
+  "richEditorFailedLoad": "Edytor wizualny nie wczytał treści",
+  "richEditorUnavailable": "Edytor wizualny jest niedostępny dla tego znacznika. Wyświetlanie surowego źródła.",
+  "retryRichEditor": "Ponów edytor wizualny",
+  "badgeProject": "Projekt",
+  "badgeUser": "Użytkownik",
+  "badgeSkill": "Umiejętność",
+  "dropFileToUpload": "Upuść plik, aby przesłać",
+  "dropImageToUpload": "Upuść obraz, aby przesłać"
+}

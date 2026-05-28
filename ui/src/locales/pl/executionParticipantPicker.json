@@ -1,0 +1,11 @@
+{
+  "user": "Użytkownik",
+  "reviewers": "Recenzenci",
+  "approvers": "Zatwierdzający",
+  "reviewersLower": "recenzentów",
+  "approversLower": "zatwierdzających",
+  "searchPlaceholder": "Szukaj {{label}}...",
+  "noParticipants": "Brak: {{label}}",
+  "assignToMe": "Przypisz do mnie",
+  "requester": "Zgłaszający"
+}
