@@ -1,0 +1,12 @@
+{
+  "panelTitle": "Agenci",
+  "emptyRuns": "Brak ostatnich uruchomień agentów.",
+  "moreRuns": "+{{count}} kolejnych uruchomień",
+  "liveNow": "Na żywo",
+  "finishedAgo": "Zakończono {{time}}",
+  "startedAgo": "Start {{time}}",
+  "now": "Teraz",
+  "nextStep": "Następny krok",
+  "waiting": "Czeka na output...",
+  "noActivity": "Brak bieżącej aktywności"
+}

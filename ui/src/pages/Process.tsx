@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import type { Issue } from "@paperclipai/shared";
 import { ChevronRight, Workflow, Ban, Activity } from "lucide-react";
 import { Link } from "@/lib/router";
@@ -23,12 +24,13 @@ function isRunActive(run: LiveRunForIssue) {
 }
 
 export function Process() {
+  const { t } = useTranslation("process");
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Proces" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: t("breadcrumb", "Process") }]);
+  }, [setBreadcrumbs, t]);
 
   const { data: issues, isLoading } = useQuery({
     queryKey: [...queryKeys.issues.list(selectedCompanyId!), "process"],
@@ -85,7 +87,7 @@ export function Process() {
   }, [issues]);
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={Workflow} message="Wybierz firmę, aby zobaczyć proces." />;
+    return <EmptyState icon={Workflow} message={t("selectCompany", "Select a company to view the process.")} />;
   }
 
   if (isLoading) {
@@ -93,16 +95,16 @@ export function Process() {
   }
 
   if (!issues || issues.length === 0) {
-    return <EmptyState icon={Workflow} message="Brak zadań. Proces pojawi się, gdy agenci zaczną pracę." />;
+    return <EmptyState icon={Workflow} message={t("empty", "No tasks yet. The process appears once agents start working.")} />;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Proces</h1>
+          <h1 className="text-xl font-bold">{t("title", "Process")}</h1>
           <p className="text-sm text-muted-foreground">
-            Hierarchia zadań firmy z bieżącą aktywnością agentów i zależnościami.
+            {t("subtitle", "Company task hierarchy with live agent activity and dependencies.")}
           </p>
         </div>
         <Link
@@ -142,6 +144,7 @@ function ProcessNode({
   agentNameById: Map<string, string>;
   activeRunByIssueId: Map<string, LiveRunForIssue>;
 }) {
+  const { t } = useTranslation("process");
   const children = childrenByParent.get(issue.id) ?? [];
   const run = activeRunByIssueId.get(issue.id);
   const agentName = issue.assigneeAgentId ? agentNameById.get(issue.assigneeAgentId) : null;
@@ -173,7 +176,7 @@ function ProcessNode({
               {issue.title}
             </Link>
             {run && (
-              <span className="relative flex h-2 w-2 shrink-0" title="Agent pracuje teraz">
+              <span className="relative flex h-2 w-2 shrink-0" title={t("agentWorking", "Agent working now")}>
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-70" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-500" />
               </span>
@@ -182,7 +185,7 @@ function ProcessNode({
 
           {run?.currentThought && (
             <p className="mt-1 line-clamp-1 text-xs text-cyan-700 dark:text-cyan-300">
-              Teraz: {run.currentThought}
+              {t("nowPrefix", "Now")}: {run.currentThought}
             </p>
           )}
 
@@ -190,7 +193,7 @@ function ProcessNode({
             {agentName && <Identity name={agentName} size="sm" className="[&>span:last-child]:!text-[11px]" />}
             {blockedByCount > 0 && (
               <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                <Ban className="h-3 w-3" /> zablokowane przez {blockedByCount}
+                <Ban className="h-3 w-3" /> {t("blockedBy", "blocked by {{count}}", { count: blockedByCount })}
               </span>
             )}
           </div>

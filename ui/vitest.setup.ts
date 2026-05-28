@@ -1,3 +1,9 @@
+import i18n from "./src/lib/i18n";
+
+// Tests assert against English UI text. Force English so components render
+// their English defaultValue regardless of the app's Polish default language.
+void i18n.changeLanguage("en");
+
 const storageEntries = new Map<string, string>();
 
 function installStorageMock(target: Record<string, unknown>) {

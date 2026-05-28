@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { useTranslation } from "react-i18next";
 import { Activity, ArrowRight, Wrench } from "lucide-react";
 import type { LiveRunForIssue } from "../api/heartbeats";
 import { cn } from "../lib/utils";
@@ -16,19 +17,21 @@ export const AgentActivitySummary = memo(function AgentActivitySummary({
   run,
   className,
 }: AgentActivitySummaryProps) {
+  const { t } = useTranslation("agents");
   const active = isRunActive(run);
   const thought = run.currentThought?.trim() || null;
   const tool = run.currentTool?.trim() || null;
   const next = run.nextAction?.trim() || null;
 
-  const nowText = thought ?? (active ? "Czeka na output..." : "Brak bieżącej aktywności");
+  const nowText =
+    thought ?? (active ? t("waiting", "Waiting for output...") : t("noActivity", "No current activity"));
 
   return (
     <div className={cn("flex flex-col gap-3 text-sm", className)}>
       <section className="flex flex-col gap-1">
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           <Activity className={cn("h-3 w-3", active && "text-cyan-500")} />
-          Teraz
+          {t("now", "Now")}
         </span>
         <p className={cn("leading-snug", thought ? "text-foreground" : "text-muted-foreground")}>
           {nowText}
@@ -45,7 +48,7 @@ export const AgentActivitySummary = memo(function AgentActivitySummary({
       <section className="flex flex-col gap-1">
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           <ArrowRight className="h-3 w-3" />
-          Następny krok
+          {t("nextStep", "Next step")}
         </span>
         <p className={cn("leading-snug", next ? "text-foreground" : "text-muted-foreground")}>
           {next ?? "—"}

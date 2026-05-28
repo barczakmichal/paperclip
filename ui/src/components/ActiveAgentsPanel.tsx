@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react";
 import { Link } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import type { Issue } from "@paperclipai/shared";
 import { heartbeatsApi, type LiveRunForIssue } from "../api/heartbeats";
 import { issuesApi } from "../api/issues";
@@ -33,17 +34,18 @@ interface ActiveAgentsPanelProps {
 
 export function ActiveAgentsPanel({
   companyId,
-  title = "Agenci",
+  title,
   minRunCount = MIN_DASHBOARD_RUNS,
   fetchLimit,
   cardLimit = DASHBOARD_RUN_CARD_LIMIT,
   gridClassName,
   cardClassName,
-  emptyMessage = "Brak ostatnich uruchomień agentów.",
+  emptyMessage,
   queryScope = "dashboard",
   showMoreLink = true,
   headerAction,
 }: ActiveAgentsPanelProps) {
+  const { t } = useTranslation("agents");
   const { data: liveRuns } = useQuery({
     queryKey: [...queryKeys.liveRuns(companyId), queryScope, { minRunCount, fetchLimit }],
     queryFn: () => heartbeatsApi.liveRunsForCompany(companyId, { minCount: minRunCount, limit: fetchLimit }),
@@ -70,13 +72,13 @@ export function ActiveAgentsPanel({
     <div className="bg-card border border-border rounded-lg p-4">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          {title}
+          {title ?? t("panelTitle", "Agents")}
         </h3>
         {headerAction}
       </div>
       {runs.length === 0 ? (
         <div className="rounded-xl border border-border p-4">
-          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+          <p className="text-sm text-muted-foreground">{emptyMessage ?? t("emptyRuns", "No recent agent runs.")}</p>
         </div>
       ) : (
         <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4", gridClassName)}>
@@ -94,7 +96,7 @@ export function ActiveAgentsPanel({
       {showMoreLink && hiddenRunCount > 0 && (
         <div className="mt-3 flex justify-end text-xs text-muted-foreground">
           <Link to="/dashboard/live" className="hover:text-foreground hover:underline">
-            +{hiddenRunCount} {hiddenRunCount === 1 ? "kolejne uruchomienie" : "kolejnych uruchomień"}
+            {t("moreRuns", "+{{count}} more runs", { count: hiddenRunCount })}
           </Link>
         </div>
       )}
@@ -113,6 +115,7 @@ const AgentRunCard = memo(function AgentRunCard({
   isActive: boolean;
   className?: string;
 }) {
+  const { t } = useTranslation("agents");
   return (
     <div className={cn(
       "flex h-[320px] flex-col overflow-hidden rounded-xl border shadow-sm hover:bg-accent/40",
@@ -136,7 +139,7 @@ const AgentRunCard = memo(function AgentRunCard({
               <Identity name={run.agentName} size="sm" className="[&>span:last-child]:!text-[11px]" />
             </div>
             <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-              <span>{isActive ? "Na żywo" : run.finishedAt ? `Zakończono ${relativeTime(run.finishedAt)}` : `Start ${relativeTime(run.createdAt)}`}</span>
+              <span>{isActive ? t("liveNow", "Live now") : run.finishedAt ? t("finishedAgo", "Finished {{time}}", { time: relativeTime(run.finishedAt) }) : t("startedAgo", "Started {{time}}", { time: relativeTime(run.createdAt) })}</span>
             </div>
           </div>
 
