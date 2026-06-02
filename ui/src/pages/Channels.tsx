@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { LiveEvent } from "@paperclipai/shared";
 import { useTranslation } from "react-i18next";
 import { MessageSquare, Send } from "lucide-react";
 import { channelsApi } from "@/api/channels";
@@ -372,10 +373,17 @@ function MemberCard({ member }: { member: ChannelMemberStatus }) {
 function MembersPanel({ channelId }: { channelId: string }) {
   const { t } = useTranslation("channels");
 
+  // POLLING FALLBACK: members are polled every 15 s so agent status stays fresh
+  // even when the backend has not yet emitted channel.status.updated events.
+  // The WebSocket handler in <Channels> will also invalidate this query on
+  // channel.status.updated once the backend starts emitting it, so polling
+  // can be relaxed or removed at that point. Messages are NOT polled here —
+  // the WS channel.message.created event + post-send invalidation cover them.
   const { data: members, isLoading, isError } = useQuery({
     queryKey: queryKeys.channels.members(channelId),
     queryFn: () => channelsApi.members(channelId),
     enabled: !!channelId,
+    refetchInterval: 15_000,
   });
 
   return (
@@ -414,12 +422,114 @@ export function Channels() {
   const { t } = useTranslation("channels");
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     setBreadcrumbs([{ label: t("breadcrumb", "Channels") }]);
   }, [setBreadcrumbs, t]);
 
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+
+  // Stable ref so the onmessage closure always reads the latest activeChannelId
+  // without adding it to the WebSocket effect's dependency array (which would
+  // tear down and recreate the socket on every channel switch).
+  const activeChannelIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeChannelIdRef.current = activeChannelId;
+  }, [activeChannelId]);
+
+  // ── Realtime WebSocket subscription ────────────────────────────────────────
+  // Mirrors the connection/reconnect/cleanup pattern from useLiveRunTranscripts.
+  // Guard against environments where WebSocket is not available (e.g. jsdom
+  // without a WS mock) so the page never throws in test environments.
+  useEffect(() => {
+    if (typeof WebSocket === "undefined") return;
+    if (!selectedCompanyId) return;
+
+    let closed = false;
+    let reconnectTimer: number | null = null;
+    let socket: WebSocket | null = null;
+
+    const scheduleReconnect = () => {
+      if (closed) return;
+      reconnectTimer = window.setTimeout(connect, 1500);
+    };
+
+    const connect = () => {
+      if (closed) return;
+      const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+      const url = `${protocol}://${window.location.host}/api/companies/${encodeURIComponent(selectedCompanyId)}/events/ws`;
+      socket = new WebSocket(url);
+
+      socket.onmessage = (message) => {
+        const raw = typeof message.data === "string" ? message.data : "";
+        if (!raw) return;
+
+        let event: LiveEvent;
+        try {
+          event = JSON.parse(raw) as LiveEvent;
+        } catch {
+          return;
+        }
+
+        if (event.companyId !== selectedCompanyId) return;
+
+        const payload = event.payload ?? {};
+
+        if (event.type === "channel.message.created") {
+          // Invalidate messages + members for the active channel only to avoid
+          // needless refetches for channels the user is not currently viewing.
+          const channelId = typeof payload["channelId"] === "string" ? payload["channelId"] : null;
+          if (!channelId) return;
+          if (channelId !== activeChannelIdRef.current) return;
+          void queryClient.invalidateQueries({ queryKey: queryKeys.channels.messages(channelId) });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.channels.members(channelId) });
+          return;
+        }
+
+        if (event.type === "channel.status.updated") {
+          // Backend does not emit this event yet — handler wired for
+          // forward-compatibility. Status freshness is currently guaranteed by
+          // the refetchInterval on the members query in MembersPanel.
+          const channelId = typeof payload["channelId"] === "string" ? payload["channelId"] : null;
+          if (!channelId || channelId !== activeChannelIdRef.current) return;
+          void queryClient.invalidateQueries({ queryKey: queryKeys.channels.members(channelId) });
+        }
+      };
+
+      socket.onerror = () => {
+        socket?.close();
+      };
+
+      socket.onclose = () => {
+        scheduleReconnect();
+      };
+    };
+
+    connect();
+
+    return () => {
+      closed = true;
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      if (socket) {
+        socket.onmessage = null;
+        socket.onerror = null;
+        socket.onclose = null;
+        if (socket.readyState === WebSocket.CONNECTING) {
+          // Defer the close until the handshake completes to avoid a noisy
+          // "closed before the connection is established" browser warning.
+          socket.onopen = () => {
+            socket?.close(1000, "channels_unmount");
+          };
+        } else if (socket.readyState === WebSocket.OPEN) {
+          socket.close(1000, "channels_unmount");
+        }
+      }
+    };
+  // Re-create the socket only when the company or queryClient changes.
+  // activeChannelId is tracked via activeChannelIdRef to avoid reconnecting
+  // every time the user switches channels.
+  }, [selectedCompanyId, queryClient]);
 
   const { data: channels, isLoading, isError } = useQuery({
     queryKey: queryKeys.channels.list(selectedCompanyId!),

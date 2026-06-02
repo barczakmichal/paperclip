@@ -49,6 +49,64 @@ vi.mock("../components/MarkdownBody", () => ({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
+// ── WebSocket mock ────────────────────────────────────────────────────────────
+// jsdom does not provide WebSocket; stub a minimal implementation so the page
+// mounts without throwing and so tests can simulate incoming messages.
+
+class FakeWebSocket extends EventTarget {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+
+  readyState = FakeWebSocket.OPEN;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onmessage: ((ev: MessageEvent) => any) | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onerror: ((ev: Event) => any) | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onclose: ((ev: CloseEvent) => any) | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onopen: ((ev: Event) => any) | null = null;
+
+  // Expose the last created instance so tests can call simulateMessage.
+  static lastInstance: FakeWebSocket | null = null;
+
+  constructor(public url: string) {
+    super();
+    FakeWebSocket.lastInstance = this;
+  }
+
+  simulateMessage(data: unknown) {
+    const event = new MessageEvent("message", { data: JSON.stringify(data) });
+    if (this.onmessage) this.onmessage(event);
+  }
+
+  close(code?: number, reason?: string) {
+    void code;
+    void reason;
+    this.readyState = FakeWebSocket.CLOSED;
+    if (this.onclose) {
+      this.onclose(new CloseEvent("close"));
+    }
+  }
+
+  send(_data: string) { /* no-op */ }
+}
+
+// Install before tests, restore after.
+let originalWebSocket: typeof WebSocket;
+beforeEach(() => {
+  originalWebSocket = globalThis.WebSocket;
+  FakeWebSocket.lastInstance = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).WebSocket = FakeWebSocket;
+});
+afterEach(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).WebSocket = originalWebSocket;
+});
+
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
 const CHANNEL: Channel = {
@@ -199,6 +257,44 @@ describe("Channels page", () => {
     await flushReact();
 
     expect(mockChannelsApi.post).toHaveBeenCalledWith("ch1", "Hello world");
+  });
+
+  it("invalidates messages and members queries on channel.message.created WS event", async () => {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <Channels />
+        </QueryClientProvider>,
+      );
+    });
+    await flushReact();
+    await flushReact();
+
+    // The page should have opened a WebSocket and auto-selected the first channel (ch1).
+    const ws = FakeWebSocket.lastInstance;
+    expect(ws).not.toBeNull();
+
+    // Spy on invalidateQueries AFTER the socket is up.
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    // Simulate the backend pushing a channel.message.created event for ch1.
+    await act(async () => {
+      ws!.simulateMessage({
+        type: "channel.message.created",
+        companyId: "c1",
+        payload: { channelId: "ch1", messageId: "msg99" },
+        createdAt: new Date().toISOString(),
+      });
+    });
+    await flushReact();
+
+    // Both the messages and members query keys should have been invalidated.
+    const calledKeys = invalidateSpy.mock.calls.map((call) =>
+      JSON.stringify((call[0] as { queryKey: unknown }).queryKey),
+    );
+    expect(calledKeys.some((k) => k.includes("messages") && k.includes("ch1"))).toBe(true);
+    expect(calledKeys.some((k) => k.includes("members") && k.includes("ch1"))).toBe(true);
   });
 
   it("shows an error and keeps the text when the post fails", async () => {
