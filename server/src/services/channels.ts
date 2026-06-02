@@ -355,5 +355,9 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
     });
   }
 
-  return { syncForCompany, list, membersOf, postMessage, listMessages, memberStatuses };
+  async function getChannel(channelId: string) {
+    return loadChannel(channelId);
+  }
+
+  return { syncForCompany, list, membersOf, postMessage, listMessages, memberStatuses, getChannel };
 }

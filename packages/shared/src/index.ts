@@ -533,6 +533,11 @@ export type {
   ChannelMessageKind,
   ChannelMemberStatus,
 } from "./types/channel.js";
+
+export {
+  postChannelMessageSchema,
+  type PostChannelMessage,
+} from "./validators/channel.js";
 export {
   ISSUE_REFERENCE_IDENTIFIER_RE,
   buildIssueReferenceHref,

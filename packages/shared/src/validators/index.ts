@@ -1,4 +1,9 @@
 export {
+  postChannelMessageSchema,
+  type PostChannelMessage,
+} from "./channel.js";
+
+export {
   instanceGeneralSettingsSchema,
   patchInstanceGeneralSettingsSchema,
   type InstanceGeneralSettings,
