@@ -1,5 +1,6 @@
 export type ChannelKind = "department" | "company";
 export type ChannelMessageKind = "message" | "agent_reply" | "system";
+export type AgentOnlineStatus = "active" | "idle" | "paused" | "error";
 
 export interface Channel {
   id: string;
@@ -16,7 +17,7 @@ export interface ChannelMemberStatus {
   name: string;
   role: string;
   icon: string | null;
-  online: "active" | "idle" | "paused" | "error";
+  online: AgentOnlineStatus;
   now: string | null;
   last: string | null;
   report: string;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CHANNEL_ROLE_KEY_MAP, channelKeyForRole, CHANNEL_STATUS_MAX_CHARS } from "../constants.js";
+import { CHANNEL_ROLE_KEY_MAP, channelKeyForRole, CHANNEL_STATUS_MAX_CHARS } from "./constants.js";
 
 describe("channel role mapping", () => {
   it("maps known C-level roles to stable keys", () => {

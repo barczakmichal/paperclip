@@ -110,9 +110,6 @@ export {
   PLUGIN_API_ROUTE_CHECKOUT_POLICIES,
   PLUGIN_EVENT_TYPES,
   PLUGIN_BRIDGE_ERROR_CODES,
-  CHANNEL_STATUS_MAX_CHARS,
-  CHANNEL_ROLE_KEY_MAP,
-  channelKeyForRole,
   type CompanyStatus,
   type DeploymentMode,
   type DeploymentExposure,
@@ -211,6 +208,12 @@ export {
   type PluginApiRouteCheckoutPolicy,
   type PluginEventType,
   type PluginBridgeErrorCode,
+} from "./constants.js";
+
+export {
+  CHANNEL_STATUS_MAX_CHARS,
+  CHANNEL_ROLE_KEY_MAP,
+  channelKeyForRole,
 } from "./constants.js";
 
 export {
@@ -523,6 +526,7 @@ export type {
   ProviderQuotaResult,
 } from "./types/index.js";
 export type {
+  AgentOnlineStatus,
   Channel,
   ChannelKind,
   ChannelMessage,
