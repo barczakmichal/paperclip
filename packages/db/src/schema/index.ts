@@ -74,3 +74,5 @@ export { pluginLogs } from "./plugin_logs.js";
 export * from "./campaign_proposals.js";
 export * from "./creatives.js";
 export * from "./marketing_audit_log.js";
+export { channels } from "./channels.js";
+export { channelMessages } from "./channel_messages.js";

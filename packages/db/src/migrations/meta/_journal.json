@@ -540,6 +540,13 @@
       "when": 1779790739535,
       "tag": "0076_quiet_otto_octavius",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1780388274956,
+      "tag": "0077_perfect_blindfold",
+      "breakpoints": true
     }
   ]
 }
