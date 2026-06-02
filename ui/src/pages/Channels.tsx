@@ -169,6 +169,7 @@ function Composer({
   const { t } = useTranslation("channels");
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   async function handleSubmit(e?: React.FormEvent) {
@@ -176,10 +177,15 @@ function Composer({
     const text = value.trim();
     if (!text || sending) return;
     setSending(true);
+    setError(null);
     try {
       await channelsApi.post(channelId, text);
       setValue("");
       onSent();
+      textareaRef.current?.focus();
+    } catch {
+      // Keep the typed text so the user can retry without re-typing.
+      setError(t("sendError", "Failed to send. Try again."));
     } finally {
       setSending(false);
     }
@@ -216,7 +222,8 @@ function Composer({
         <button
           type="submit"
           disabled={!value.trim() || sending}
-          aria-label="send"
+          aria-label={t("sendButton", "Send")}
+          data-testid="channel-send"
           className={cn(
             "shrink-0 flex items-center justify-center rounded-md h-9 w-9",
             "bg-primary text-primary-foreground",
@@ -227,6 +234,11 @@ function Composer({
           <Send className="h-4 w-4" />
         </button>
       </form>
+      {error && (
+        <p className="mt-1.5 text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -238,7 +250,7 @@ function MessageStream({ channelId }: { channelId: string }) {
   const queryClient = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const { data: messages, isLoading } = useQuery({
+  const { data: messages, isLoading, isError } = useQuery({
     queryKey: queryKeys.channels.messages(channelId),
     queryFn: () => channelsApi.messages(channelId),
     enabled: !!channelId,
@@ -269,6 +281,10 @@ function MessageStream({ channelId }: { channelId: string }) {
               />
             ))}
           </div>
+        ) : isError ? (
+          <div className="flex items-center justify-center h-full text-sm text-destructive py-12" role="alert">
+            {t("loadError", "Failed to load.")}
+          </div>
         ) : !messages || messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground/60 italic py-12">
             {t("noMessages", "No messages yet. Say hello!")}
@@ -290,6 +306,9 @@ function MessageStream({ channelId }: { channelId: string }) {
 }
 
 // ── member card ────────────────────────────────────────────────────────────────
+
+/** Reports longer than this get a collapsed preview with an expand toggle. */
+const REPORT_PREVIEW_CHARS = 120;
 
 function MemberCard({ member }: { member: ChannelMemberStatus }) {
   const { t } = useTranslation("channels");
@@ -333,7 +352,7 @@ function MemberCard({ member }: { member: ChannelMemberStatus }) {
           >
             {member.report}
           </p>
-          {member.report.length > 120 && (
+          {member.report.length > REPORT_PREVIEW_CHARS && (
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
@@ -353,7 +372,7 @@ function MemberCard({ member }: { member: ChannelMemberStatus }) {
 function MembersPanel({ channelId }: { channelId: string }) {
   const { t } = useTranslation("channels");
 
-  const { data: members, isLoading } = useQuery({
+  const { data: members, isLoading, isError } = useQuery({
     queryKey: queryKeys.channels.members(channelId),
     queryFn: () => channelsApi.members(channelId),
     enabled: !!channelId,
@@ -373,6 +392,10 @@ function MembersPanel({ channelId }: { channelId: string }) {
               <div key={i} className="h-20 rounded-lg bg-muted/50 animate-pulse" />
             ))}
           </div>
+        ) : isError ? (
+          <p className="text-xs text-destructive py-4 text-center" role="alert">
+            {t("loadError", "Failed to load.")}
+          </p>
         ) : !members || members.length === 0 ? (
           <p className="text-xs text-muted-foreground/60 italic py-4 text-center">
             {t("noMembers", "No members")}
@@ -398,7 +421,7 @@ export function Channels() {
 
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
 
-  const { data: channels, isLoading } = useQuery({
+  const { data: channels, isLoading, isError } = useQuery({
     queryKey: queryKeys.channels.list(selectedCompanyId!),
     queryFn: () => channelsApi.list(selectedCompanyId!),
     enabled: !!selectedCompanyId,
@@ -422,6 +445,15 @@ export function Channels() {
 
   if (isLoading) {
     return <PageSkeleton variant="list" />;
+  }
+
+  if (isError) {
+    return (
+      <EmptyState
+        icon={MessageSquare}
+        message={t("loadError", "Failed to load.")}
+      />
+    );
   }
 
   if (!channels || channels.length === 0) {

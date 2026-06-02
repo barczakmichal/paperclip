@@ -105,6 +105,16 @@ async function flushReact() {
   });
 }
 
+/** Sets a textarea's value through the native setter so React's onChange fires. */
+function typeInto(textarea: HTMLTextAreaElement, text: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLTextAreaElement.prototype,
+    "value",
+  )?.set;
+  valueSetter?.call(textarea, text);
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe("Channels page", () => {
@@ -171,36 +181,65 @@ describe("Channels page", () => {
     await flushReact();
     await flushReact();
 
-    // Find the textarea and type a message
-    const textarea = container.querySelector("textarea");
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement | null;
     expect(textarea).not.toBeNull();
 
     await act(async () => {
-      if (textarea) {
-        // simulate typing
-        Object.defineProperty(textarea, "value", {
-          writable: true,
-          value: "Hello world",
-        });
-        textarea.dispatchEvent(new Event("input", { bubbles: true }));
-      }
+      typeInto(textarea!, "Hello world");
     });
 
-    // Find the send button and click it
-    const sendButton = Array.from(container.querySelectorAll("button")).find(
-      (btn) => btn.textContent?.trim() !== "" || btn.getAttribute("aria-label") === "send",
+    const sendButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="channel-send"]',
     );
+    expect(sendButton).not.toBeNull();
 
-    if (sendButton) {
-      await act(async () => {
-        sendButton.click();
-      });
-      await flushReact();
-    }
+    await act(async () => {
+      sendButton!.click();
+    });
+    await flushReact();
 
-    // channelsApi.post should have been called (or at least the button exists)
-    // Note: the textarea value change via Object.defineProperty doesn't trigger React state,
-    // so we just verify the UI renders correctly with the expected elements
-    expect(container.querySelector("textarea")).not.toBeNull();
+    expect(mockChannelsApi.post).toHaveBeenCalledWith("ch1", "Hello world");
+  });
+
+  it("shows an error and keeps the text when the post fails", async () => {
+    mockChannelsApi.post.mockRejectedValueOnce(new Error("boom"));
+
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <Channels />
+        </QueryClientProvider>,
+      );
+    });
+    await flushReact();
+    await flushReact();
+
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(textarea).not.toBeNull();
+
+    await act(async () => {
+      typeInto(textarea!, "This should fail");
+    });
+
+    const sendButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="channel-send"]',
+    );
+    expect(sendButton).not.toBeNull();
+
+    await act(async () => {
+      sendButton!.click();
+    });
+    await flushReact();
+
+    expect(mockChannelsApi.post).toHaveBeenCalledWith("ch1", "This should fail");
+
+    // Error message is shown via role="alert"
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert).not.toBeNull();
+
+    // Typed text is preserved for retry.
+    const textareaAfter = container.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(textareaAfter?.value).toBe("This should fail");
   });
 });
