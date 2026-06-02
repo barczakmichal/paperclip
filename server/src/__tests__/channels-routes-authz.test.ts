@@ -16,12 +16,23 @@ const mockHeartbeatSvc = vi.hoisted(() => ({
   wakeup: vi.fn(),
 }));
 
+const mockLogActivity = vi.hoisted(() => vi.fn());
+
+// Wzorzec podwójnej rejestracji mocków (vi.mock + vi.doMock z cache-bustingiem):
+// vi.mock obsługuje statyczny import modułów, ale każdy test importuje route dynamicznie
+// z unikalnym query stringiem (?channels-routes-authz-N), by ominąć cache modułów ESM.
+// Każda taka świeża instancja route'a wymaga ponownej rejestracji tych samych mocków przez
+// vi.doMock (registerChannelRouteMocks) — inaczej dynamiczny import sięgnąłby po prawdziwe serwisy/DB.
 vi.mock("../services/channels.js", () => ({
   channelService: () => mockChannelSvc,
 }));
 
 vi.mock("../services/heartbeat.js", () => ({
   heartbeatService: () => mockHeartbeatSvc,
+}));
+
+vi.mock("../services/index.js", () => ({
+  logActivity: mockLogActivity,
 }));
 
 function registerChannelRouteMocks() {
@@ -31,6 +42,10 @@ function registerChannelRouteMocks() {
 
   vi.doMock("../services/heartbeat.js", () => ({
     heartbeatService: () => mockHeartbeatSvc,
+  }));
+
+  vi.doMock("../services/index.js", () => ({
+    logActivity: mockLogActivity,
   }));
 }
 
@@ -94,6 +109,7 @@ describe.sequential("channels route authorization", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    mockLogActivity.mockResolvedValue(undefined);
   });
 
   it("odrzuca agenta z innej firmy przy POST wiadomości", async () => {
@@ -183,5 +199,61 @@ describe.sequential("channels route authorization", () => {
 
     expect(res.status).toBe(403);
     expect(mockChannelSvc.list).not.toHaveBeenCalled();
+  });
+
+  it("pozwala agentowi z tej samej firmy wysłać wiadomość (201) — ścieżka mostu z Task 6", async () => {
+    mockChannelSvc.getChannel.mockResolvedValue(buildChannel({ companyId: "company-1" }));
+    const app = await createChannelApp({
+      type: "agent",
+      agentId: "a1",
+      companyId: "company-1",
+      source: "agent_key",
+      runId: "run-1",
+    });
+
+    const res = await request(app)
+      .post("/api/channels/channel-1/messages")
+      .send({ body: "hello @CMO" });
+
+    expect(res.status).toBe(201);
+    expect(mockChannelSvc.postMessage).toHaveBeenCalledWith(
+      "channel-1",
+      expect.objectContaining({ body: "hello @CMO", agentId: "a1" }),
+    );
+  });
+
+  it("zwraca 404 dla nieznanego kanału przy GET members", async () => {
+    mockChannelSvc.getChannel.mockResolvedValue(null);
+    const app = await createChannelApp({
+      type: "board",
+      userId: "user-1",
+      companyIds: ["company-1"],
+      source: "session",
+      isInstanceAdmin: false,
+    });
+
+    const res = await request(app).get("/api/channels/no-such-channel/members");
+
+    expect(res.status).toBe(404);
+    expect(mockChannelSvc.memberStatuses).not.toHaveBeenCalled();
+  });
+
+  it("klampuje nadmiarowy limit do CHANNEL_MESSAGES_MAX_LIMIT (200) przy GET messages", async () => {
+    mockChannelSvc.getChannel.mockResolvedValue(buildChannel({ companyId: "company-1" }));
+    const app = await createChannelApp({
+      type: "board",
+      userId: "user-1",
+      companyIds: ["company-1"],
+      source: "session",
+      isInstanceAdmin: false,
+    });
+
+    const res = await request(app).get("/api/channels/channel-1/messages?limit=1000000");
+
+    expect(res.status).toBe(200);
+    expect(mockChannelSvc.listMessages).toHaveBeenCalledWith(
+      "channel-1",
+      expect.objectContaining({ limit: 200 }),
+    );
   });
 });

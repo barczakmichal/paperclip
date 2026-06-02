@@ -355,6 +355,10 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
     });
   }
 
+  // Publiczny wrapper nad prywatnym loadChannel: route'y /channels/:id/* potrzebują
+  // companyId kanału, by wykonać assertCompanyAccess (companyId nie ma w URL).
+  // loadChannel pozostaje prywatne (szczegół implementacyjny serwisu używany wewnętrznie
+  // przez postMessage/membersOf); getChannel to wąski, czytelny kontrakt dla warstwy REST.
   async function getChannel(channelId: string) {
     return loadChannel(channelId);
   }
