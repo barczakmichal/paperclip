@@ -13,6 +13,7 @@ import { composeAgentStatusReport } from "./agent-status.js";
 import { issueService, normalizeAgentMentionToken } from "./issues.js";
 import { heartbeatService } from "./heartbeat.js";
 import { HEARTBEAT_RUN_RESULT_SUMMARY_MAX_CHARS } from "./heartbeat-run-summary.js";
+import { publishLiveEvent } from "./live-events.js";
 
 type ChannelRow = typeof channels.$inferSelect;
 
@@ -176,6 +177,7 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
       originKind: "channel",
       originId: ch.id,
       assigneeAgentId: firstMentionAgentId,
+      hiddenAt: new Date(),
     });
 
     // Warunkowy persyst: ustaw backingIssueId tylko jeśli wciąż null (tani guard na wyścig).
@@ -218,6 +220,13 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
         mentionedAgentIds,
       })
       .returning();
+
+    // Powiadom wszystkie sesje/zakładki o nowej wiadomości (user + agent — obie ścieżki).
+    publishLiveEvent({
+      companyId: ch.companyId,
+      type: "channel.message.created",
+      payload: { channelId, messageId: inserted.id },
+    });
 
     // Most @mention → run: tylko gdy są wzmianki
     if (mentionedAgentIds.length > 0) {

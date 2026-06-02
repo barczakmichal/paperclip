@@ -7,6 +7,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { channelService } from "../services/channels.js";
+import { issueService } from "../services/issues.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -129,7 +130,7 @@ describeEmbeddedPostgres("channel @mention → run bridge", () => {
 
     expect(issuesMock.create).toHaveBeenCalledWith(
       companyId,
-      expect.objectContaining({ originKind: "channel", originId: channelId }),
+      expect.objectContaining({ originKind: "channel", originId: channelId, hiddenAt: expect.any(Date) }),
     );
     expect(issuesMock.addComment).toHaveBeenCalledWith(
       seededIssueId,
@@ -194,5 +195,25 @@ describeEmbeddedPostgres("channel @mention → run bridge", () => {
 
     expect(wakeup).not.toHaveBeenCalled();
     expect(issuesMock.create).not.toHaveBeenCalled();
+  });
+
+  it("backing issue z hiddenAt nie pojawia się w issueService.list", async () => {
+    await seedCompanyAndChannel();
+
+    // Bezpośrednio tworzymy backing issue z hiddenAt przez prawdziwy issueService —
+    // to weryfikuje że hiddenAt jest realnie filtrowane przez list(), niezależnie od mocked deps.
+    // Używamy unikalnego originId aby nie kolidować z seededIssueId wstawionym w seedCompanyAndChannel.
+    const realIssueService = issueService(db);
+    const hiddenOriginId = randomUUID();
+    await realIssueService.create(companyId, {
+      title: "#hidden-channel",
+      originKind: "channel",
+      originId: hiddenOriginId,
+      hiddenAt: new Date(),
+    });
+
+    const listed = await realIssueService.list(companyId);
+    const hiddenInList = listed.find((issue) => issue.originKind === "channel" && issue.originId === hiddenOriginId);
+    expect(hiddenInList).toBeUndefined();
   });
 });

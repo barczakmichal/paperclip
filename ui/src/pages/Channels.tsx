@@ -292,7 +292,7 @@ function MessageStream({ channelId }: { channelId: string }) {
           </div>
         ) : (
           <>
-            {messages.map((msg) => (
+            {[...messages].reverse().map((msg) => (
               <MessageRow key={msg.id} msg={msg} />
             ))}
           </>

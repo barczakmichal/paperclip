@@ -329,6 +329,30 @@ describe("Channels page", () => {
     expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
+  it("renders messages oldest-first even when API returns them newest-first (DESC)", async () => {
+    // Backend returns DESC (newest first): AGENT_REPLY (12:01) then MESSAGE (12:00)
+    mockChannelsApi.messages.mockResolvedValue([AGENT_REPLY, MESSAGE]);
+
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <Channels />
+        </QueryClientProvider>,
+      );
+    });
+    await flushReact();
+    await flushReact();
+
+    const bodyText = container.textContent ?? "";
+    const olderPos = bodyText.indexOf("Hello from user");
+    const newerPos = bodyText.indexOf("Reply from agent");
+    // Older message (MESSAGE, 12:00) should appear before newer (AGENT_REPLY, 12:01) in the DOM
+    expect(olderPos).toBeGreaterThan(-1);
+    expect(newerPos).toBeGreaterThan(-1);
+    expect(olderPos).toBeLessThan(newerPos);
+  });
+
   it("shows an error and keeps the text when the post fails", async () => {
     mockChannelsApi.post.mockRejectedValueOnce(new Error("boom"));
 
