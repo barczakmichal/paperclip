@@ -131,7 +131,7 @@ Wiadomość bez `@mention` = sam zapis `channel_messages`, bez kroków 2–6.
 
 ### 7.1 Wykluczenie backing-issues z UI issues
 
-Backing-issue oznaczony `origin=channel` (lub flaga `isChannelBacking`). Listy/wyszukiwarki issues filtrują go domyślnie. To jedyny „dług semantyczny" modelu B z mostem 1 — świadomy i odizolowany.
+Backing-issue oznaczony przez **rozszerzenie `originKind`** (realne pole w `packages/db/src/schema/issues.ts`; istniejące wartości: `manual`, `routine_execution`, …) o nową wartość `channel`. Plan musi zdecydować: nowa wartość `originKind=channel` vs. osobna flaga `isChannelBacking` — i odpowiednio zaktualizować filtry list/wyszukiwarek issues, które keyują po `originKind`. Preferencja: `originKind=channel` (spójne z istniejącym wzorcem). To jedyny „dług semantyczny" modelu B z mostem 1 — świadomy i odizolowany.
 
 ## 8. API (REST, wzorzec istniejących routes)
 
@@ -181,7 +181,7 @@ Nowa strona `ui/src/pages/Channels.tsx`, trasa w `App.tsx` `boardRoutes()` (`<Ro
 
 ## 13. Ryzyka
 
-1. **Dług semantyczny backing-issue** — izolowany flagą `origin=channel` + filtrami; akceptowalny.
+1. **Dług semantyczny backing-issue** — izolowany przez `originKind=channel` + filtrami; akceptowalny.
 2. **Mirror zwrotny** — najtrudniejszy element; wymaga pewnego hooka na zapis komentarza issue gdy `origin=channel`. Plan implementacji musi go domknąć przed UI.
 3. **Mapowanie roli→klucz kanału** — kolizje (dwóch menedżerów „marketing"); fallback do slugu nazwy menedżera.
 4. **Koszt runów** — `@mention` odpala realny run; UI musi jasno sygnalizować „to uruchomi agenta" (jak w issue chat).
