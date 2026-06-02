@@ -10,8 +10,7 @@ import {
 } from "@paperclipai/shared";
 import { notFound } from "../errors.js";
 import { composeAgentStatusReport } from "./agent-status.js";
-import { issueService } from "./issues.js";
-import { normalizeAgentMentionToken } from "./issues.js";
+import { issueService, normalizeAgentMentionToken } from "./issues.js";
 import { heartbeatService } from "./heartbeat.js";
 import { HEARTBEAT_RUN_RESULT_SUMMARY_MAX_CHARS } from "./heartbeat-run-summary.js";
 
@@ -37,6 +36,9 @@ function slug(name: string): string {
 
 export function channelService(db: Db, deps?: ChannelServiceDeps) {
   const issues: IssuesDep = deps?.issues ?? issueService(db);
+  // UWAGA: domyślny heartbeatService(db) BEZ pluginWorkerManager NIE dispatchuje runów do workerów.
+  // Produkcyjny caller (route w Task 8) MUSI wstrzyknąć heartbeat: heartbeatService(db, { pluginWorkerManager }),
+  // inaczej wakeup zapisze żądanie, ale run nie zostanie podjęty przez workera.
   const heartbeat: HeartbeatDep = deps?.heartbeat ?? heartbeatService(db);
   async function loadAgents(companyId: string) {
     return db
@@ -187,6 +189,8 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
       // Inny zapis wygrał wyścig — odczytaj zwycięski backingIssueId i porzuć właśnie utworzone issue.
       const reread = await loadChannel(ch.id);
       if (reread?.backingIssueId) return reread.backingIssueId;
+      // Kanał zniknął między warunkowym UPDATE a re-readem — nie zwracaj cicho sieroty.
+      throw notFound(`Channel zniknal podczas ensureBackingIssue: ${ch.id}`);
     }
 
     return created.id;
@@ -220,7 +224,7 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
       const issueId = await ensureBackingIssue(ch, mentionedAgentIds[0]);
 
       const comment = await issues.addComment(issueId, input.body, { userId: input.userId });
-      const backingIssueCommentId = comment?.id ?? null;
+      const backingIssueCommentId = comment.id;
 
       let triggeredRunId: string | null = null;
 
