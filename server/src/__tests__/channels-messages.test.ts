@@ -29,7 +29,15 @@ describeEmbeddedPostgres("channel messages", () => {
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-channels-messages-");
     db = createDb(tempDb.connectionString);
-    svc = channelService(db);
+    // Przekazujemy no-op deps żeby @mention nie wywoływał prawdziwych serwisów
+    // (bez tego cleanup afterEach napotkałby FK z issues/heartbeat_runs)
+    svc = channelService(db, {
+      issues: {
+        create: async () => ({ id: randomUUID() } as any),
+        addComment: async () => ({ id: randomUUID() } as any),
+      },
+      heartbeat: { wakeup: async () => null },
+    });
   }, 20_000);
 
   afterEach(async () => {
