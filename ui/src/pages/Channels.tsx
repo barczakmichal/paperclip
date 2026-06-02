@@ -483,6 +483,8 @@ export function Channels() {
           if (!channelId) return;
           if (channelId !== activeChannelIdRef.current) return;
           void queryClient.invalidateQueries({ queryKey: queryKeys.channels.messages(channelId) });
+          // Intentional: an agent reply both adds a message AND can change the
+          // member's status, so we refresh members too. Do not remove.
           void queryClient.invalidateQueries({ queryKey: queryKeys.channels.members(channelId) });
           return;
         }
@@ -512,6 +514,10 @@ export function Channels() {
       closed = true;
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       if (socket) {
+        // ORDER MATTERS: onclose must be nulled BEFORE we set the deferred-close
+        // onopen below. Otherwise the close() we trigger on handshake completion
+        // would fire onclose → scheduleReconnect → a phantom reconnect after
+        // unmount. Do not reorder these lines.
         socket.onmessage = null;
         socket.onerror = null;
         socket.onclose = null;

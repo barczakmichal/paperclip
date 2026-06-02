@@ -297,6 +297,38 @@ describe("Channels page", () => {
     expect(calledKeys.some((k) => k.includes("members") && k.includes("ch1"))).toBe(true);
   });
 
+  it("nie invaliduje gdy event dotyczy innego kanału", async () => {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <Channels />
+        </QueryClientProvider>,
+      );
+    });
+    await flushReact();
+    await flushReact();
+
+    const ws = FakeWebSocket.lastInstance;
+    expect(ws).not.toBeNull();
+
+    // Spy AFTER the socket is up and the first channel (ch1) is selected.
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    // Event targets a DIFFERENT channel than the active one (ch1) → no-op.
+    await act(async () => {
+      ws!.simulateMessage({
+        type: "channel.message.created",
+        companyId: "c1",
+        payload: { channelId: "OTHER", messageId: "m99" },
+        createdAt: new Date().toISOString(),
+      });
+    });
+    await flushReact();
+
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
   it("shows an error and keeps the text when the post fails", async () => {
     mockChannelsApi.post.mockRejectedValueOnce(new Error("boom"));
 
