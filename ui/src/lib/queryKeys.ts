@@ -92,6 +92,11 @@ export const queryKeys = {
   budgets: {
     overview: (companyId: string) => ["budgets", "overview", companyId] as const,
   },
+  channels: {
+    list: (companyId: string) => ["channels", companyId] as const,
+    members: (channelId: string) => ["channels", "members", channelId] as const,
+    messages: (channelId: string) => ["channels", "messages", channelId] as const,
+  },
   approvals: {
     list: (companyId: string, status?: string) =>
       ["approvals", companyId, status] as const,
