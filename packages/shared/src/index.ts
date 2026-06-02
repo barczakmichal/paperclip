@@ -110,6 +110,9 @@ export {
   PLUGIN_API_ROUTE_CHECKOUT_POLICIES,
   PLUGIN_EVENT_TYPES,
   PLUGIN_BRIDGE_ERROR_CODES,
+  CHANNEL_STATUS_MAX_CHARS,
+  CHANNEL_ROLE_KEY_MAP,
+  channelKeyForRole,
   type CompanyStatus,
   type DeploymentMode,
   type DeploymentExposure,
@@ -519,6 +522,13 @@ export type {
   QuotaWindow,
   ProviderQuotaResult,
 } from "./types/index.js";
+export type {
+  Channel,
+  ChannelKind,
+  ChannelMessage,
+  ChannelMessageKind,
+  ChannelMemberStatus,
+} from "./types/channel.js";
 export {
   ISSUE_REFERENCE_IDENTIFIER_RE,
   buildIssueReferenceHref,
