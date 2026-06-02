@@ -927,14 +927,14 @@ export type PluginBridgeErrorCode = (typeof PLUGIN_BRIDGE_ERROR_CODES)[number];
 
 export const CHANNEL_STATUS_MAX_CHARS = 500;
 
-export const CHANNEL_ROLE_KEY_MAP = {
+export const CHANNEL_ROLE_KEY_MAP: Partial<Record<AgentRole, { key: string; name: string }>> = {
   ceo: { key: "ceo", name: "CEO" },
   cmo: { key: "marketing", name: "Marketing" },
   cfo: { key: "finance", name: "Finanse" },
   cto: { key: "tech", name: "Tech" },
   security: { key: "security", name: "Security" },
-} satisfies Partial<Record<AgentRole, { key: string; name: string }>>;
+};
 
 export function channelKeyForRole(role: AgentRole): string {
-  return (CHANNEL_ROLE_KEY_MAP as Partial<Record<AgentRole, { key: string; name: string }>>)[role]?.key ?? role;
+  return CHANNEL_ROLE_KEY_MAP[role]?.key ?? role;
 }

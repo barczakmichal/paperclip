@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agents, channelMessages, channels, heartbeatRuns } from "@paperclipai/db";
 import {
@@ -8,8 +8,12 @@ import {
   type AgentRole,
   type ChannelMemberStatus,
 } from "@paperclipai/shared";
+import { notFound } from "../errors.js";
 import { composeAgentStatusReport } from "./agent-status.js";
 import { normalizeAgentMentionToken } from "./issues.js";
+import { HEARTBEAT_RUN_RESULT_SUMMARY_MAX_CHARS } from "./heartbeat-run-summary.js";
+
+type ChannelRow = typeof channels.$inferSelect;
 
 const EXCLUDED_AGENT_STATUSES = ["terminated", "pending_approval"];
 
@@ -107,9 +111,12 @@ export function channelService(db: Db) {
     return db.select().from(channels).where(and(eq(channels.companyId, companyId), isNull(channels.archivedAt)));
   }
 
-  async function membersOf(channelId: string) {
-    const ch = await db.select().from(channels).where(eq(channels.id, channelId)).then((r) => r[0] ?? null);
-    if (!ch) return [];
+  async function loadChannel(channelId: string): Promise<ChannelRow | null> {
+    return db.select().from(channels).where(eq(channels.id, channelId)).then((r) => r[0] ?? null);
+  }
+
+  // Wyznacza członków na podstawie już załadowanego rekordu kanału (bez ponownego zapytania).
+  async function membersOfChannel(ch: ChannelRow) {
     const all = await loadAgents(ch.companyId);
     if (ch.kind === "company") return all;
     const byParent = buildByParent(all);
@@ -117,9 +124,15 @@ export function channelService(db: Db) {
     return all.filter((a) => ids.has(a.id));
   }
 
+  async function membersOf(channelId: string) {
+    const ch = await loadChannel(channelId);
+    if (!ch) return [];
+    return membersOfChannel(ch);
+  }
+
   // Parsuje tokeny @wzmianka z body i resolwuje je do agentId po name (case-insensitive).
   // Dopasowanie: pojedyncze słowo po @, np. @CMO — ograniczenie udokumentowane.
-  async function parseMentions(body: string, members: { id: string; name: string }[]): Promise<string[]> {
+  function parseMentions(body: string, members: { id: string; name: string }[]): string[] {
     const re = /\B@([^\s@,!?.]+)/g;
     const tokens = new Set<string>();
     let m: RegExpExecArray | null;
@@ -141,11 +154,11 @@ export function channelService(db: Db) {
     channelId: string,
     input: { body: string; userId?: string; agentId?: string; kind?: string },
   ) {
-    const ch = await db.select().from(channels).where(eq(channels.id, channelId)).then((r) => r[0] ?? null);
-    if (!ch) throw new Error(`Channel not found: ${channelId}`);
+    const ch = await loadChannel(channelId);
+    if (!ch) throw notFound(`Channel not found: ${channelId}`);
 
-    const members = await membersOf(channelId);
-    const mentionedAgentIds = await parseMentions(input.body, members);
+    const members = await membersOfChannel(ch);
+    const mentionedAgentIds = parseMentions(input.body, members);
 
     const [inserted] = await db
       .insert(channelMessages)
@@ -185,60 +198,70 @@ export function channelService(db: Db) {
   //   - pozostałe → "idle"
   async function memberStatuses(channelId: string): Promise<ChannelMemberStatus[]> {
     const members = await membersOf(channelId);
-    const now = new Date();
+    const agentIds = members.map((a) => a.id);
+    if (agentIds.length === 0) return [];
 
-    return Promise.all(
-      members.map(async (agent) => {
-        // Aktywny run agenta (status="running", najnowszy)
-        const [activeRun] = await db
-          .select({
-            id: heartbeatRuns.id,
-            nextAction: heartbeatRuns.nextAction,
-            currentThought: heartbeatRuns.currentThought,
-          })
-          .from(heartbeatRuns)
-          .where(and(eq(heartbeatRuns.agentId, agent.id), eq(heartbeatRuns.status, "running")))
-          .orderBy(desc(heartbeatRuns.startedAt))
-          .limit(1);
+    // Batch: aktywne runy (status="running") dla wszystkich członków jednym zapytaniem.
+    // orderBy desc(startedAt) → przy grupowaniu pierwszy wpis per agent = najnowszy.
+    const activeRows = await db
+      .select({
+        agentId: heartbeatRuns.agentId,
+        nextAction: heartbeatRuns.nextAction,
+        currentThought: heartbeatRuns.currentThought,
+      })
+      .from(heartbeatRuns)
+      .where(and(inArray(heartbeatRuns.agentId, agentIds), eq(heartbeatRuns.status, "running")))
+      .orderBy(desc(heartbeatRuns.startedAt));
 
-        // Ostatni zakończony run (succeeded) z polem resultJson.summary
-        const [lastRun] = await db
-          .select({
-            resultSummary: sql<string | null>`${heartbeatRuns.resultJson} ->> 'summary'`.as("resultSummary"),
-          })
-          .from(heartbeatRuns)
-          .where(and(eq(heartbeatRuns.agentId, agent.id), eq(heartbeatRuns.status, "succeeded")))
-          .orderBy(desc(heartbeatRuns.finishedAt))
-          .limit(1);
+    const activeByAgent = new Map<string, (typeof activeRows)[number]>();
+    for (const row of activeRows) {
+      if (!activeByAgent.has(row.agentId)) activeByAgent.set(row.agentId, row);
+    }
 
-        let online: AgentOnlineStatus;
-        if (agent.status === "paused") {
-          online = "paused";
-        } else if (agent.status === "error") {
-          online = "error";
-        } else if (activeRun) {
-          online = "active";
-        } else {
-          online = "idle";
-        }
+    // Batch: ostatni zakończony run (succeeded) per agent jednym zapytaniem.
+    // orderBy desc(finishedAt) → pierwszy per agent = najświeższy. Truncacja jak w heartbeat.ts.
+    const lastRows = await db
+      .select({
+        agentId: heartbeatRuns.agentId,
+        resultSummary: sql<
+          string | null
+        >`left(${heartbeatRuns.resultJson} ->> 'summary', ${HEARTBEAT_RUN_RESULT_SUMMARY_MAX_CHARS})`.as("resultSummary"),
+      })
+      .from(heartbeatRuns)
+      .where(and(inArray(heartbeatRuns.agentId, agentIds), eq(heartbeatRuns.status, "succeeded")))
+      .orderBy(desc(heartbeatRuns.finishedAt));
 
-        const nowText = activeRun?.nextAction ?? activeRun?.currentThought ?? null;
-        const lastText = lastRun?.resultSummary ?? null;
+    const lastByAgent = new Map<string, (typeof lastRows)[number]>();
+    for (const row of lastRows) {
+      if (!lastByAgent.has(row.agentId)) lastByAgent.set(row.agentId, row);
+    }
 
-        const report = composeAgentStatusReport({ now: nowText, last: lastText, online });
+    return members.map((agent) => {
+      const activeRun = activeByAgent.get(agent.id);
+      const lastRun = lastByAgent.get(agent.id);
 
-        return {
-          agentId: agent.id,
-          name: agent.name,
-          role: agent.role,
-          icon: null,
-          online,
-          now: nowText,
-          last: lastText,
-          report,
-        } satisfies ChannelMemberStatus;
-      }),
-    );
+      let online: AgentOnlineStatus;
+      if (agent.status === "paused") online = "paused";
+      else if (agent.status === "error") online = "error";
+      else if (agent.status === "running" || activeRun) online = "active";
+      else online = "idle";
+
+      const nowText = activeRun?.nextAction ?? activeRun?.currentThought ?? null;
+      const lastText = lastRun?.resultSummary ?? null;
+
+      const report = composeAgentStatusReport({ now: nowText, last: lastText, online });
+
+      return {
+        agentId: agent.id,
+        name: agent.name,
+        role: agent.role,
+        icon: null,
+        online,
+        now: nowText,
+        last: lastText,
+        report,
+      } satisfies ChannelMemberStatus;
+    });
   }
 
   return { syncForCompany, list, membersOf, postMessage, listMessages, memberStatuses };
