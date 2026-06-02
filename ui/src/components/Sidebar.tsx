@@ -14,6 +14,7 @@ import {
   Settings,
   Radio,
   Workflow,
+  MessageSquare,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -105,6 +106,7 @@ export function Sidebar() {
         <SidebarSection label={t("work", "Work")}>
           <SidebarNavItem to="/issues" label={t("issues", "Issues")} icon={CircleDot} />
           <SidebarNavItem to="/process" label={t("process", "Proces")} icon={Workflow} />
+          <SidebarNavItem to="/channels" label={t("channels", "Channels")} icon={MessageSquare} />
           <SidebarNavItem to="/routines" label={t("routines", "Routines")} icon={Repeat} />
           <SidebarNavItem to="/goals" label={t("goals", "Goals")} icon={Target} />
           {showWorkspacesLink ? (

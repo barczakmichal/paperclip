@@ -22,6 +22,7 @@ import { UserProfile } from "./pages/UserProfile";
 import { ExecutionWorkspaceDetail } from "./pages/ExecutionWorkspaceDetail";
 import { Goals } from "./pages/Goals";
 import { Process } from "./pages/Process";
+import { Channels } from "./pages/Channels";
 import { GoalDetail } from "./pages/GoalDetail";
 import { Approvals } from "./pages/Approvals";
 import { ApprovalDetail } from "./pages/ApprovalDetail";
@@ -120,6 +121,7 @@ function boardRoutes() {
       <Route path="goals" element={<Goals />} />
       <Route path="goals/:goalId" element={<GoalDetail />} />
       <Route path="process" element={<Process />} />
+      <Route path="channels" element={<Channels />} />
       <Route path="live" element={<LiveOpsPage />} />
       <Route path="live/:agentId" element={<AgentSoloPage />} />
       <Route path="approvals" element={<Navigate to="/approvals/pending" replace />} />
