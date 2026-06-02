@@ -14,7 +14,13 @@ import { publishLiveEvent } from "./live-events.js";
 
 /**
  * Mirroruje komentarz agenta z backing-issue do channel_messages.
- * Idempotentna — powtórne wywołanie z tym samym commentId jest bezpieczne.
+ *
+ * Idempotencja jest APLIKACYJNA, na poziomie pojedynczego call-site: funkcja jest
+ * wołana dokładnie raz per `issueService.addComment` (jedno synchroniczne miejsce),
+ * więc dedup SELECT-then-INSERT po `backingIssueCommentId` wystarcza w praktyce.
+ * Docelowym hardeningiem (świadomy defer, NIE robimy teraz) byłby partial unique
+ * index na `channel_messages.backing_issue_comment_id WHERE backing_issue_comment_id
+ * IS NOT NULL` + `.onConflictDoNothing()`, co dałoby gwarancję na poziomie DB.
  */
 export async function mirrorAgentCommentToChannel(
   db: Db,
@@ -26,7 +32,6 @@ export async function mirrorAgentCommentToChannel(
       id: issueComments.id,
       issueId: issueComments.issueId,
       authorAgentId: issueComments.authorAgentId,
-      authorUserId: issueComments.authorUserId,
       body: issueComments.body,
       companyId: issueComments.companyId,
     })
@@ -55,7 +60,8 @@ export async function mirrorAgentCommentToChannel(
   const channelId = issue.originId;
   if (!channelId) return;
 
-  // 4. Dedup — sprawdź czy channel_messages z tym backingIssueCommentId już istnieje
+  // 4. Dedup aplikacyjny (patrz docstring) — sprawdź czy channel_messages
+  //    z tym backingIssueCommentId już istnieje.
   const existing = await db
     .select({ id: channelMessages.id })
     .from(channelMessages)

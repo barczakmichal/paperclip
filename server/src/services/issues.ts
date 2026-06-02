@@ -54,6 +54,7 @@ import {
 } from "./issue-tree-control.js";
 import { parseIssueGraphLivenessIncidentKey } from "./recovery/origins.js";
 import { mirrorAgentCommentToChannel } from "./channel-mirror.js";
+import { logger } from "../middleware/logger.js";
 
 const ALL_ISSUE_STATUSES = ["backlog", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const MAX_ISSUE_COMMENT_PAGE_LIMIT = 500;
@@ -3608,7 +3609,7 @@ export function issueService(db: Db) {
         try {
           await mirrorAgentCommentToChannel(db, { commentId: comment.id });
         } catch (err) {
-          console.warn("[channel-mirror] Nie udało się zmirrorować komentarza agenta do kanału:", err);
+          logger.warn({ err, commentId: comment.id }, "channel-mirror: failed to mirror agent comment");
         }
       }
 
