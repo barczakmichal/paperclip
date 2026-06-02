@@ -162,24 +162,12 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
     return [...resolved];
   }
 
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-  // In-memory cache: channelId → backingIssueId (uzupełniany przy pierwszym create lub odczycie z DB)
-  const backingIssueCache = new Map<string, string>();
-
   // Lazily tworzy backing issue dla kanału jeśli jeszcze nie istnieje.
-  // Zapisuje nowe backingIssueId w tabeli channels (tylko gdy id jest prawidłowym uuid) i zwraca id issue.
+  // Reużycie realizowane wyłącznie przez odczyt/persystencję channels.backingIssueId (bez cache in-memory).
   async function ensureBackingIssue(ch: ChannelRow, firstMentionAgentId: string): Promise<string> {
-    // Sprawdź lokalny cache (działa też gdy UUID z mocka nie jest prawidłowy)
-    const cached = backingIssueCache.get(ch.id);
-    if (cached) return cached;
-
     // Odczytaj świeży rekord z DB — może być już ustawiony przez wcześniejsze wywołanie
     const fresh = await loadChannel(ch.id);
-    if (fresh?.backingIssueId) {
-      backingIssueCache.set(ch.id, fresh.backingIssueId);
-      return fresh.backingIssueId;
-    }
+    if (fresh?.backingIssueId) return fresh.backingIssueId;
 
     const created = await issues.create(ch.companyId, {
       title: `#${ch.key}`,
@@ -188,19 +176,17 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
       assigneeAgentId: firstMentionAgentId,
     });
 
-    // Cache lokalnie zawsze
-    backingIssueCache.set(ch.id, created.id);
+    // Warunkowy persyst: ustaw backingIssueId tylko jeśli wciąż null (tani guard na wyścig).
+    const persisted = await db
+      .update(channels)
+      .set({ backingIssueId: created.id, updatedAt: new Date() })
+      .where(and(eq(channels.id, ch.id), isNull(channels.backingIssueId)))
+      .returning({ id: channels.id });
 
-    // Persystuj do DB tylko gdy id jest prawidłowym UUID; ignoruj FK violation (np. mock w testach)
-    if (UUID_RE.test(created.id)) {
-      try {
-        await db
-          .update(channels)
-          .set({ backingIssueId: created.id, updatedAt: new Date() })
-          .where(eq(channels.id, ch.id));
-      } catch {
-        // FK violation gdy issue nie istnieje w DB (mock) — cache lokalny wystarczy
-      }
+    if (persisted.length === 0) {
+      // Inny zapis wygrał wyścig — odczytaj zwycięski backingIssueId i porzuć właśnie utworzone issue.
+      const reread = await loadChannel(ch.id);
+      if (reread?.backingIssueId) return reread.backingIssueId;
     }
 
     return created.id;
@@ -234,11 +220,12 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
       const issueId = await ensureBackingIssue(ch, mentionedAgentIds[0]);
 
       const comment = await issues.addComment(issueId, input.body, { userId: input.userId });
+      const backingIssueCommentId = comment?.id ?? null;
 
       let triggeredRunId: string | null = null;
-      let backingIssueCommentId: string | null = null;
 
-      // Budzimy tylko pierwszego wspomnianego agenta (najprostsze podejście — YAGNI)
+      // Budzimy tylko pierwszego wspomnianego agenta (najprostsze podejście — YAGNI).
+      // wakeup jest opakowane: błąd budzenia nie blokuje zapisu wiadomości ani komentarza.
       try {
         const wakeResult = await heartbeat.wakeup(mentionedAgentIds[0], {
           source: "on_demand",
@@ -249,37 +236,27 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
           requestedByActorId: input.userId ?? null,
           contextSnapshot: { channelId, issueId },
         });
-        // Defensywnie: wakeup może zwrócić run-like z .id lub cokolwiek innego
-        if (wakeResult && typeof wakeResult === "object" && "id" in wakeResult && typeof wakeResult.id === "string") {
-          triggeredRunId = wakeResult.id;
-        }
+        // Defensywnie: kształt zwrotki wakeup może się różnić — czytamy .id jeśli jest.
+        triggeredRunId = wakeResult?.id ?? null;
       } catch {
-        // Nie blokujemy zapisu wiadomości błędem wakeup
+        // Nie blokujemy zapisu wiadomości błędem wakeup.
       }
 
-      if (comment && typeof comment === "object" && "id" in comment && typeof comment.id === "string") {
-        backingIssueCommentId = comment.id;
-      }
-
-      // Tylko prawidłowe UUIDs mogą trafić do kolumn uuid w DB
-      const dbTriggeredRunId = triggeredRunId && UUID_RE.test(triggeredRunId) ? triggeredRunId : null;
-      const dbBackingIssueCommentId = backingIssueCommentId && UUID_RE.test(backingIssueCommentId) ? backingIssueCommentId : null;
-
-      // Aktualizuj wiersz wiadomości o powiązane id
-      if (dbTriggeredRunId !== null || dbBackingIssueCommentId !== null) {
+      // Aktualizuj wiersz wiadomości o powiązane id (id-ki to prawdziwe UUID z serwisów).
+      if (triggeredRunId !== null || backingIssueCommentId !== null) {
         await db
           .update(channelMessages)
           .set({
-            ...(dbTriggeredRunId !== null ? { triggeredRunId: dbTriggeredRunId } : {}),
-            ...(dbBackingIssueCommentId !== null ? { backingIssueCommentId: dbBackingIssueCommentId } : {}),
+            ...(triggeredRunId !== null ? { triggeredRunId } : {}),
+            ...(backingIssueCommentId !== null ? { backingIssueCommentId } : {}),
           })
           .where(eq(channelMessages.id, inserted.id));
       }
 
       return {
         ...inserted,
-        triggeredRunId: dbTriggeredRunId ?? inserted.triggeredRunId,
-        backingIssueCommentId: dbBackingIssueCommentId ?? inserted.backingIssueCommentId,
+        triggeredRunId: triggeredRunId ?? inserted.triggeredRunId,
+        backingIssueCommentId: backingIssueCommentId ?? inserted.backingIssueCommentId,
       };
     }
 

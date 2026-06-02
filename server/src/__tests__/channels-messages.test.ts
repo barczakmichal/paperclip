@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { agents, channelMessages, channels, companies, createDb } from "@paperclipai/db";
+import { agents, channelMessages, channels, companies, createDb, issues } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -29,20 +29,34 @@ describeEmbeddedPostgres("channel messages", () => {
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-channels-messages-");
     db = createDb(tempDb.connectionString);
-    // Przekazujemy no-op deps żeby @mention nie wywoływał prawdziwych serwisów
-    // (bez tego cleanup afterEach napotkałby FK z issues/heartbeat_runs)
+    // Lekkie deps: prawdziwe serwisy heartbeat/issues nie są tu potrzebne (testujemy parsowanie i statusy),
+    // ale @mention uruchamia mostek, więc create wstawia realny wiersz issues (FK channels.backingIssueId)
+    // i zwraca jego id. heartbeat.wakeup to no-op.
     svc = channelService(db, {
       issues: {
-        create: async () => ({ id: randomUUID() } as any),
+        create: async (cId: string, data: any) => {
+          const id = randomUUID();
+          await db.insert(issues).values({
+            id,
+            companyId: cId,
+            title: data.title ?? "channel",
+            originKind: data.originKind ?? "channel",
+            originId: data.originId ?? null,
+            assigneeAgentId: data.assigneeAgentId ?? null,
+          });
+          return { id } as any;
+        },
         addComment: async () => ({ id: randomUUID() } as any),
       },
-      heartbeat: { wakeup: async () => null },
+      heartbeat: { wakeup: async () => null as any },
     });
   }, 20_000);
 
   afterEach(async () => {
     await db.delete(channelMessages);
+    // channels.backingIssueId → issues.id (FK), więc channels przed issues
     await db.delete(channels);
+    await db.delete(issues);
     await db.delete(agents);
     await db.delete(companies);
   });
