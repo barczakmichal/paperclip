@@ -1,7 +1,15 @@
-import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agents, channels } from "@paperclipai/db";
-import { channelKeyForRole, CHANNEL_ROLE_KEY_MAP, type AgentRole } from "@paperclipai/shared";
+import { agents, channelMessages, channels, heartbeatRuns } from "@paperclipai/db";
+import {
+  channelKeyForRole,
+  CHANNEL_ROLE_KEY_MAP,
+  type AgentOnlineStatus,
+  type AgentRole,
+  type ChannelMemberStatus,
+} from "@paperclipai/shared";
+import { composeAgentStatusReport } from "./agent-status.js";
+import { normalizeAgentMentionToken } from "./issues.js";
 
 const EXCLUDED_AGENT_STATUSES = ["terminated", "pending_approval"];
 
@@ -109,5 +117,129 @@ export function channelService(db: Db) {
     return all.filter((a) => ids.has(a.id));
   }
 
-  return { syncForCompany, list, membersOf };
+  // Parsuje tokeny @wzmianka z body i resolwuje je do agentId po name (case-insensitive).
+  // Dopasowanie: pojedyncze słowo po @, np. @CMO — ograniczenie udokumentowane.
+  async function parseMentions(body: string, members: { id: string; name: string }[]): Promise<string[]> {
+    const re = /\B@([^\s@,!?.]+)/g;
+    const tokens = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(body)) !== null) {
+      const normalized = normalizeAgentMentionToken(m[1]);
+      if (normalized) tokens.add(normalized.toLowerCase());
+    }
+    if (tokens.size === 0) return [];
+    const resolved = new Set<string>();
+    for (const agent of members) {
+      if (tokens.has(agent.name.toLowerCase())) {
+        resolved.add(agent.id);
+      }
+    }
+    return [...resolved];
+  }
+
+  async function postMessage(
+    channelId: string,
+    input: { body: string; userId?: string; agentId?: string; kind?: string },
+  ) {
+    const ch = await db.select().from(channels).where(eq(channels.id, channelId)).then((r) => r[0] ?? null);
+    if (!ch) throw new Error(`Channel not found: ${channelId}`);
+
+    const members = await membersOf(channelId);
+    const mentionedAgentIds = await parseMentions(input.body, members);
+
+    const [inserted] = await db
+      .insert(channelMessages)
+      .values({
+        companyId: ch.companyId,
+        channelId,
+        authorUserId: input.userId ?? null,
+        authorAgentId: input.agentId ?? null,
+        kind: input.kind ?? "message",
+        body: input.body,
+        mentionedAgentIds,
+      })
+      .returning();
+
+    return inserted;
+  }
+
+  async function listMessages(channelId: string, opts: { before?: Date | string; limit?: number }) {
+    const limit = opts.limit ?? 50;
+    const conditions = [eq(channelMessages.channelId, channelId)];
+    if (opts.before) {
+      const beforeDate = opts.before instanceof Date ? opts.before : new Date(opts.before);
+      conditions.push(lt(channelMessages.createdAt, beforeDate));
+    }
+    return db
+      .select()
+      .from(channelMessages)
+      .where(and(...conditions))
+      .orderBy(desc(channelMessages.createdAt))
+      .limit(limit);
+  }
+
+  // Mapowanie statusu agenta na AgentOnlineStatus:
+  //   - "paused"  → "paused"  (agent jawnie wstrzymany)
+  //   - "error"   → "error"   (agent w stanie błędu)
+  //   - ma aktywny run (status="running") → "active"
+  //   - pozostałe → "idle"
+  async function memberStatuses(channelId: string): Promise<ChannelMemberStatus[]> {
+    const members = await membersOf(channelId);
+    const now = new Date();
+
+    return Promise.all(
+      members.map(async (agent) => {
+        // Aktywny run agenta (status="running", najnowszy)
+        const [activeRun] = await db
+          .select({
+            id: heartbeatRuns.id,
+            nextAction: heartbeatRuns.nextAction,
+            currentThought: heartbeatRuns.currentThought,
+          })
+          .from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.agentId, agent.id), eq(heartbeatRuns.status, "running")))
+          .orderBy(desc(heartbeatRuns.startedAt))
+          .limit(1);
+
+        // Ostatni zakończony run (succeeded) z polem resultJson.summary
+        const [lastRun] = await db
+          .select({
+            resultSummary: sql<string | null>`${heartbeatRuns.resultJson} ->> 'summary'`.as("resultSummary"),
+          })
+          .from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.agentId, agent.id), eq(heartbeatRuns.status, "succeeded")))
+          .orderBy(desc(heartbeatRuns.finishedAt))
+          .limit(1);
+
+        let online: AgentOnlineStatus;
+        if (agent.status === "paused") {
+          online = "paused";
+        } else if (agent.status === "error") {
+          online = "error";
+        } else if (activeRun) {
+          online = "active";
+        } else {
+          online = "idle";
+        }
+
+        const nowText = activeRun?.nextAction ?? activeRun?.currentThought ?? null;
+        const lastText = lastRun?.resultSummary ?? null;
+
+        const report = composeAgentStatusReport({ now: nowText, last: lastText, online });
+
+        return {
+          agentId: agent.id,
+          name: agent.name,
+          role: agent.role,
+          icon: null,
+          online,
+          now: nowText,
+          last: lastText,
+          report,
+        } satisfies ChannelMemberStatus;
+      }),
+    );
+  }
+
+  return { syncForCompany, list, membersOf, postMessage, listMessages, memberStatuses };
 }
