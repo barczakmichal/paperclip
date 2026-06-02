@@ -53,6 +53,7 @@ import {
   type ActiveIssueTreePauseHoldGate,
 } from "./issue-tree-control.js";
 import { parseIssueGraphLivenessIncidentKey } from "./recovery/origins.js";
+import { mirrorAgentCommentToChannel } from "./channel-mirror.js";
 
 const ALL_ISSUE_STATUSES = ["backlog", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const MAX_ISSUE_COMMENT_PAGE_LIMIT = 500;
@@ -3569,7 +3570,11 @@ export function issueService(db: Db) {
       actor: { agentId?: string; userId?: string; runId?: string | null },
     ) => {
       const issue = await db
-        .select({ companyId: issues.companyId })
+        .select({
+          companyId: issues.companyId,
+          originKind: issues.originKind,
+          originId: issues.originId,
+        })
         .from(issues)
         .where(eq(issues.id, issueId))
         .then((rows) => rows[0] ?? null);
@@ -3597,6 +3602,15 @@ export function issueService(db: Db) {
         .update(issues)
         .set({ updatedAt: new Date() })
         .where(eq(issues.id, issueId));
+
+      // Mirror agenta do kanału — tylko gdy backing-issue i komentarz agenta
+      if (issue.originKind === "channel" && actor.agentId) {
+        try {
+          await mirrorAgentCommentToChannel(db, { commentId: comment.id });
+        } catch (err) {
+          console.warn("[channel-mirror] Nie udało się zmirrorować komentarza agenta do kanału:", err);
+        }
+      }
 
       return redactIssueComment(comment, currentUserRedactionOptions.enabled);
     },
