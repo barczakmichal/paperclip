@@ -247,7 +247,17 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
           payload: { channelId, messageId: inserted.id, issueId },
           requestedByActorType: "user",
           requestedByActorId: input.userId ?? null,
-          contextSnapshot: { channelId, issueId },
+          // Kontekst interaction-wake (wzorzec @mention w komentarzu issue): pozwala obudzić
+          // DOWOLNEGO wspomnianego agenta, nawet gdy nie jest assignee współdzielonego backing-issue.
+          // Bez tego guard `issue_assignee_changed` w heartbeat anuluje run każdego agenta != assignee
+          // (assignee to pierwszy kiedykolwiek wspomniany agent), więc odpowiadałby tylko on.
+          contextSnapshot: {
+            channelId,
+            issueId,
+            wakeReason: "issue_comment_mentioned",
+            source: "comment.mention",
+            commentId: backingIssueCommentId,
+          },
         });
         // Defensywnie: kształt zwrotki wakeup może się różnić — czytamy .id jeśli jest.
         triggeredRunId = wakeResult?.id ?? null;

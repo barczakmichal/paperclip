@@ -142,6 +142,15 @@ describeEmbeddedPostgres("channel @mention → run bridge", () => {
       expect.objectContaining({
         reason: "channel_mention",
         payload: expect.objectContaining({ channelId, issueId: seededIssueId }),
+        // Kontekst interaction-wake — pozwala obudzić agenta != assignee backing-issue
+        // (guard issue_assignee_changed w heartbeat). Naśladuje @mention w komentarzu issue.
+        contextSnapshot: expect.objectContaining({
+          channelId,
+          issueId: seededIssueId,
+          wakeReason: "issue_comment_mentioned",
+          source: "comment.mention",
+          commentId,
+        }),
       }),
     );
 
