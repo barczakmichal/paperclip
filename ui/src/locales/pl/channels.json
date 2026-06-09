@@ -19,5 +19,8 @@
   "nowLabel": "Teraz:",
   "lastLabel": "Ostatnio:",
   "showMore": "Pokaż więcej",
-  "showLess": "Pokaż mniej"
+  "showLess": "Pokaż mniej",
+  "agentWorkingGeneric": "odpowiada…",
+  "mentionPickerEmpty": "Brak agentów",
+  "mentionPickerHint": "↑↓ wybór · Enter/Tab wstaw · Esc zamknij"
 }

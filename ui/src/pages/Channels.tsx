@@ -15,6 +15,96 @@ import { MarkdownBody } from "../components/MarkdownBody";
 import { cn } from "../lib/utils";
 import type { Channel, ChannelMessage, ChannelMemberStatus } from "@paperclipai/shared";
 
+// ── "agent working" indicator logic ────────────────────────────────────────────
+
+// Po wysłaniu @mention run agenta trwa zwykle 20–90 s. Dopóki nie wróci jego
+// odpowiedź (agent_reply), pokazujemy bąbel "Agent odpowiada…", żeby kanał nie
+// wyglądał na martwy. Wskaźnik znika gdy: (a) pojawi się agent_reply danego
+// agenta nowszy niż wzmianka, albo (b) minie okno czasowe (agent mógł zakończyć
+// heartbeat bez odpowiedzi w kanale — wtedy nie wisimy w nieskończoność).
+export const AGENT_WORKING_TIMEOUT_MS = 3 * 60_000;
+
+export interface PendingAgent {
+  agentId: string;
+  name: string;
+}
+
+/**
+ * Wylicza listę agentów "w trakcie odpowiadania" wyłącznie z listy wiadomości —
+ * bez dodatkowego stanu ani API. Dla każdego najnowszego @mention agenta
+ * sprawdza, czy istnieje jego agent_reply po wzmiance i czy mieścimy się w oknie.
+ */
+export function computeWorkingAgents(
+  messages: Pick<ChannelMessage, "kind" | "authorAgentId" | "mentionedAgentIds" | "createdAt">[],
+  nameFor: (agentId: string) => string | null,
+  nowMs: number,
+): PendingAgent[] {
+  // Najnowsza wzmianka per agent (po czasie).
+  const latestMentionAt = new Map<string, number>();
+  for (const m of messages) {
+    if (m.kind !== "message") continue;
+    const t = new Date(m.createdAt).getTime();
+    for (const agentId of m.mentionedAgentIds ?? []) {
+      const prev = latestMentionAt.get(agentId);
+      if (prev === undefined || t > prev) latestMentionAt.set(agentId, t);
+    }
+  }
+
+  const out: PendingAgent[] = [];
+  for (const [agentId, mentionAt] of latestMentionAt) {
+    if (nowMs - mentionAt > AGENT_WORKING_TIMEOUT_MS) continue; // poza oknem
+    const answered = messages.some(
+      (m) =>
+        m.kind === "agent_reply" &&
+        m.authorAgentId === agentId &&
+        new Date(m.createdAt).getTime() >= mentionAt,
+    );
+    if (answered) continue;
+    out.push({ agentId, name: nameFor(agentId) ?? "Agent" });
+  }
+  return out;
+}
+
+// ── @mention autocomplete logic ─────────────────────────────────────────────────
+
+export interface ActiveMention {
+  /** Tekst po @ aż do kursora (np. "c" dla "@c"). */
+  query: string;
+  /** Indeks znaku @ w tekście. */
+  start: number;
+  /** Indeks kursora (koniec tokenu). */
+  end: number;
+}
+
+/**
+ * Wykrywa, czy kursor stoi wewnątrz tokenu @wzmianki (po @, bez spacji w środku),
+ * żeby otworzyć listę podpowiedzi. Zwraca null, gdy nie piszemy wzmianki.
+ */
+export function detectActiveMention(text: string, caret: number): ActiveMention | null {
+  // Szukamy ostatniego @ przed kursorem.
+  const upto = text.slice(0, caret);
+  const at = upto.lastIndexOf("@");
+  if (at === -1) return null;
+  // @ musi być na początku lub poprzedzone białym znakiem (nie e-mail w środku słowa).
+  if (at > 0 && !/\s/.test(text[at - 1]!)) return null;
+  const query = upto.slice(at + 1);
+  // Token kończy się na spacji — jeśli jest spacja, kursor nie jest już we wzmiance.
+  if (/\s/.test(query)) return null;
+  return { query, start: at, end: caret };
+}
+
+/** Filtruje członków po prefiksie zapytania (case-insensitive). */
+export function filterMentionCandidates(
+  members: Pick<ChannelMemberStatus, "agentId" | "name" | "role">[],
+  query: string,
+): Pick<ChannelMemberStatus, "agentId" | "name" | "role">[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return members;
+  return members.filter(
+    (m) => m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q),
+  );
+}
+
 // ── online status dot ─────────────────────────────────────────────────────────
 
 const ONLINE_DOT: Record<string, string> = {
@@ -80,11 +170,18 @@ function ChannelRail({
 
 // ── message bubble ────────────────────────────────────────────────────────────
 
-function MessageRow({ msg }: { msg: ChannelMessage }) {
+function MessageRow({
+  msg,
+  nameFor,
+}: {
+  msg: ChannelMessage;
+  nameFor: (agentId: string) => string | null;
+}) {
   const { t } = useTranslation("channels");
   const isSystem = msg.kind === "system";
   const isAgent = msg.kind === "agent_reply";
   const isUser = msg.kind === "message";
+  const agentName = (msg.authorAgentId && nameFor(msg.authorAgentId)) || t("agent", "Agent");
 
   const time = new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
@@ -127,9 +224,7 @@ function MessageRow({ msg }: { msg: ChannelMessage }) {
       <div className={cn("min-w-0 flex-1", isUser && "flex flex-col items-end")}>
         <div className={cn("flex items-center gap-2 mb-0.5", isUser && "flex-row-reverse")}>
           <span className="text-xs font-medium">
-            {isAgent
-              ? t("agent", "Agent")
-              : t("you", "You")}
+            {isAgent ? agentName : t("you", "You")}
           </span>
           <span className="text-xs text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
             {time}
@@ -162,16 +257,48 @@ function MessageRow({ msg }: { msg: ChannelMessage }) {
 
 function Composer({
   channelId,
+  members,
   onSent,
 }: {
   channelId: string;
+  members: ChannelMemberStatus[];
   onSent: () => void;
 }) {
   const { t } = useTranslation("channels");
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mention, setMention] = useState<ActiveMention | null>(null);
+  const [highlight, setHighlight] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const candidates = mention ? filterMentionCandidates(members, mention.query) : [];
+  const pickerOpen = mention !== null && candidates.length > 0;
+
+  // Po każdej zmianie tekstu/kursora przeliczamy, czy jesteśmy we wzmiance.
+  function refreshMention(el: HTMLTextAreaElement) {
+    const next = detectActiveMention(el.value, el.selectionStart ?? el.value.length);
+    setMention(next);
+    setHighlight(0);
+  }
+
+  function insertMention(name: string) {
+    if (!mention) return;
+    const before = value.slice(0, mention.start);
+    const after = value.slice(mention.end);
+    const next = `${before}@${name} ${after}`;
+    setValue(next);
+    setMention(null);
+    // Ustaw kursor zaraz za wstawioną wzmianką.
+    const caret = before.length + name.length + 2;
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(caret, caret);
+      }
+    });
+  }
 
   async function handleSubmit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -182,6 +309,7 @@ function Composer({
     try {
       await channelsApi.post(channelId, text);
       setValue("");
+      setMention(null);
       onSent();
       textareaRef.current?.focus();
     } catch {
@@ -193,6 +321,30 @@ function Composer({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Gdy lista podpowiedzi otwarta — strzałki/Enter/Tab/Esc steruje listą,
+    // a nie wysyłaniem wiadomości.
+    if (pickerOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlight((h) => (h + 1) % candidates.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlight((h) => (h - 1 + candidates.length) % candidates.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        insertMention(candidates[Math.min(highlight, candidates.length - 1)]!.name);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMention(null);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSubmit();
@@ -205,21 +357,67 @@ function Composer({
         {t("mentionHint", "@AgentName triggers a run")}
       </p>
       <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-        <textarea
-          ref={textareaRef}
-          rows={2}
-          className={cn(
-            "flex-1 resize-none rounded-md border border-border bg-card px-3 py-2",
-            "text-sm placeholder:text-muted-foreground/50",
-            "focus:outline-none focus-visible:ring-ring focus-visible:ring-[2px]",
-            "disabled:opacity-50",
+        <div className="relative flex-1">
+          {/* @mention autocomplete */}
+          {pickerOpen && (
+            <div
+              className="absolute bottom-full mb-1 left-0 w-full max-w-sm z-20 rounded-md border border-border bg-popover shadow-lg overflow-hidden"
+              role="listbox"
+              data-testid="mention-picker"
+            >
+              <ul className="max-h-52 overflow-y-auto py-1">
+                {candidates.map((c, i) => (
+                  <li key={c.agentId}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={i === highlight}
+                      // onMouseDown (nie onClick) — żeby nie zabrać focusu z textarea
+                      // przed wstawieniem (blur zamknąłby listę i zgubił wybór).
+                      onMouseDown={(ev) => {
+                        ev.preventDefault();
+                        insertMention(c.name);
+                      }}
+                      onMouseEnter={() => setHighlight(i)}
+                      className={cn(
+                        "w-full text-left flex items-center gap-2 px-3 py-1.5 text-sm",
+                        i === highlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
+                      )}
+                    >
+                      <span className="text-muted-foreground/60">@</span>
+                      <span className="font-medium truncate">{c.name}</span>
+                      <span className="text-xs text-muted-foreground/60 capitalize ml-auto">{c.role}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="border-t border-border px-3 py-1 text-[10px] text-muted-foreground/50">
+                {t("mentionPickerHint", "↑↓ select · Enter/Tab insert · Esc close")}
+              </div>
+            </div>
           )}
-          placeholder={t("composerPlaceholder", "Write a message… (Enter to send, Shift+Enter for newline)")}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={sending}
-        />
+          <textarea
+            ref={textareaRef}
+            rows={2}
+            className={cn(
+              "w-full resize-none rounded-md border border-border bg-card px-3 py-2",
+              "text-sm placeholder:text-muted-foreground/50",
+              "focus:outline-none focus-visible:ring-ring focus-visible:ring-[2px]",
+              "disabled:opacity-50",
+            )}
+            placeholder={t("composerPlaceholder", "Write a message… (Enter to send, Shift+Enter for newline)")}
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              refreshMention(e.target);
+            }}
+            onKeyUp={(e) => refreshMention(e.currentTarget)}
+            onClick={(e) => refreshMention(e.currentTarget)}
+            onBlur={() => setMention(null)}
+            onKeyDown={handleKeyDown}
+            disabled={sending}
+          />
+        </div>
         <button
           type="submit"
           disabled={!value.trim() || sending}
@@ -244,6 +442,34 @@ function Composer({
   );
 }
 
+// ── "agent working" bubble ──────────────────────────────────────────────────────
+
+function WorkingIndicator({ name }: { name: string }) {
+  const { t } = useTranslation("channels");
+  return (
+    <div className="flex gap-2.5 px-4 py-2" data-testid="agent-working">
+      <div className="shrink-0 mt-0.5">
+        <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+          <AgentIcon icon={null} className="h-4 w-4" />
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="text-xs font-medium">{name}</span>
+        </div>
+        <div className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm bg-muted/60 text-muted-foreground">
+          <span>{t("agentWorkingGeneric", "replying…")}</span>
+          <span className="inline-flex gap-0.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:-0.3s]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:-0.15s]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-bounce" />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── center panel (messages) ────────────────────────────────────────────────────
 
 function MessageStream({ channelId }: { channelId: string }) {
@@ -255,17 +481,45 @@ function MessageStream({ channelId }: { channelId: string }) {
     queryKey: queryKeys.channels.messages(channelId),
     queryFn: () => channelsApi.messages(channelId),
     enabled: !!channelId,
+    // FALLBACK live-update: WS channel.message.created jest szybką ścieżką, ale
+    // jeśli event się zgubi (reconnect, timing), agent_reply nigdy by się nie
+    // pojawił — wiadomości nie były wcześniej pollowane wcale. Krótki interwał
+    // gwarantuje, że odpowiedź agenta dotrze nawet bez WS.
+    refetchInterval: 10_000,
   });
 
-  // scroll to bottom on new messages
+  // Członkowie kanału — współdzielą cache z MembersPanel (ten sam queryKey).
+  // Potrzebni do: (a) nazw agentów w bąblach/wskaźniku, (b) autocomplete @.
+  const { data: members } = useQuery({
+    queryKey: queryKeys.channels.members(channelId),
+    queryFn: () => channelsApi.members(channelId),
+    enabled: !!channelId,
+  });
+
+  const memberList = members ?? [];
+  const nameFor = (agentId: string) =>
+    memberList.find((m) => m.agentId === agentId)?.name ?? null;
+
+  // Wskaźnik "agent pracuje" — przeliczany z wiadomości. Tick co 15 s odświeża
+  // okno czasowe (żeby wygasłe wskaźniki znikały nawet bez nowych wiadomości).
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 15_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const workingAgents = computeWorkingAgents(messages ?? [], nameFor, nowMs);
+
+  // scroll to bottom on new messages / new working indicator
   useEffect(() => {
     if (bottomRef.current && typeof bottomRef.current.scrollIntoView === "function") {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, workingAgents.length]);
 
   function handleSent() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.channels.messages(channelId) });
+    // Wysłanie @mention startuje run — odśwież też "teraz" by wskaźnik pojawił się od razu.
+    setNowMs(Date.now());
   }
 
   return (
@@ -293,7 +547,10 @@ function MessageStream({ channelId }: { channelId: string }) {
         ) : (
           <>
             {[...messages].reverse().map((msg) => (
-              <MessageRow key={msg.id} msg={msg} />
+              <MessageRow key={msg.id} msg={msg} nameFor={nameFor} />
+            ))}
+            {workingAgents.map((a) => (
+              <WorkingIndicator key={a.agentId} name={a.name} />
             ))}
           </>
         )}
@@ -301,7 +558,7 @@ function MessageStream({ channelId }: { channelId: string }) {
       </div>
 
       {/* composer */}
-      <Composer channelId={channelId} onSent={handleSent} />
+      <Composer channelId={channelId} members={memberList} onSent={handleSent} />
     </div>
   );
 }
