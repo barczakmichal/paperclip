@@ -21,6 +21,7 @@ const BOARD_ROUTE_ROOTS = new Set([
   "marketing",
   "live",
   "process",
+  "channels",
 ]);
 
 const GLOBAL_ROUTE_ROOTS = new Set(["auth", "invite", "board-claim", "cli-auth", "docs", "instance"]);

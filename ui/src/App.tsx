@@ -329,6 +329,7 @@ export function App() {
           <Route path="marketing" element={<UnprefixedBoardRedirect />} />
           <Route path="marketing/:campaignId" element={<UnprefixedBoardRedirect />} />
           <Route path="process" element={<UnprefixedBoardRedirect />} />
+          <Route path="channels" element={<UnprefixedBoardRedirect />} />
           <Route path="execution-workspaces/:workspaceId" element={<UnprefixedBoardRedirect />} />
           <Route path="execution-workspaces/:workspaceId/configuration" element={<UnprefixedBoardRedirect />} />
           <Route path="execution-workspaces/:workspaceId/runtime-logs" element={<UnprefixedBoardRedirect />} />

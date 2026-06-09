@@ -20,4 +20,11 @@ describe("company routes", () => {
       "/execution-workspaces/workspace-123",
     );
   });
+
+  it("treats the channels path as a board route that needs a company prefix", () => {
+    expect(isBoardPathWithoutPrefix("/channels")).toBe(true);
+    expect(extractCompanyPrefixFromPath("/channels")).toBeNull();
+    expect(applyCompanyPrefix("/channels", "PAP")).toBe("/PAP/channels");
+    expect(toCompanyRelativePath("/PAP/channels")).toBe("/channels");
+  });
 });
