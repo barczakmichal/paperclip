@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
 import { channels } from "./channels.js";
@@ -21,5 +22,9 @@ export const channelMessages = pgTable(
   (table) => ({
     streamIdx: index("channel_messages_channel_created_idx").on(table.channelId, table.createdAt),
     backingCommentIdx: index("channel_messages_backing_comment_idx").on(table.backingIssueCommentId),
+    // Twardy (DB-level) dedup mirrora: jeden channel_message per backing-issue comment.
+    backingCommentUq: uniqueIndex("channel_messages_backing_comment_uq")
+      .on(table.backingIssueCommentId)
+      .where(sql`${table.backingIssueCommentId} is not null`),
   }),
 );

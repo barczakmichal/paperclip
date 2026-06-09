@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "channel_messages_backing_comment_uq" ON "channel_messages" USING btree ("backing_issue_comment_id") WHERE "channel_messages"."backing_issue_comment_id" is not null;

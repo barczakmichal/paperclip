@@ -547,6 +547,13 @@
       "when": 1780388274956,
       "tag": "0077_perfect_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1781019219628,
+      "tag": "0078_abandoned_spyke",
+      "breakpoints": true
     }
   ]
 }

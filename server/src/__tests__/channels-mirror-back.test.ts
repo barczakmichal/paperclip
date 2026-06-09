@@ -160,6 +160,34 @@ describeEmbeddedPostgres("mirror zwrotny agenta → kanał", () => {
     expect(rows).toHaveLength(1);
   });
 
+  it("DB blokuje duplikat backing-issue comment także przy wyścigu (onConflictDoNothing)", async () => {
+    // Równoległe mirrorowanie tego samego komentarza — szybka ścieżka SELECT może
+    // u obu nie zobaczyć jeszcze wiersza, więc obrona musi zadziałać na poziomie DB.
+    await Promise.all([
+      mirrorAgentCommentToChannel(db, { commentId: existingCommentId }),
+      mirrorAgentCommentToChannel(db, { commentId: existingCommentId }),
+    ]);
+    const rows = await db
+      .select()
+      .from(channelMessages)
+      .where(eq(channelMessages.backingIssueCommentId, existingCommentId));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("partial unique index NIE blokuje wielu wierszy z NULL backing comment", async () => {
+    // Wiadomości użytkownika nie mają backingIssueCommentId — partial index
+    // (WHERE backing_issue_comment_id IS NOT NULL) nie może ich kolidować.
+    await db.insert(channelMessages).values([
+      { companyId, channelId, body: "msg A", mentionedAgentIds: [] },
+      { companyId, channelId, body: "msg B", mentionedAgentIds: [] },
+    ]);
+    const rows = await db
+      .select()
+      .from(channelMessages)
+      .where(eq(channelMessages.channelId, channelId));
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("komentarz na zwykłym issue (origin=manual) nie trafia do kanałów", async () => {
     await issueSvc.addComment(manualIssueId, "zwykły komentarz", { agentId: cmoId });
     const stream = await channelSvc.listMessages(channelId, {});

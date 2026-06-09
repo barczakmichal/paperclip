@@ -15,12 +15,13 @@ import { publishLiveEvent } from "./live-events.js";
 /**
  * Mirroruje komentarz agenta z backing-issue do channel_messages.
  *
- * Idempotencja jest APLIKACYJNA, na poziomie pojedynczego call-site: funkcja jest
- * wołana dokładnie raz per `issueService.addComment` (jedno synchroniczne miejsce),
- * więc dedup SELECT-then-INSERT po `backingIssueCommentId` wystarcza w praktyce.
- * Docelowym hardeningiem (świadomy defer, NIE robimy teraz) byłby partial unique
- * index na `channel_messages.backing_issue_comment_id WHERE backing_issue_comment_id
- * IS NOT NULL` + `.onConflictDoNothing()`, co dałoby gwarancję na poziomie DB.
+ * Idempotencja jest dwuwarstwowa:
+ *   1. Szybka ścieżka aplikacyjna — SELECT po `backingIssueCommentId`, żeby uniknąć
+ *      zbędnego INSERT-a i publikacji live-eventu dla już zmirrorowanego komentarza.
+ *   2. Twarda gwarancja na poziomie DB — partial unique index
+ *      `channel_messages_backing_comment_uq` na `backing_issue_comment_id
+ *      WHERE backing_issue_comment_id IS NOT NULL` + `.onConflictDoNothing()`,
+ *      odporna na wyścig dwóch równoległych mirrorów tego samego komentarza.
  */
 export async function mirrorAgentCommentToChannel(
   db: Db,
@@ -60,8 +61,8 @@ export async function mirrorAgentCommentToChannel(
   const channelId = issue.originId;
   if (!channelId) return;
 
-  // 4. Dedup aplikacyjny (patrz docstring) — sprawdź czy channel_messages
-  //    z tym backingIssueCommentId już istnieje.
+  // 4. Szybka ścieżka aplikacyjna (patrz docstring) — sprawdź czy channel_messages
+  //    z tym backingIssueCommentId już istnieje, by uniknąć zbędnego INSERT-a.
   const existing = await db
     .select({ id: channelMessages.id })
     .from(channelMessages)
@@ -70,7 +71,11 @@ export async function mirrorAgentCommentToChannel(
 
   if (existing) return;
 
-  // 5. Wstaw wiersz channel_messages
+  // 5. Wstaw wiersz channel_messages. `.onConflictDoNothing()` (bez targetu — partial
+  //    unique index wymagałby powtórzenia predykatu, a brak targetu łapie każdy
+  //    konflikt unikalności) daje twardą gwarancję dedupu na poziomie DB przez index
+  //    channel_messages_backing_comment_uq (odporność na wyścig). Gdy konflikt —
+  //    INSERT nic nie wstawia, `.returning()` zwraca pustą tablicę.
   const [inserted] = await db
     .insert(channelMessages)
     .values({
@@ -82,9 +87,13 @@ export async function mirrorAgentCommentToChannel(
       mentionedAgentIds: [],
       backingIssueCommentId: commentId,
     })
+    .onConflictDoNothing()
     .returning();
 
-  // 6. Opublikuj live event
+  // 6. Duplikat (wyścig) — wiersz wstawił inny call, nic nie publikujemy.
+  if (!inserted) return;
+
+  // 7. Opublikuj live event
   publishLiveEvent({
     companyId: comment.companyId,
     type: "channel.message.created",
