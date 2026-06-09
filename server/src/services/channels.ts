@@ -27,6 +27,29 @@ interface ChannelServiceDeps {
 
 const EXCLUDED_AGENT_STATUSES = ["terminated", "pending_approval"];
 
+// Wyciąga id uruchomionego runu ze zwrotki heartbeat.wakeup, niezależnie od jej kształtu.
+// Kontrakt wakeup (enqueueWakeup) jest niejednorodny w runtime:
+//   - rekord heartbeatRuns (queued/coalesced) → runId pod `id`
+//   - AgentWakeupSkipped (status="skipped")    → runId, jeśli istnieje, pod `executionRunId`
+//   - warianty zagnieżdżone                    → `run.id` lub `triggeredRunId`
+//   - null/undefined (deferred/skipped bez runu) → null (run nie powstał — oczekiwane)
+// Zwraca pierwsze niepuste, sensowne id; w przeciwnym razie null.
+export function extractTriggeredRunId(wakeResult: unknown): string | null {
+  if (!wakeResult || typeof wakeResult !== "object") return null;
+  const r = wakeResult as Record<string, unknown>;
+  const candidates: unknown[] = [
+    r.id,
+    r.executionRunId,
+    r.triggeredRunId,
+    r.runId,
+    (r.run as Record<string, unknown> | undefined)?.id,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.length > 0) return c;
+  }
+  return null;
+}
+
 function slug(name: string): string {
   return name
     .toLowerCase()
@@ -259,8 +282,15 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
             commentId: backingIssueCommentId,
           },
         });
-        // Defensywnie: kształt zwrotki wakeup może się różnić — czytamy .id jeśli jest.
-        triggeredRunId = wakeResult?.id ?? null;
+        // Wyciągnięcie runId odporne na rzeczywiste kształty zwrotki heartbeat.wakeup:
+        //   - rekord runu (queued/coalesced)         → pole `id`
+        //   - AgentWakeupSkipped (dedup/agent zajęty) → brak `id`, ale runId bywa w `executionRunId`
+        //   - zwrotka zagnieżdżona                    → `run.id` / `triggeredRunId`
+        //   - null/undefined (deferred/skipped)       → run nie powstał, zostaje null (poprawnie)
+        // UWAGA: gdy wakeup faktycznie NIE utworzył runu (deferred/skipped bez executionRunId),
+        // triggeredRunId zostaje null — to oczekiwane, nie błąd. Bug dotyczył tylko kształtów,
+        // w których id runu siedziało poza `.id` i było gubione.
+        triggeredRunId = extractTriggeredRunId(wakeResult);
       } catch {
         // Nie blokujemy zapisu wiadomości błędem wakeup.
       }

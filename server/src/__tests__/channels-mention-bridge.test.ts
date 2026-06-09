@@ -6,8 +6,32 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { channelService } from "../services/channels.js";
+import { channelService, extractTriggeredRunId } from "../services/channels.js";
 import { issueService } from "../services/issues.js";
+
+describe("extractTriggeredRunId — kształty zwrotki heartbeat.wakeup", () => {
+  it("czyta id z rekordu runu (queued/coalesced)", () => {
+    expect(extractTriggeredRunId({ id: "run-abc", status: "queued" })).toBe("run-abc");
+  });
+
+  it("czyta executionRunId ze zwrotki skipped (dedup/agent zajęty)", () => {
+    expect(
+      extractTriggeredRunId({ status: "skipped", reason: "agent_busy", executionRunId: "run-exec" }),
+    ).toBe("run-exec");
+  });
+
+  it("czyta triggeredRunId oraz zagnieżdżone run.id", () => {
+    expect(extractTriggeredRunId({ triggeredRunId: "run-trig" })).toBe("run-trig");
+    expect(extractTriggeredRunId({ run: { id: "run-nested" } })).toBe("run-nested");
+  });
+
+  it("zwraca null gdy runu nie ma (null/undefined/pusty obiekt/skipped bez runu)", () => {
+    expect(extractTriggeredRunId(null)).toBeNull();
+    expect(extractTriggeredRunId(undefined)).toBeNull();
+    expect(extractTriggeredRunId({})).toBeNull();
+    expect(extractTriggeredRunId({ status: "skipped", executionRunId: null })).toBeNull();
+  });
+});
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -170,6 +194,32 @@ describeEmbeddedPostgres("channel @mention → run bridge", () => {
       .then((rows) => rows[0]);
     expect(persistedMessage?.triggeredRunId).toBe(runId);
     expect(persistedMessage?.backingIssueCommentId).toBe(commentId);
+  });
+
+  it("zapisuje triggeredRunId gdy wakeup zwraca kształt skipped z executionRunId", async () => {
+    await seedCompanyAndChannel();
+
+    // Symulujemy realny wariant zwrotki: agent zajęty/dedup → status="skipped",
+    // ale run i tak istnieje i jego id siedzi pod executionRunId (nie pod .id).
+    const execRunId = randomUUID();
+    wakeup.mockResolvedValueOnce({
+      status: "skipped",
+      reason: "agent_busy",
+      message: null,
+      issueId: seededIssueId,
+      executionRunId: execRunId,
+      executionAgentId: cmoId,
+      executionAgentName: "CMO",
+    });
+
+    const message = await svc.postMessage(channelId, { body: "@CMO status?", userId: "u1" });
+
+    const persistedMessage = await db
+      .select()
+      .from(channelMessages)
+      .where(eq(channelMessages.id, message.id))
+      .then((rows) => rows[0]);
+    expect(persistedMessage?.triggeredRunId).toBe(execRunId);
   });
 
   it("druga wiadomość reużywa istniejący backing-issue (przez DB, nie cache)", async () => {

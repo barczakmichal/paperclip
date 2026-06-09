@@ -116,6 +116,7 @@ const CHANNEL: Channel = {
   name: "marketing",
   kind: "department",
   managerAgentId: null,
+  backingIssueId: null,
   archivedAt: null,
 };
 

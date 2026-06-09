@@ -9,6 +9,10 @@ export interface Channel {
   name: string;
   kind: ChannelKind;
   managerAgentId: string | null;
+  // Backing issue kanału — leniwie tworzony przy pierwszym @mention (channels.backingIssueId).
+  // null dopóki w kanale nie padła żadna wzmianka. list() robi select() wszystkich kolumn,
+  // więc pole realnie leci w JSON; tu domykamy kontrakt typu.
+  backingIssueId: string | null;
   archivedAt: string | null;
 }
 

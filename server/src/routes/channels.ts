@@ -13,6 +13,32 @@ import type { PluginWorkerManager } from "../services/plugin-worker-manager.js";
 // (klient nie może wymusić nieograniczonego skanu tabeli przez ?limit=...).
 export const CHANNEL_MESSAGES_MAX_LIMIT = 200;
 
+// TTL throttlingu syncForCompany (ms). W obrębie tego okna powtórne GET listy kanałów
+// pomijają sync — eliminuje N+1 zapisów per żądanie przy częstym odświeżaniu listy.
+export const CHANNEL_SYNC_THROTTLE_MS = 5000;
+
+// In-memory mapa: companyId → timestamp ostatniego wykonanego synca (ms, Date.now()).
+// Throttle jest per companyId (różne firmy synchronizują się niezależnie).
+// UWAGA: stan w pamięci procesu — przy wielu instancjach serwera każda throttluje osobno;
+// to akceptowalne (sync jest idempotentny, a celem jest tylko redukcja częstotliwości).
+const channelSyncLastAt = new Map<string, number>();
+
+// Zwraca true i odnotowuje timestamp, gdy sync POWINIEN się wykonać (pierwszy raz lub po TTL).
+// Zwraca false, gdy od ostatniego synca dla tej firmy minęło mniej niż TTL.
+export function shouldSyncCompanyChannels(companyId: string, now: number = Date.now()): boolean {
+  const last = channelSyncLastAt.get(companyId);
+  if (last !== undefined && now - last < CHANNEL_SYNC_THROTTLE_MS) {
+    return false;
+  }
+  channelSyncLastAt.set(companyId, now);
+  return true;
+}
+
+// Reset mapy throttlingu — wyłącznie dla testów (czysty stan między przypadkami).
+export function resetChannelSyncThrottle(): void {
+  channelSyncLastAt.clear();
+}
+
 export function channelRoutes(db: Db, opts: { pluginWorkerManager?: PluginWorkerManager } = {}) {
   const router = Router();
   const svc = channelService(db, {
@@ -22,11 +48,14 @@ export function channelRoutes(db: Db, opts: { pluginWorkerManager?: PluginWorker
   router.get("/companies/:companyId/channels", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
-    // TODO(Task 4 dług): sync na każdy GET to świadomy kompromis — robi N+1 zapisów
-    // (insert/update kanałów) per żądanie. Produkcyjny hardening: throttling per companyId
-    // (TTL in-memory lub bramka po timestampie ostatniego synca), żeby nie synchronizować
-    // przy każdym odświeżeniu listy.
-    await svc.syncForCompany(companyId);
+    // Throttling per companyId: sync wykonuje się przy pierwszym GET i po wygaśnięciu TTL
+    // (CHANNEL_SYNC_THROTTLE_MS), w pozostałych przypadkach jest pomijany. Eliminuje N+1
+    // zapisów (insert/update kanałów) przy częstym odświeżaniu listy. list() zawsze zwraca
+    // świeży stan z DB, więc pominięcie synca nie pokazuje nieaktualnych danych —
+    // co najwyżej opóźnia (do TTL) wykrycie zmiany struktury agentów.
+    if (shouldSyncCompanyChannels(companyId)) {
+      await svc.syncForCompany(companyId);
+    }
     const channels = await svc.list(companyId);
     res.json(channels);
   });
