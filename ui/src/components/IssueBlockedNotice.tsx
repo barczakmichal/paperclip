@@ -19,6 +19,7 @@ import {
   RECOVERY_CHIP_DEFAULT_TONE,
   recoveryChipLabel,
 } from "../lib/recovery-display";
+import { useTranslation } from "@/i18n";
 
 function BlockerRecoveryIndicator({ action }: { action: IssueRecoveryAction }) {
   const state = deriveActiveRecoveryDisplayState(action);
@@ -124,6 +125,7 @@ export function IssueBlockedNotice({
   scheduledRetry?: IssueScheduledRetry | null;
   agentName?: string | null;
 }) {
+  const { t } = useTranslation();
   if (issueStatus === "done" || issueStatus === "cancelled") return null;
   const showSuccessfulRunHandoff = successfulRunHandoff?.required === true;
   if (!showSuccessfulRunHandoff && blockers.length === 0 && issueStatus !== "blocked") return null;
@@ -217,10 +219,10 @@ export function IssueBlockedNotice({
                 with no clear owner for the next action.
               </p>
               <ul className="list-disc space-y-1 pl-5 text-xs leading-5 text-amber-900 dark:text-amber-100">
-                <li>Mark it done or cancelled.</li>
-                <li>Send it for review or ask for input.</li>
-                <li>Mark it blocked with a blocker owner.</li>
-                <li>Delegate follow-up work or queue a continuation.</li>
+                <li>{t("component.issueBlockedNotice.successfulRunHandoff.tip1")}</li>
+                <li>{t("component.issueBlockedNotice.successfulRunHandoff.tip2")}</li>
+                <li>{t("component.issueBlockedNotice.successfulRunHandoff.tip3")}</li>
+                <li>{t("component.issueBlockedNotice.successfulRunHandoff.tip4")}</li>
               </ul>
               <div className="flex flex-wrap gap-1.5 text-xs">
                 {successfulRunHandoff.sourceRunId && successfulRunHandoff.assigneeAgentId ? (
@@ -228,20 +230,22 @@ export function IssueBlockedNotice({
                     to={`/agents/${successfulRunHandoff.assigneeAgentId}/runs/${successfulRunHandoff.sourceRunId}`}
                     className="rounded-md border border-amber-300/70 bg-background/80 px-2 py-1 font-mono text-amber-950 hover:border-amber-500 hover:bg-amber-100 hover:underline dark:border-amber-500/40 dark:bg-background/40 dark:text-amber-100 dark:hover:bg-amber-500/15"
                   >
-                    run {successfulRunHandoff.sourceRunId.slice(0, 8)}
+                    {t("component.issueBlockedNotice.successfulRunHandoff.runChip", { shortId: successfulRunHandoff.sourceRunId.slice(0, 8) })}
                   </Link>
                 ) : successfulRunHandoff.sourceRunId ? (
                   <span className="rounded-md border border-amber-300/70 bg-background/80 px-2 py-1 font-mono text-amber-950 dark:border-amber-500/40 dark:bg-background/40 dark:text-amber-100">
-                    run {successfulRunHandoff.sourceRunId.slice(0, 8)}
+                    {t("component.issueBlockedNotice.successfulRunHandoff.runChip", { shortId: successfulRunHandoff.sourceRunId.slice(0, 8) })}
                   </span>
                 ) : null}
                 <span className="rounded-md border border-amber-300/70 bg-background/80 px-2 py-1 text-amber-900 dark:border-amber-500/40 dark:bg-background/40 dark:text-amber-100">
-                  Corrective wake queued for {agentName ?? "the assignee"}
+                  {agentName
+                    ? t("component.issueBlockedNotice.successfulRunHandoff.correctiveWake", { name: agentName })
+                    : t("component.issueBlockedNotice.successfulRunHandoff.correctiveWakeFallback")}
                 </span>
               </div>
               {successfulRunHandoff.detectedProgressSummary ? (
                 <p className="text-xs leading-5 text-amber-800 dark:text-amber-200">
-                  Detected progress: {successfulRunHandoff.detectedProgressSummary}
+                  {t("component.issueBlockedNotice.successfulRunHandoff.detectedProgress", { summary: successfulRunHandoff.detectedProgressSummary })}
                 </p>
               ) : null}
               {successfulRunRetryNow ? (
@@ -274,14 +278,14 @@ export function IssueBlockedNotice({
               {showStalledRow ? (
                 <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                   <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
-                    Stalled in review
+                    {t("component.issueBlockedNotice.stalledInReview")}
                   </span>
                   {stalledLeafBlockers.map(renderBlockerChip)}
                 </div>
               ) : terminalBlockers.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                   <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
-                    Ultimately waiting on
+                    {t("component.issueBlockedNotice.ultimatelyWaitingOn")}
                   </span>
                   {terminalBlockers.map(renderBlockerChip)}
                 </div>
@@ -293,7 +297,7 @@ export function IssueBlockedNotice({
                 >
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-200">
                     <Flag className="h-3 w-3" aria-hidden />
-                    Blocked by parked work
+                    {t("component.issueBlockedNotice.blockedByParkedWork")}
                   </span>
                   {parkedBlockers.map(renderBlockerChip)}
                 </div>

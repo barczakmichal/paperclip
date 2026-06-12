@@ -53,6 +53,7 @@
     "perf:issue-chat-long-thread": "node scripts/measure-issue-chat-long-thread.mjs"
   },
   "devDependencies": {
+    "@embedded-postgres/windows-x64": "18.1.0-beta.15",
     "@playwright/test": "^1.58.2",
     "cross-env": "^10.1.0",
     "esbuild": "^0.28.0",

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import { FolderOpen, Loader2, LogOut, MoreHorizontal, Plus } from "lucide-react";
+import { useTranslation } from "@/i18n";
 import {
   DndContext,
   MouseSensor,
@@ -52,6 +53,7 @@ const PROJECT_SORT_CHOICES: SidebarSectionRadioChoice[] = [
   { value: "recent", label: "Recent" },
 ];
 const REORDER_POINTER_MEDIA = "(hover: hover) and (pointer: fine)";
+
 
 type ProjectItemProps = {
   activeProjectRef: string | null;
@@ -121,6 +123,7 @@ function ProjectItem({
   leaving = false,
   isDragging = false,
 }: ProjectItemProps) {
+  const { t } = useTranslation();
   const routeRef = projectRouteRef(project);
 
   const link = (
@@ -143,7 +146,7 @@ function ProjectItem({
     >
       <ProjectTile color={project.color ?? null} icon={project.icon ?? null} size="xs" />
       <span className={rail ? SIDEBAR_RAIL_HIDDEN_LABEL : "flex-1 truncate"}>{project.name}</span>
-      {!rail && project.pauseReason === "budget" ? <BudgetSidebarMarker title="Project paused by budget" /> : null}
+      {!rail && project.pauseReason === "budget" ? <BudgetSidebarMarker title={t("component.sidebarProjects.budgetPaused")} /> : null}
     </NavLink>
   );
 
@@ -249,6 +252,7 @@ function SortableProjectItem(props: ProjectItemProps) {
 }
 
 export function SidebarProjects() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(true);
   const { selectedCompany, selectedCompanyId } = useCompany();
   const { openNewProject } = useDialogActions();
@@ -256,6 +260,15 @@ export function SidebarProjects() {
   const rail = collapsed && !peeking;
   const fineReorderPointer = useFineReorderPointer();
   const location = useLocation();
+
+  const PROJECT_SORT_CHOICES: SidebarSectionRadioChoice[] = useMemo(
+    () => [
+      { value: "top", label: t("component.sidebarProjects.sortTop") },
+      { value: "alphabetical", label: t("component.sidebarProjects.sortAlphabetical") },
+      { value: "recent", label: t("component.sidebarProjects.sortRecent") },
+    ],
+    [t],
+  );
 
   const { data: projects } = useQuery({
     queryKey: queryKeys.projects.list(selectedCompanyId!),
@@ -406,20 +419,21 @@ export function SidebarProjects() {
 
   return (
     <SidebarSection
-      label="Projects"
+      label={t("component.sidebarProjects.projects")}
       collapsible={{ open, onOpenChange: setOpen }}
       headerAction={{
-        ariaLabel: "New project",
+        ariaLabel: t("component.sidebarProjects.newProject"),
         icon: Plus,
         onClick: openNewProject,
       }}
       menu={{
-        ariaLabel: "Projects section actions",
+        ariaLabel: t("component.sidebarProjects.sectionActions"),
         actions: [
-          { type: "item", label: "Browse projects", icon: FolderOpen, href: "/projects" },
+          { type: "separator" },
+          { type: "item", label: t("component.sidebarProjects.browseProjects"), icon: FolderOpen, href: "/projects" },
           { type: "separator" },
         ],
-        radioLabel: "Project sort",
+        radioLabel: t("component.sidebarProjects.projectSort"),
         radioChoices: PROJECT_SORT_CHOICES,
         radioValue: sortMode,
         onRadioValueChange: persistSortMode,

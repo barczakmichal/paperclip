@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { i18n, t } from ".";
 import en from "./locales/en.json";
 import { localeMessages } from "./locales";
@@ -8,6 +8,11 @@ describe("locale validation", () => {
   beforeAll(async () => {
     // The initial language follows the host environment; pin it for determinism.
     await i18n.changeLanguage("en");
+    localStorage.removeItem("paperclip_locale");
+  });
+
+  afterEach(() => {
+    localStorage.removeItem("paperclip_locale");
   });
 
   it("resolves English messages with key and default fallbacks", () => {

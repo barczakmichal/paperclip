@@ -6,18 +6,19 @@ import { authApi } from "@/api/auth";
 import { healthApi } from "@/api/health";
 import { queryKeys } from "@/lib/queryKeys";
 import { BootstrapPendingPage } from "@/components/BootstrapPendingPage";
+import { useTranslation } from "@/i18n";
 
 function NoBoardAccessPage() {
+  const { t } = useTranslation();
   return (
     <div className="mx-auto max-w-xl py-10">
       <div className="rounded-lg border border-border bg-card p-6">
-        <h1 className="text-xl font-semibold">No company access</h1>
+        <h1 className="text-xl font-semibold">{t("cloudAccess.noCompanyAccess")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          This account is signed in, but it does not have an active company membership or instance-admin access on
-          this Paperclip instance.
+          {t("cloudAccess.noCompanyAccessDescription1")}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Use a company invite or sign in with an account that already belongs to this org.
+          {t("cloudAccess.noCompanyAccessDescription2")}
         </p>
       </div>
     </div>
@@ -25,6 +26,7 @@ function NoBoardAccessPage() {
 }
 
 export function CloudAccessGate() {
+  const { t } = useTranslation();
   const location = useLocation();
   const queryClient = useQueryClient();
   const healthQuery = useQuery({
@@ -73,7 +75,7 @@ export function CloudAccessGate() {
     (isAuthenticatedMode && sessionQuery.isLoading) ||
     (isAuthenticatedMode && !isBootstrapPending && !!sessionQuery.data && boardAccessQuery.isLoading)
   ) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">Loading...</div>;
+    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">{t("common.actions.loading")}</div>;
   }
 
   if (healthQuery.error || boardAccessQuery.error) {
@@ -83,7 +85,7 @@ export function CloudAccessGate() {
           ? healthQuery.error.message
           : boardAccessQuery.error instanceof Error
             ? boardAccessQuery.error.message
-            : "Failed to load app state"}
+            : t("cloudAccess.failedToLoadAppState")}
       </div>
     );
   }

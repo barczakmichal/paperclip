@@ -77,6 +77,9 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogContent: ({ children, className }: { children: ReactNode; className?: string }) => (
     <div className={className}>{children}</div>
   ),
+  DialogTitle: ({ children, className }: { children: ReactNode; className?: string }) => (
+    <div className={className}>{children}</div>
+  ),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

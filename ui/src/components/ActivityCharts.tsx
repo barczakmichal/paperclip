@@ -1,4 +1,5 @@
 import type { DashboardRunActivityDay, HeartbeatRun } from "@paperclipai/shared";
+import { useTranslation } from "@/i18n";
 
 /* ---- Utilities ---- */
 
@@ -85,6 +86,7 @@ function resolveRunActivity(props: RunChartProps): DashboardRunActivityDay[] {
 }
 
 export function RunActivityChart(props: RunChartProps) {
+  const { t } = useTranslation();
   const activity = resolveRunActivity(props);
   const days = activity.length > 0 ? activity.map((day) => day.date) : getLast14Days();
   const grouped = new Map(activity.map((day) => [day.date, day]));
@@ -92,7 +94,7 @@ export function RunActivityChart(props: RunChartProps) {
   const maxValue = Math.max(...activity.map(v => v.total), 1);
   const hasData = activity.some(v => v.total > 0);
 
-  if (!hasData) return <p className="text-xs text-muted-foreground">No runs yet</p>;
+  if (!hasData) return <p className="text-xs text-muted-foreground">{t("activityCharts.noRunsYet")}</p>;
 
   return (
     <div>
@@ -184,17 +186,8 @@ const statusColors: Record<string, string> = {
   backlog: "#64748b",
 };
 
-const statusLabels: Record<string, string> = {
-  todo: "To Do",
-  in_progress: "In Progress",
-  in_review: "In Review",
-  done: "Done",
-  blocked: "Blocked",
-  cancelled: "Cancelled",
-  backlog: "Backlog",
-};
-
 export function IssueStatusChart({ issues }: { issues: { status: string; createdAt: Date }[] }) {
+  const { t } = useTranslation();
   const days = getLast14Days();
   const allStatuses = new Set<string>();
   const grouped = new Map<string, Record<string, number>>();
@@ -206,6 +199,16 @@ export function IssueStatusChart({ issues }: { issues: { status: string; created
     entry[issue.status] = (entry[issue.status] ?? 0) + 1;
     allStatuses.add(issue.status);
   }
+
+  const statusLabels: Record<string, string> = {
+    todo: t("common.issues.status.todo"),
+    in_progress: t("common.issues.status.inProgress"),
+    in_review: t("common.issues.status.inReview"),
+    done: t("common.issues.status.done"),
+    blocked: t("common.issues.status.blocked"),
+    cancelled: t("common.issues.status.cancelled"),
+    backlog: t("common.issues.status.backlog"),
+  };
 
   const statusOrder = ["todo", "in_progress", "in_review", "done", "blocked", "cancelled", "backlog"].filter(s => allStatuses.has(s));
   const maxValue = Math.max(...Array.from(grouped.values()).map(v => Object.values(v).reduce((a, b) => a + b, 0)), 1);
@@ -242,12 +245,13 @@ export function IssueStatusChart({ issues }: { issues: { status: string; created
 }
 
 export function SuccessRateChart(props: RunChartProps) {
+  const { t } = useTranslation();
   const activity = resolveRunActivity(props);
   const days = activity.length > 0 ? activity.map((day) => day.date) : getLast14Days();
   const grouped = new Map(activity.map((day) => [day.date, day]));
 
   const hasData = activity.some(v => v.total > 0);
-  if (!hasData) return <p className="text-xs text-muted-foreground">No runs yet</p>;
+  if (!hasData) return <p className="text-xs text-muted-foreground">{t("activityCharts.noRunsYet")}</p>;
 
   return (
     <div>

@@ -25,6 +25,7 @@ import {
   useResourceMembershipMutation,
   useResourceMemberships,
 } from "../hooks/useResourceMemberships";
+import { useTranslation } from "@/i18n";
 
 import { getAdapterLabel } from "../adapters/adapter-display-registry";
 
@@ -77,6 +78,7 @@ function filterOrgTree(nodes: OrgNode[], tab: FilterTab): OrgNode[] {
 }
 
 export function Agents() {
+  const { t } = useTranslation();
   const { selectedCompanyId } = useCompany();
   const { openNewAgent } = useDialogActions();
   const { setBreadcrumbs } = useBreadcrumbs();
@@ -132,11 +134,11 @@ export function Agents() {
   }, [agents]);
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Agents" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: t("page.agents.title") }]);
+  }, [setBreadcrumbs, t]);
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={Bot} message="Select a company to view agents." />;
+    return <EmptyState icon={Bot} message={t("page.agents.empty.selectCompany")} />;
   }
 
   if (isLoading) {
@@ -152,10 +154,10 @@ export function Agents() {
         <Tabs value={tab} onValueChange={(v) => navigate(`/agents/${v}`)}>
           <PageTabBar
             items={[
-              { value: "all", label: "All" },
-              { value: "active", label: "Active" },
-              { value: "paused", label: "Paused" },
-              { value: "error", label: "Error" },
+              { value: "all", label: t("page.agents.filter.all") },
+              { value: "active", label: t("page.agents.filter.active") },
+              { value: "paused", label: t("page.agents.filter.paused") },
+              { value: "error", label: t("page.agents.filter.error") },
             ]}
             value={tab}
             onValueChange={(v) => navigate(`/agents/${v}`)}
@@ -171,6 +173,7 @@ export function Agents() {
                   effectiveView === "list" ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50"
                 )}
                 onClick={() => setView("list")}
+                title={t("page.agents.view.list")}
               >
                 <List className="h-3.5 w-3.5" />
               </button>
@@ -180,6 +183,7 @@ export function Agents() {
                   effectiveView === "org" ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50"
                 )}
                 onClick={() => setView("org")}
+                title={t("page.agents.view.org")}
               >
                 <GitBranch className="h-3.5 w-3.5" />
               </button>
@@ -187,13 +191,15 @@ export function Agents() {
           )}
           <Button size="sm" variant="outline" onClick={openNewAgent}>
             <Plus className="h-3.5 w-3.5 mr-1.5" />
-            New Agent
+            {t("page.agents.newAgent")}
           </Button>
         </div>
       </div>
 
       {filtered.length > 0 && (
-        <p className="text-xs text-muted-foreground">{filtered.length} agent{filtered.length !== 1 ? "s" : ""}</p>
+        <p className="text-xs text-muted-foreground">
+          {filtered.length} {filtered.length !== 1 ? t("common.count.agents_other") : t("common.count.agents_one")}
+        </p>
       )}
 
       {error && <p className="text-sm text-destructive">{error.message}</p>}
@@ -201,8 +207,8 @@ export function Agents() {
       {agents && agents.length === 0 && (
         <EmptyState
           icon={Bot}
-          message="Create your first agent to get started."
-          action="New Agent"
+          message={t("page.agents.empty.message")}
+          action={t("page.agents.newAgent")}
           onAction={openNewAgent}
         />
       )}
@@ -316,7 +322,7 @@ export function Agents() {
 
       {effectiveView === "list" && agents && agents.length > 0 && filtered.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-8">
-          No agents match the selected filter.
+          {t("page.agents.empty.noMatch")}
         </p>
       )}
 
@@ -340,13 +346,13 @@ export function Agents() {
 
       {effectiveView === "org" && orgTree && orgTree.length > 0 && filteredOrg.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-8">
-          No agents match the selected filter.
+          {t("page.agents.empty.noMatch")}
         </p>
       )}
 
       {effectiveView === "org" && orgTree && orgTree.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-8">
-          No organizational hierarchy defined.
+          {t("page.agents.empty.noHierarchy")}
         </p>
       )}
     </div>

@@ -2,8 +2,9 @@ import { PageTabBar } from "@/components/PageTabBar";
 import { Tabs } from "@/components/ui/tabs";
 import { INSTANCE_SETTINGS_PATH_PREFIX } from "@/lib/instance-settings";
 import { useLocation, useNavigate } from "@/lib/router";
+import { useTranslation } from "@/i18n";
 
-const items = [
+const ITEMS_DEFINITION = [
   { value: "general", label: "General", href: "/company/settings" },
   { value: "environments", label: "Environments", href: "/company/settings/environments" },
   { value: "cloud-upstream", label: "Cloud upstream", href: "/company/settings/cloud-upstream" },
@@ -19,7 +20,7 @@ const items = [
   { value: "instance-adapters", label: "Instance adapters", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/adapters` },
 ] as const;
 
-type CompanySettingsTab = (typeof items)[number]["value"];
+type CompanySettingsTab = (typeof ITEMS_DEFINITION)[number]["value"];
 
 export function getCompanySettingsTab(pathname: string): CompanySettingsTab {
   if (pathname.includes(`${INSTANCE_SETTINGS_PATH_PREFIX}/profile`)) {
@@ -74,9 +75,26 @@ export function getCompanySettingsTab(pathname: string): CompanySettingsTab {
 }
 
 export function CompanySettingsNav() {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const activeTab = getCompanySettingsTab(location.pathname);
+
+  const items = [
+    { value: "general", label: t("nav.sidebar.companySettings.general"), href: "/company/settings" },
+    { value: "environments", label: t("nav.sidebar.companySettings.environments"), href: "/company/settings/environments" },
+    { value: "cloud-upstream", label: "Cloud upstream", href: "/company/settings/cloud-upstream" },
+    { value: "members", label: "Members", href: "/company/settings/members" },
+    { value: "invites", label: t("nav.sidebar.companySettings.invites"), href: "/company/settings/invites" },
+    { value: "secrets", label: t("nav.sidebar.companySettings.secrets"), href: "/company/settings/secrets" },
+    { value: "instance-profile", label: "Instance profile", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/profile` },
+    { value: "instance-general", label: "Instance general", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/general` },
+    { value: "instance-access", label: "Instance access", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/access` },
+    { value: "instance-heartbeats", label: "Instance heartbeats", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/heartbeats` },
+    { value: "instance-experimental", label: "Instance experimental", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/experimental` },
+    { value: "instance-plugins", label: "Instance plugins", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/plugins` },
+    { value: "instance-adapters", label: "Instance adapters", href: `${INSTANCE_SETTINGS_PATH_PREFIX}/adapters` },
+  ] as const;
 
   function handleTabChange(value: string) {
     const nextTab = items.find((item) => item.value === value);

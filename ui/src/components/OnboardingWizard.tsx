@@ -51,6 +51,7 @@ import {
   ChevronDown,
   X
 } from "lucide-react";
+import { useTranslation } from "@/i18n";
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5;
 // Plugin/external adapters use arbitrary type ids, so this mirrors the master
@@ -248,6 +249,7 @@ export function OnboardingWizard() {
     adapterType === "opencode_local" ||
     adapterType === "pi_local" ||
     adapterType === "cursor";
+  const { t } = useTranslation();
   // Build adapter grids dynamically from the UI registry + display metadata.
   // External/plugin adapters automatically appear with generic defaults, and
   // server-disabled types are filtered out.
@@ -678,7 +680,7 @@ export function OnboardingWizard() {
             className="absolute top-4 left-4 z-10 rounded-sm p-1.5 text-muted-foreground/60 hover:text-foreground transition-colors"
           >
             <X className="h-5 w-5" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t("component.onboardingWizard.close")}</span>
           </button>
 
           {/* Step 0: Front Door — full-screen choice */}
@@ -901,7 +903,7 @@ export function OnboardingWizard() {
                     </label>
                     <input
                       className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                      placeholder="Acme Corp"
+                      placeholder={t("component.onboardingWizard.acmeCorpPlaceholder")}
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
                       onKeyDown={(e) => {
@@ -1151,7 +1153,7 @@ export function OnboardingWizard() {
                   {/* Adapter type radio cards */}
                   <div>
                     <label className="text-xs text-muted-foreground mb-2 block">
-                      Adapter type
+                      {t("component.onboardingWizard.adapterType")}
                     </label>
                     <div className="grid grid-cols-2 gap-2">
                       {recommendedAdapters.map((opt) => (
@@ -1178,7 +1180,7 @@ export function OnboardingWizard() {
                         >
                           {opt.recommended && (
                             <span className="absolute -top-1.5 right-1.5 bg-green-500 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded-full leading-none">
-                              Recommended
+                              {t("component.onboardingWizard.recommended")}
                             </span>
                           )}
                           <opt.icon className="h-4 w-4" />
@@ -1200,7 +1202,7 @@ export function OnboardingWizard() {
                           showMoreAdapters ? "rotate-0" : "-rotate-90"
                         )}
                       />
-                      More Agent Adapter Types
+                      {t("component.onboardingWizard.moreAdapterTypes")}
                     </button>
 
                     {showMoreAdapters && (
@@ -1239,10 +1241,10 @@ export function OnboardingWizard() {
                             <opt.icon className="h-4 w-4" />
                             <span className="font-medium">{opt.label}</span>
                             <span className="text-muted-foreground text-[10px]">
-                              {opt.comingSoon
-                                ? opt.disabledLabel ?? "Coming soon"
-                                : opt.description}
-                            </span>
+                            {opt.comingSoon
+                              ? t("component.onboardingWizard.comingSoon")
+                              : opt.description}
+                          </span>
                           </button>
                         ))}
                       </div>
@@ -1254,7 +1256,7 @@ export function OnboardingWizard() {
                     <div className="space-y-3">
                       <div>
                         <label className="text-xs text-muted-foreground mb-1 block">
-                          Model
+                          {t("component.onboardingWizard.model")}
                         </label>
                         <Popover
                           open={modelOpen}
@@ -1274,8 +1276,8 @@ export function OnboardingWizard() {
                                   ? selectedModel.label
                                   : model ||
                                     (adapterType === "opencode_local"
-                                      ? "Select model (required)"
-                                      : "Default")}
+                                      ? t("component.onboardingWizard.selectModelRequired")
+                                      : t("component.onboardingWizard.default"))}
                               </span>
                               <ChevronDown className="h-3 w-3 text-muted-foreground" />
                             </button>
@@ -1286,7 +1288,7 @@ export function OnboardingWizard() {
                           >
                             <input
                               className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border-b border-border mb-1 placeholder:text-muted-foreground/50"
-                              placeholder="Search models..."
+                              placeholder={t("component.onboardingWizard.searchModels")}
                               value={modelSearch}
                               onChange={(e) => setModelSearch(e.target.value)}
                               autoFocus
@@ -1302,7 +1304,7 @@ export function OnboardingWizard() {
                                   setModelOpen(false);
                                 }}
                               >
-                                Default
+                                {t("component.onboardingWizard.default")}
                               </button>
                             )}
                             <div className="max-h-[240px] overflow-y-auto">
@@ -1343,7 +1345,7 @@ export function OnboardingWizard() {
                             </div>
                             {filteredModels.length === 0 && (
                               <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                                No models discovered.
+                                {t("component.onboardingWizard.noModelsDiscovered")}
                               </p>
                             )}
                           </PopoverContent>
@@ -1357,11 +1359,10 @@ export function OnboardingWizard() {
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <p className="text-xs font-medium">
-                            Adapter environment check
+                            {t("component.onboardingWizard.adapterEnvironmentCheck")}
                           </p>
                           <p className="text-[11px] text-muted-foreground">
-                            Runs a live probe that asks the adapter CLI to
-                            respond with hello.
+                            {t("component.onboardingWizard.runsLiveProbe")}
                           </p>
                         </div>
                         <Button
@@ -1371,7 +1372,7 @@ export function OnboardingWizard() {
                           disabled={adapterEnvLoading}
                           onClick={() => void runAdapterEnvironmentTest()}
                         >
-                          {adapterEnvLoading ? "Testing..." : "Test now"}
+                          {adapterEnvLoading ? t("component.onboardingWizard.testing") : t("component.onboardingWizard.testNow")}
                         </Button>
                       </div>
 
@@ -1385,10 +1386,10 @@ export function OnboardingWizard() {
                       adapterEnvResult.status === "pass" ? (
                         <div className="flex items-center gap-2 rounded-md border border-green-300 dark:border-green-500/40 bg-green-50 dark:bg-green-500/10 px-3 py-2 text-xs text-green-700 dark:text-green-300 animate-in fade-in slide-in-from-bottom-1 duration-300">
                           <Check className="h-3.5 w-3.5 shrink-0" />
-                          <span className="font-medium">Passed</span>
+                          <span className="font-medium">{t("component.onboardingWizard.passed")}</span>
                         </div>
                       ) : adapterEnvResult ? (
-                        <AdapterEnvironmentResult result={adapterEnvResult} />
+                        <AdapterEnvironmentResult result={adapterEnvResult} t={t} />
                       ) : null}
 
                       {shouldSuggestUnsetAnthropicApiKey && (
@@ -1409,15 +1410,15 @@ export function OnboardingWizard() {
                             onClick={() => void handleUnsetAnthropicApiKey()}
                           >
                             {unsetAnthropicLoading
-                              ? "Retrying..."
-                              : "Unset ANTHROPIC_API_KEY"}
+                              ? t("component.onboardingWizard.retrying")
+                              : t("component.onboardingWizard.unsetAnthropicApiKey")}
                           </Button>
                         </div>
                       )}
 
                       {adapterEnvResult && adapterEnvResult.status === "fail" && (
                         <div className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-2 text-[11px] space-y-1.5">
-                          <p className="font-medium">Manual debug</p>
+                          <p className="font-medium">{t("component.onboardingWizard.manualDebug")}</p>
                           <p className="text-muted-foreground font-mono break-all">
                             {adapterType === "cursor"
                               ? `${effectiveAdapterCommand} -p --mode ask --output-format json \"Respond with hello.\"`
@@ -1475,15 +1476,15 @@ export function OnboardingWizard() {
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">
                         {adapterType === "openclaw_gateway"
-                          ? "Gateway URL"
-                          : "Webhook URL"}
+                          ? t("component.onboardingWizard.gatewayUrl")
+                          : t("component.onboardingWizard.webhookUrl")}
                       </label>
                       <input
                         className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm font-mono outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
                         placeholder={
                           adapterType === "openclaw_gateway"
-                            ? "ws://127.0.0.1:18789"
-                            : "https://..."
+                            ? t("component.onboardingWizard.gatewayUrlPlaceholder")
+                            : t("component.onboardingWizard.webhookUrlPlaceholder")
                         }
                         value={url}
                         onChange={(e) => setUrl(e.target.value)}
@@ -1551,7 +1552,7 @@ export function OnboardingWizard() {
                       disabled={loading}
                     >
                       <ArrowLeft className="h-3.5 w-3.5 mr-1" />
-                      Back
+                      {t("component.onboardingWizard.back")}
                     </Button>
                   )}
                 </div>
@@ -1565,7 +1566,7 @@ export function OnboardingWizard() {
                         setStep(2);
                       }}
                     >
-                      Next
+                      {t("component.onboardingWizard.next")}
                       <ArrowRight className="h-3.5 w-3.5 ml-1" />
                     </Button>
                   )}
@@ -1580,7 +1581,7 @@ export function OnboardingWizard() {
                       ) : (
                         <ArrowRight className="h-3.5 w-3.5 mr-1" />
                       )}
-                      {loading ? "Creating..." : "Confirm mission"}
+                      {loading ? t("component.onboardingWizard.creating") : "Confirm mission"}
                     </Button>
                   )}
                   {step === 3 && (
@@ -1636,16 +1637,18 @@ export function OnboardingWizard() {
 }
 
 function AdapterEnvironmentResult({
-  result
+  result,
+  t
 }: {
   result: AdapterEnvironmentTestResult;
+  t: ReturnType<typeof useTranslation>[0];
 }) {
   const statusLabel =
     result.status === "pass"
-      ? "Passed"
+      ? t("component.onboardingWizard.passed")
       : result.status === "warn"
-      ? "Warnings"
-      : "Failed";
+      ? t("component.onboardingWizard.warnings")
+      : t("component.onboardingWizard.failed");
   const statusClass =
     result.status === "pass"
       ? "text-green-700 dark:text-green-300 border-green-300 dark:border-green-500/40 bg-green-50 dark:bg-green-500/10"
@@ -1679,7 +1682,7 @@ function AdapterEnvironmentResult({
             )}
             {check.hint && (
               <span className="block opacity-90 break-words">
-                Hint: {check.hint}
+                {t("component.onboardingWizard.hint")}: {check.hint}
               </span>
             )}
           </div>

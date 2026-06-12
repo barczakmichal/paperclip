@@ -40,6 +40,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { cn, SIDEBAR_RAIL_HIDDEN_LABEL } from "@/lib/utils";
 import { useSidebar } from "../context/SidebarContext";
 import { CompanyPatternIcon } from "./CompanyPatternIcon";
+import { useTranslation } from "@/i18n";
 
 interface SidebarCompanyMenuProps {
   open?: boolean;
@@ -68,6 +69,7 @@ function SortableCompanyItem({
   isSelected: boolean;
   onSelect: (company: Company) => void;
 }) {
+  const { t } = useTranslation();
   const {
     attributes,
     listeners,
@@ -106,7 +108,7 @@ function SortableCompanyItem({
         <button
           type="button"
           ref={setActivatorNodeRef}
-          aria-label={`Reorder ${company.name}`}
+          aria-label={t("sidebarCompanyMenu.reorder", { name: company.name })}
           className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-ring"
           onClick={(event) => {
             event.preventDefault();
@@ -130,6 +132,7 @@ function SortableCompanyItem({
 }
 
 export function SidebarCompanyMenu({ open: controlledOpen, onOpenChange }: SidebarCompanyMenuProps = {}) {
+  const { t } = useTranslation();
   const [internalOpen, setInternalOpen] = useState(false);
   const [isEditingOrder, setIsEditingOrder] = useState(false);
   const queryClient = useQueryClient();
@@ -235,12 +238,12 @@ export function SidebarCompanyMenu({ open: controlledOpen, onOpenChange }: Sideb
           // svg present (expanded) it was already 12px but without it (rail) it fell
           // back to 8px — a 4px horizontal jump on collapse (PAP-10676).
           className="h-9 flex-1 justify-start gap-2 px-3 text-left"
-          aria-label={selectedCompany ? `Open ${selectedCompany.name} workspace switcher` : "Open workspace switcher"}
+          aria-label={selectedCompany ? t("sidebarCompanyMenu.openWorkspaceSwitcher", { name: selectedCompany.name }) : t("sidebarCompanyMenu.openWorkspaceSwitcherDefault")}
         >
           <span className="flex min-w-0 flex-1 items-center gap-2">
             {selectedCompany ? <WorkspaceIcon company={selectedCompany} /> : null}
             <span className={cn("truncate text-sm font-bold text-foreground", rail && SIDEBAR_RAIL_HIDDEN_LABEL)}>
-              {selectedCompany?.name ?? "Select workspace"}
+              {selectedCompany?.name ?? t("sidebarCompanyMenu.selectWorkspace")}
             </span>
           </span>
           {!rail && <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -249,7 +252,7 @@ export function SidebarCompanyMenu({ open: controlledOpen, onOpenChange }: Sideb
       <DropdownMenuContent align="start" sideOffset={8} className="w-64 p-1">
         <div className="flex items-center justify-between gap-2 px-2 py-1.5">
           <DropdownMenuLabel className="p-0 text-[11px] font-semibold uppercase text-muted-foreground">
-            Switch workspace
+            {t("sidebarCompanyMenu.switchWorkspace")}
           </DropdownMenuLabel>
           <button
             type="button"
@@ -260,7 +263,7 @@ export function SidebarCompanyMenu({ open: controlledOpen, onOpenChange }: Sideb
             }}
             className="rounded px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
-            {isEditingOrder ? "Done" : "Edit"}
+            {isEditingOrder ? t("common.actions.done") : t("common.actions.edit")}
           </button>
         </div>
         <div className="max-h-96 overflow-y-auto">
@@ -285,7 +288,7 @@ export function SidebarCompanyMenu({ open: controlledOpen, onOpenChange }: Sideb
             </SortableContext>
           </DndContext>
           {orderedCompanies.length === 0 ? (
-            <DropdownMenuItem disabled>No workspaces</DropdownMenuItem>
+            <DropdownMenuItem disabled>{t("sidebarCompanyMenu.noWorkspaces")}</DropdownMenuItem>
           ) : null}
         </div>
         <DropdownMenuSeparator />
@@ -295,7 +298,7 @@ export function SidebarCompanyMenu({ open: controlledOpen, onOpenChange }: Sideb
           disabled={isEditingOrder}
         >
           <Plus className="size-4" />
-          <span>{conferenceRoomChatEnabled ? "Create new team..." : "Add company..."}</span>
+          <span>{conferenceRoomChatEnabled ? "Create new team..." : t("sidebarCompanyMenu.addCompany")}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild disabled={isEditingOrder}>
@@ -311,7 +314,7 @@ export function SidebarCompanyMenu({ open: controlledOpen, onOpenChange }: Sideb
           >
             <UserPlus className="size-4" />
             <span className="truncate">
-              {selectedCompany ? `Invite people to ${selectedCompany.name}` : "Invite people"}
+              {selectedCompany ? t("sidebarCompanyMenu.invitePeopleTo", { name: selectedCompany.name }) : t("sidebarCompanyMenu.invitePeople")}
             </span>
           </Link>
         </DropdownMenuItem>
@@ -327,7 +330,7 @@ export function SidebarCompanyMenu({ open: controlledOpen, onOpenChange }: Sideb
             }}
           >
             <Settings className="size-4" />
-            <span>Company settings</span>
+            <span>{t("sidebarCompanyMenu.companySettings")}</span>
           </Link>
         </DropdownMenuItem>
         {session?.session ? (
@@ -339,7 +342,7 @@ export function SidebarCompanyMenu({ open: controlledOpen, onOpenChange }: Sideb
               disabled={isEditingOrder || signOutMutation.isPending}
             >
               <LogOut className="size-4" />
-              <span>{signOutMutation.isPending ? "Signing out..." : "Sign out"}</span>
+              <span>{signOutMutation.isPending ? t("sidebarCompanyMenu.signingOut") : t("sidebarCompanyMenu.signOut")}</span>
             </DropdownMenuItem>
           </>
         ) : null}

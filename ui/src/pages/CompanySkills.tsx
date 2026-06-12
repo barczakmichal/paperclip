@@ -113,6 +113,7 @@ import {
   History,
   XOctagon,
 } from "lucide-react";
+import { useTranslation } from "@/i18n";
 
 type SkillTreeNode = {
   name: string;

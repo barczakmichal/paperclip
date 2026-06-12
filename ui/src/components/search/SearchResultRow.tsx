@@ -6,21 +6,23 @@ import { cn } from "@/lib/utils";
 import { StatusIcon } from "../StatusIcon";
 import { Identity } from "../Identity";
 import { HighlightedText, type HighlightedTextProps } from "./HighlightedText";
+import { useTranslation, t } from "../../i18n";
 
 type SnippetStyle = {
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
-  label: string;
+  labelKey: string;
 };
 
 const SNIPPET_STYLES: Record<string, SnippetStyle> = {
-  comment: { Icon: MessageSquare, label: "Comment" },
-  document: { Icon: FileText, label: "Doc" },
-  artifact: { Icon: Paperclip, label: "Artifact" },
-  description: { Icon: Quote, label: "Description" },
+  comment: { Icon: MessageSquare, labelKey: "search.resultType.comment" },
+  document: { Icon: FileText, labelKey: "search.resultType.doc" },
+  // No translation key exists for artifacts yet; i18next returns the literal unchanged.
+  artifact: { Icon: Paperclip, labelKey: "Artifact" },
+  description: { Icon: Quote, labelKey: "search.resultType.description" },
 };
 
-function snippetStyle(field: string, fallbackLabel: string): SnippetStyle {
-  return SNIPPET_STYLES[field] ?? { Icon: Quote, label: fallbackLabel };
+function snippetStyle(field: string): SnippetStyle {
+  return SNIPPET_STYLES[field] ?? { Icon: Quote, labelKey: "search.resultType.description" };
 }
 
 function formatRelativeTime(input: string | null): string {
@@ -29,19 +31,19 @@ function formatRelativeTime(input: string | null): string {
   if (Number.isNaN(value.getTime())) return "";
   const diffMs = Date.now() - value.getTime();
   const seconds = Math.round(diffMs / 1000);
-  if (seconds < 60) return "just now";
+  if (seconds < 60) return t("common.time.justNow");
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60) return `${minutes}${t("common.time.minutesAgo", { count: minutes }).replace("{{count}}", "")}`;
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h`;
+  if (hours < 24) return `${hours}${t("common.time.hoursAgo", { count: hours }).replace("{{count}}", "")}`;
   const days = Math.round(hours / 24);
-  if (days < 7) return `${days}d`;
+  if (days < 7) return `${days}${t("common.time.daysAgo", { count: days }).replace("{{count}}", "")}`;
   const weeks = Math.round(days / 7);
-  if (weeks < 5) return `${weeks}w`;
+  if (weeks < 5) return `${weeks}${t("common.time.weeksAgo", { count: weeks }).replace("{{count}}", "")}`;
   const months = Math.round(days / 30);
-  if (months < 12) return `${months}mo`;
+  if (months < 12) return `${months}${t("common.time.monthsAgo", { count: months }).replace("{{count}}", "")}`;
   const years = Math.round(days / 365);
-  return `${years}y`;
+  return `${years}${t("common.time.yearsAgo", { count: years }).replace("{{count}}", "")}`;
 }
 
 export interface SearchResultRowProps {
@@ -60,6 +62,8 @@ function SearchResultRowImpl({
   isActive,
   className,
 }: SearchResultRowProps) {
+  const { t } = useTranslation();
+
   if (result.type === "agent") {
     return (
       <Link
@@ -79,7 +83,7 @@ function SearchResultRowImpl({
               text={result.snippets[0]?.text ?? result.snippet}
               highlights={result.snippets[0]?.highlights}
               field="agent"
-              fallbackLabel={result.sourceLabel ?? "Agent"}
+              fallbackLabel={result.sourceLabel ?? t("common.fallback.agent")}
             />
           ) : null}
         </div>
@@ -102,7 +106,7 @@ function SearchResultRowImpl({
               text={result.snippets[0]?.text ?? result.snippet}
               highlights={result.snippets[0]?.highlights}
               field="project"
-              fallbackLabel={result.sourceLabel ?? "Project"}
+              fallbackLabel={result.sourceLabel ?? t("common.fallback.project")}
             />
           ) : null}
         </div>
@@ -244,7 +248,9 @@ interface SnippetLineProps {
 }
 
 function SnippetLine({ text, highlights, field, fallbackLabel, multiline = false }: SnippetLineProps) {
-  const { Icon, label } = snippetStyle(field, fallbackLabel);
+  const { t } = useTranslation();
+  const { Icon, labelKey } = snippetStyle(field);
+  const label = t(labelKey);
   return (
     <div
       className={cn(

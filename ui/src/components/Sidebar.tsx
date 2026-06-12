@@ -25,6 +25,7 @@ import { SidebarSection } from "./SidebarSection";
 import { SidebarNavItem } from "./SidebarNavItem";
 import { SidebarAgents } from "./SidebarAgents";
 import { SidebarProjects } from "./SidebarProjects";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import { useDialogActions } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
 import { useSidebar } from "../context/SidebarContext";
@@ -32,6 +33,7 @@ import { heartbeatsApi } from "../api/heartbeats";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { queryKeys } from "../lib/queryKeys";
 import { useInboxBadge } from "../hooks/useInboxBadge";
+import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn, SIDEBAR_RAIL_HIDDEN_LABEL } from "../lib/utils";
@@ -40,6 +42,7 @@ import { PluginLauncherOutlet } from "@/plugins/launchers";
 import { SidebarCompanyMenu } from "./SidebarCompanyMenu";
 
 export function Sidebar() {
+  const { t } = useTranslation();
   const { openNewIssue } = useDialogActions();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const { isMobile, collapsed, collapseLocked, peeking, toggleCollapsed, setCollapsed } = useSidebar();
@@ -89,8 +92,8 @@ export function Sidebar() {
               variant="ghost"
               size="icon-sm"
               className="text-muted-foreground shrink-0"
-              aria-label="Open search"
-              title="Open search"
+              aria-label={t("nav.sidebar.openSearch")}
+              title={t("nav.sidebar.openSearch")}
             >
               <NavLink to="/search">
                 <Search className="h-4 w-4" />
@@ -156,10 +159,10 @@ export function Sidebar() {
               newTaskButton
             );
           })()}
-          <SidebarNavItem to="/dashboard" label="Dashboard" icon={LayoutDashboard} liveCount={liveRunCount} />
+          <SidebarNavItem to="/dashboard" label={t("nav.sidebar.dashboard")} icon={LayoutDashboard} liveCount={liveRunCount} />
           <SidebarNavItem
             to="/inbox"
-            label="Inbox"
+            label={t("nav.sidebar.inbox")}
             icon={Inbox}
             badge={inboxBadge.inbox}
             badgeLabel="unread"
@@ -171,13 +174,13 @@ export function Sidebar() {
           ) : null}
         </div>
 
-        <SidebarSection label="Work">
+        <SidebarSection label={t("nav.sidebar.work")}>
           <SidebarNavItem to="/issues" label="Tasks" icon={CircleDot} />
-          <SidebarNavItem to="/routines" label="Routines" icon={Repeat} />
-          <SidebarNavItem to="/goals" label="Goals" icon={Target} />
+          <SidebarNavItem to="/routines" label={t("nav.sidebar.routines")} icon={Repeat} />
+          <SidebarNavItem to="/goals" label={t("nav.sidebar.goals")} icon={Target} />
           <SidebarNavItem to="/artifacts" label="Artifacts" icon={Package} />
           {showWorkspacesLink ? (
-            <SidebarNavItem to="/workspaces" label="Workspaces" icon={GitBranch} />
+            <SidebarNavItem to="/workspaces" label={t("nav.sidebar.workspaces")} icon={GitBranch} />
           ) : null}
           {streamlined ? (
             <SidebarNavItem to="/projects" label="Projects" icon={FolderOpen} />
@@ -202,12 +205,12 @@ export function Sidebar() {
 
         <SidebarAgents streamlined={streamlined} />
 
-        <SidebarSection label="Company">
-          <SidebarNavItem to="/org" label="Org" icon={Network} />
-          <SidebarNavItem to="/skills" label="Skills" icon={Boxes} />
-          <SidebarNavItem to="/costs" label="Costs" icon={DollarSign} />
-          <SidebarNavItem to="/activity" label="Activity" icon={History} />
-          <SidebarNavItem to="/company/settings" label="Settings" icon={Settings} />
+        <SidebarSection label={t("nav.sidebar.company")}>
+          <SidebarNavItem to="/org" label={t("nav.sidebar.org")} icon={Network} />
+          <SidebarNavItem to="/skills" label={t("nav.sidebar.skills")} icon={Boxes} />
+          <SidebarNavItem to="/costs" label={t("nav.sidebar.costs")} icon={DollarSign} />
+          <SidebarNavItem to="/activity" label={t("nav.sidebar.activity")} icon={History} />
+          <SidebarNavItem to="/company/settings" label={t("nav.sidebar.settings")} icon={Settings} />
         </SidebarSection>
 
         <PluginSlotOutlet
@@ -218,6 +221,10 @@ export function Sidebar() {
           missingBehavior="placeholder"
         />
       </nav>
+
+      <div className="shrink-0 border-t border-border px-3 py-2">
+        <LanguageSwitcher />
+      </div>
     </aside>
   );
 }
