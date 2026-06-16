@@ -8,4 +8,10 @@ export const channelsApi = {
     api.get<ChannelMessage[]>(`/channels/${channelId}/messages${before ? `?before=${before}` : ""}`),
   post: (channelId: string, body: string) =>
     api.post<ChannelMessage>(`/channels/${channelId}/messages`, { body }),
+  deleteMessage: (channelId: string, messageId: string) =>
+    api.delete<void>(`/channels/${channelId}/messages/${messageId}`),
+  clear: (channelId: string) =>
+    api.post<void>(`/channels/${channelId}/clear`, {}),
+  newConversation: (channelId: string) =>
+    api.post<void>(`/channels/${channelId}/new-conversation`, {}),
 };

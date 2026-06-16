@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, lstatSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, lstatSync, rmSync, rmdirSync, symlinkSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,7 +20,12 @@ mkdirSync(scopeDir, { recursive: true });
 try {
   const stat = lstatSync(linkTarget);
   if (stat.isSymbolicLink()) {
-    rmSync(linkTarget, { force: true });
+    try {
+      rmSync(linkTarget, { force: true });
+    } catch {
+      // Windows: removing a directory symlink/junction needs rmdir, not unlink
+      rmdirSync(linkTarget);
+    }
   } else {
     console.log("  i Keeping existing installed @paperclipai/plugin-sdk directory in place");
     process.exit(0);

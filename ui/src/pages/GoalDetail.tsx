@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { useTranslation } from "react-i18next";
 import { useParams } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { goalsApi } from "../api/goals";
@@ -31,7 +30,6 @@ export function GoalPropertiesToggleButton({
   panelVisible,
   onShowProperties,
 }: GoalPropertiesToggleButtonProps) {
-  const { t } = useTranslation("goalDetailPage");
   return (
     <Button
       variant="ghost"
@@ -41,7 +39,7 @@ export function GoalPropertiesToggleButton({
         panelVisible ? "opacity-0 pointer-events-none w-0 overflow-hidden" : "opacity-100",
       )}
       onClick={onShowProperties}
-      title={t("showProperties", "Show properties")}
+      title="Show properties"
     >
       <SlidersHorizontal className="h-4 w-4" />
     </Button>
@@ -54,7 +52,6 @@ export function GoalDetail() {
   const { openNewGoal } = useDialogActions();
   const { openPanel, closePanel, panelVisible, setPanelVisible } = usePanel();
   const { setBreadcrumbs } = useBreadcrumbs();
-  const { t } = useTranslation("goalDetailPage");
   const queryClient = useQueryClient();
 
   const {
@@ -121,10 +118,10 @@ export function GoalDetail() {
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: t("breadcrumbGoals", "Goals"), href: "/goals" },
-      { label: goal?.title ?? goalId ?? t("breadcrumbGoal", "Goal") }
+      { label: "Goals", href: "/goals" },
+      { label: goal?.title ?? goalId ?? "Goal" }
     ]);
-  }, [setBreadcrumbs, goal, goalId, t]);
+  }, [setBreadcrumbs, goal, goalId]);
 
   useEffect(() => {
     if (goal) {
@@ -170,7 +167,7 @@ export function GoalDetail() {
           onSave={(description) => updateGoal.mutate({ description })}
           as="p"
           className="text-sm text-muted-foreground"
-          placeholder={t("descriptionPlaceholder", "Add a description...")}
+          placeholder="Add a description..."
           multiline
           imageUploadHandler={async (file) => {
             const asset = await uploadImage.mutateAsync(file);
@@ -182,10 +179,10 @@ export function GoalDetail() {
       <Tabs defaultValue="children">
         <TabsList>
           <TabsTrigger value="children">
-            {t("tabSubGoals", "Sub-Goals ({{n}})", { n: childGoals.length })}
+            Sub-Goals ({childGoals.length})
           </TabsTrigger>
           <TabsTrigger value="projects">
-            {t("tabProjects", "Projects ({{n}})", { n: linkedProjects.length })}
+            Projects ({linkedProjects.length})
           </TabsTrigger>
         </TabsList>
 
@@ -197,11 +194,11 @@ export function GoalDetail() {
               onClick={() => openNewGoal({ parentId: goalId })}
             >
               <Plus className="h-3.5 w-3.5 mr-1.5" />
-              {t("subGoal", "Sub Goal")}
+              Sub Goal
             </Button>
           </div>
           {childGoals.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("noSubGoals", "No sub-goals.")}</p>
+            <p className="text-sm text-muted-foreground">No sub-goals.</p>
           ) : (
             <GoalTree goals={childGoals} goalLink={(g) => `/goals/${g.id}`} />
           )}
@@ -209,7 +206,7 @@ export function GoalDetail() {
 
         <TabsContent value="projects" className="mt-4">
           {linkedProjects.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("noLinkedProjects", "No linked projects.")}</p>
+            <p className="text-sm text-muted-foreground">No linked projects.</p>
           ) : (
             <div className="border border-border">
               {linkedProjects.map((project) => (

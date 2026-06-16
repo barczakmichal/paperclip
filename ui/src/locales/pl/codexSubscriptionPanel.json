@@ -1,8 +1,0 @@
-{
-  "title": "Subskrypcja Codex",
-  "subtitle": "Okna limitów Codex na żywo.",
-  "resets": "Reset {{date}}",
-  "accountWindows": "Okna konta",
-  "modelWindows": "Okna modelu",
-  "percentUsed": "{{percent}}% wykorzystane"
-}

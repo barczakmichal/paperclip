@@ -1,5 +1,5 @@
 {
-  "id": "ab1504d9-b528-4b50-b31b-5604949dd116",
+  "id": "fdc9cd8b-5423-4d64-b255-9bc1497fdd6a",
   "prevId": "12b3d91e-98ee-4a48-aecb-891f5bde6eda",
   "version": "7",
   "dialect": "postgresql",
@@ -2697,188 +2697,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.campaign_proposals": {
-      "name": "campaign_proposals",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "agent_id": {
-          "name": "agent_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "platform": {
-          "name": "platform",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "goal": {
-          "name": "goal",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'draft'"
-        },
-        "product_ids": {
-          "name": "product_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "budget_daily_pln": {
-          "name": "budget_daily_pln",
-          "type": "numeric(12, 2)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "duration_days": {
-          "name": "duration_days",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "audience_brief": {
-          "name": "audience_brief",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "estimated_reach": {
-          "name": "estimated_reach",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "platform_campaign_id": {
-          "name": "platform_campaign_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ad_sets": {
-          "name": "ad_sets",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "brief_json": {
-          "name": "brief_json",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rejection_reason": {
-          "name": "rejection_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "approval_id": {
-          "name": "approval_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "published_at": {
-          "name": "published_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "campaign_proposals_company_status_idx": {
-          "name": "campaign_proposals_company_status_idx",
-          "columns": [
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "campaign_proposals_company_id_companies_id_fk": {
-          "name": "campaign_proposals_company_id_companies_id_fk",
-          "tableFrom": "campaign_proposals",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "company_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "campaign_proposals_agent_id_agents_id_fk": {
-          "name": "campaign_proposals_agent_id_agents_id_fk",
-          "tableFrom": "campaign_proposals",
-          "tableTo": "agents",
-          "columnsFrom": [
-            "agent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.cli_auth_challenges": {
       "name": "cli_auth_challenges",
       "schema": "",
@@ -3184,18 +3002,6 @@
         "brand_color": {
           "name": "brand_color",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "brand_kit_json": {
-          "name": "brand_kit_json",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "marketing_monthly_cap_pln": {
-          "name": "marketing_monthly_cap_pln",
-          "type": "numeric(12, 2)",
           "primaryKey": false,
           "notNull": false
         },
@@ -4429,180 +4235,6 @@
           "tableTo": "heartbeat_runs",
           "columnsFrom": [
             "heartbeat_run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.creatives": {
-      "name": "creatives",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "proposal_id": {
-          "name": "proposal_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "format": {
-          "name": "format",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "image_url": {
-          "name": "image_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "headlines": {
-          "name": "headlines",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "bodies": {
-          "name": "bodies",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "descriptions": {
-          "name": "descriptions",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "cta": {
-          "name": "cta",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "brief_json": {
-          "name": "brief_json",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "platform_asset_id": {
-          "name": "platform_asset_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "error_detail": {
-          "name": "error_detail",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "creatives_proposal_idx": {
-          "name": "creatives_proposal_idx",
-          "columns": [
-            {
-              "expression": "proposal_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "creatives_company_status_idx": {
-          "name": "creatives_company_status_idx",
-          "columns": [
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "creatives_company_id_companies_id_fk": {
-          "name": "creatives_company_id_companies_id_fk",
-          "tableFrom": "creatives",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "company_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "creatives_proposal_id_campaign_proposals_id_fk": {
-          "name": "creatives_proposal_id_campaign_proposals_id_fk",
-          "tableFrom": "creatives",
-          "tableTo": "campaign_proposals",
-          "columnsFrom": [
-            "proposal_id"
           ],
           "columnsTo": [
             "id"
@@ -7563,31 +7195,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "current_thought": {
-          "name": "current_thought",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "current_tool": {
-          "name": "current_tool",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "current_cost_cents": {
-          "name": "current_cost_cents",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "current_thought_updated_at": {
-          "name": "current_thought_updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "retry_of_run_id": {
           "name": "retry_of_run_id",
           "type": "uuid",
@@ -7790,33 +7397,6 @@
             },
             {
               "expression": "process_started_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "heartbeat_runs_company_status_started_idx": {
-          "name": "heartbeat_runs_company_status_started_idx",
-          "columns": [
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "started_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -11534,6 +11114,43 @@
           "primaryKey": false,
           "notNull": false
         },
+        "monitor_next_check_at": {
+          "name": "monitor_next_check_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "monitor_wake_requested_at": {
+          "name": "monitor_wake_requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "monitor_last_triggered_at": {
+          "name": "monitor_last_triggered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "monitor_attempt_count": {
+          "name": "monitor_attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "monitor_notes": {
+          "name": "monitor_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "monitor_scheduled_by": {
+          "name": "monitor_scheduled_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "execution_workspace_id": {
           "name": "execution_workspace_id",
           "type": "uuid",
@@ -11768,6 +11385,27 @@
             },
             {
               "expression": "execution_workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "issues_company_monitor_due_idx": {
+          "name": "issues_company_monitor_due_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "monitor_next_check_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -16283,111 +15921,6 @@
             "id"
           ],
           "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.marketing_audit_log": {
-      "name": "marketing_audit_log",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "action": {
-          "name": "action",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "agent_id": {
-          "name": "agent_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "entity_type": {
-          "name": "entity_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "payload_diff": {
-          "name": "payload_diff",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "marketing_audit_log_company_created_idx": {
-          "name": "marketing_audit_log_company_created_idx",
-          "columns": [
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "marketing_audit_log_company_id_companies_id_fk": {
-          "name": "marketing_audit_log_company_id_companies_id_fk",
-          "tableFrom": "marketing_audit_log",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "company_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },

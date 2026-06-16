@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { goalsApi } from "../api/goals";
 import { useCompany } from "../context/CompanyContext";
@@ -11,15 +10,16 @@ import { EmptyState } from "../components/EmptyState";
 import { PageSkeleton } from "../components/PageSkeleton";
 import { Button } from "@/components/ui/button";
 import { Target, Plus } from "lucide-react";
+import { useTranslation } from "@/i18n";
 
 export function Goals() {
+  const { t } = useTranslation();
   const { selectedCompanyId } = useCompany();
   const { openNewGoal } = useDialogActions();
   const { setBreadcrumbs } = useBreadcrumbs();
-  const { t } = useTranslation("goalsPage");
 
   useEffect(() => {
-    setBreadcrumbs([{ label: t("breadcrumb", "Goals") }]);
+    setBreadcrumbs([{ label: t("page.goals.title") }]);
   }, [setBreadcrumbs, t]);
 
   const { data: goals, isLoading, error } = useQuery({
@@ -29,7 +29,7 @@ export function Goals() {
   });
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={Target} message={t("selectCompany", "Select a company to view goals.")} />;
+    return <EmptyState icon={Target} message={t("page.goals.empty.selectCompany")} />;
   }
 
   if (isLoading) {
@@ -43,8 +43,8 @@ export function Goals() {
       {goals && goals.length === 0 && (
         <EmptyState
           icon={Target}
-          message={t("emptyState", "No goals yet.")}
-          action={t("addGoal", "Add Goal")}
+          message={t("page.goals.empty.message")}
+          action={t("page.goals.addGoal")}
           onAction={() => openNewGoal()}
         />
       )}
@@ -54,7 +54,7 @@ export function Goals() {
           <div className="flex items-center justify-start">
             <Button size="sm" variant="outline" onClick={() => openNewGoal()}>
               <Plus className="h-3.5 w-3.5 mr-1.5" />
-              {t("newGoal", "New Goal")}
+              {t("page.goals.newGoal")}
             </Button>
           </div>
           <GoalTree goals={goals} goalLink={(goal) => `/goals/${goal.id}`} />

@@ -1,19 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   HUMAN_COMPANY_MEMBERSHIP_ROLE_LABELS,
-  PERMISSION_KEYS,
   type Agent,
-  type PermissionKey,
 } from "@paperclipai/shared";
-import { ShieldCheck, Trash2, Users } from "lucide-react";
+import { Shield, ShieldCheck, Trash2, Users } from "lucide-react";
 import { accessApi, type CompanyMember } from "@/api/access";
 import { agentsApi } from "@/api/agents";
 import { ApiError } from "@/api/client";
 import { issuesApi } from "@/api/issues";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -26,45 +22,14 @@ import { Badge } from "@/components/ui/badge";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { useCompany } from "@/context/CompanyContext";
 import { useToast } from "@/context/ToastContext";
+import { Link, Navigate } from "@/lib/router";
 import { queryKeys } from "@/lib/queryKeys";
-
-type PermissionLabels = Record<PermissionKey, string>;
-
-function buildPermissionLabels(t: (key: string, defaultValue: string) => string): PermissionLabels {
-  return {
-    "agents:create": t("permissionCreateAgents", "Create agents"),
-    "users:invite": t("permissionInvite", "Invite humans and agents"),
-    "users:manage_permissions": t("permissionManagePermissions", "Manage members and grants"),
-    "tasks:assign": t("permissionAssignTasks", "Assign tasks"),
-    "tasks:assign_scope": t("permissionAssignScopedTasks", "Assign scoped tasks"),
-    "tasks:manage_active_checkouts": t("permissionManageCheckouts", "Manage active task checkouts"),
-    "joins:approve": t("permissionApproveJoins", "Approve join requests"),
-    "environments:manage": t("permissionManageEnvironments", "Manage environments"),
-  };
-}
-
-function formatGrantSummary(member: CompanyMember, permissionLabels: PermissionLabels, noGrantsLabel: string) {
-  if (member.grants.length === 0) return noGrantsLabel;
-  return member.grants.map((grant) => permissionLabels[grant.permissionKey]).join(", ");
-}
-
-const implicitRoleGrantMap: Record<NonNullable<CompanyMember["membershipRole"]>, PermissionKey[]> = {
-  owner: ["agents:create", "users:invite", "users:manage_permissions", "tasks:assign", "joins:approve"],
-  admin: ["agents:create", "users:invite", "tasks:assign", "joins:approve"],
-  operator: ["tasks:assign"],
-  viewer: [],
-};
+import { usePluginSlots } from "@/plugins/slots";
 
 const reassignmentIssueStatuses = "backlog,todo,in_progress,in_review,blocked,failed,timed_out";
 type EditableMemberStatus = "pending" | "active" | "suspended";
 
-function getImplicitGrantKeys(role: CompanyMember["membershipRole"]) {
-  return role ? implicitRoleGrantMap[role] : [];
-}
-
 export function CompanyAccess() {
-  const { t } = useTranslation("companyAccessPage");
-  const permissionLabels = useMemo(() => buildPermissionLabels(t), [t]);
   const { selectedCompany, selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const { pushToast } = useToast();
@@ -74,15 +39,14 @@ export function CompanyAccess() {
   const [reassignmentTarget, setReassignmentTarget] = useState<string>("__unassigned");
   const [draftRole, setDraftRole] = useState<CompanyMember["membershipRole"]>(null);
   const [draftStatus, setDraftStatus] = useState<EditableMemberStatus>("active");
-  const [draftGrants, setDraftGrants] = useState<Set<PermissionKey>>(new Set());
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: selectedCompany?.name ?? t("companyFallback", "Company"), href: "/dashboard" },
-      { label: t("settingsBreadcrumb", "Settings"), href: "/company/settings" },
-      { label: t("accessBreadcrumb", "Access") },
+      { label: selectedCompany?.name ?? "Company", href: "/dashboard" },
+      { label: "Settings", href: "/company/settings" },
+      { label: "Members" },
     ]);
-  }, [selectedCompany?.name, setBreadcrumbs, t]);
+  }, [selectedCompany?.name, setBreadcrumbs]);
 
   const membersQuery = useQuery({
     queryKey: queryKeys.access.companyMembers(selectedCompanyId ?? ""),
@@ -110,25 +74,24 @@ export function CompanyAccess() {
   };
 
   const updateMemberMutation = useMutation({
-    mutationFn: async (input: { memberId: string; membershipRole: CompanyMember["membershipRole"]; status: EditableMemberStatus; grants: PermissionKey[] }) => {
-      return accessApi.updateMemberAccess(selectedCompanyId!, input.memberId, {
+    mutationFn: async (input: { memberId: string; membershipRole: CompanyMember["membershipRole"]; status: EditableMemberStatus }) => {
+      return accessApi.updateMember(selectedCompanyId!, input.memberId, {
         membershipRole: input.membershipRole,
         status: input.status,
-        grants: input.grants.map((permissionKey) => ({ permissionKey })),
       });
     },
     onSuccess: async () => {
       setEditingMemberId(null);
       await refreshAccessData();
       pushToast({
-        title: t("toastMemberUpdated", "Member updated"),
+        title: "Member updated",
         tone: "success",
       });
     },
     onError: (error) => {
       pushToast({
-        title: t("toastMemberUpdateFailed", "Failed to update member"),
-        body: error instanceof Error ? error.message : t("unknownError", "Unknown error"),
+        title: "Failed to update member",
+        body: error instanceof Error ? error.message : "Unknown error",
         tone: "error",
       });
     },
@@ -139,14 +102,14 @@ export function CompanyAccess() {
     onSuccess: async () => {
       await refreshAccessData();
       pushToast({
-        title: t("toastJoinApproved", "Join request approved"),
+        title: "Join request approved",
         tone: "success",
       });
     },
     onError: (error) => {
       pushToast({
-        title: t("toastJoinApproveFailed", "Failed to approve join request"),
-        body: error instanceof Error ? error.message : t("unknownError", "Unknown error"),
+        title: "Failed to approve join request",
+        body: error instanceof Error ? error.message : "Unknown error",
         tone: "error",
       });
     },
@@ -157,14 +120,14 @@ export function CompanyAccess() {
     onSuccess: async () => {
       await refreshAccessData();
       pushToast({
-        title: t("toastJoinRejected", "Join request rejected"),
+        title: "Join request rejected",
         tone: "success",
       });
     },
     onError: (error) => {
       pushToast({
-        title: t("toastJoinRejectFailed", "Failed to reject join request"),
-        body: error instanceof Error ? error.message : t("unknownError", "Unknown error"),
+        title: "Failed to reject join request",
+        body: error instanceof Error ? error.message : "Unknown error",
         tone: "error",
       });
     },
@@ -209,18 +172,18 @@ export function CompanyAccess() {
         await queryClient.invalidateQueries({ queryKey: queryKeys.issues.listTouchedByMe(selectedCompanyId) });
       }
       pushToast({
-        title: t("toastMemberRemoved", "Member removed"),
+        title: "Member removed",
         body:
           result.reassignedIssueCount > 0
-            ? t("toastIssuesCleanedUp", "{{count}} assigned issue cleaned up.", { count: result.reassignedIssueCount })
+            ? `${result.reassignedIssueCount} assigned task${result.reassignedIssueCount === 1 ? "" : "s"} cleaned up.`
             : undefined,
         tone: "success",
       });
     },
     onError: (error) => {
       pushToast({
-        title: t("toastMemberRemoveFailed", "Failed to remove member"),
-        body: error instanceof Error ? error.message : t("unknownError", "Unknown error"),
+        title: "Failed to remove member",
+        body: error instanceof Error ? error.message : "Unknown error",
         tone: "error",
       });
     },
@@ -230,7 +193,6 @@ export function CompanyAccess() {
     if (!editingMember) return;
     setDraftRole(editingMember.membershipRole);
     setDraftStatus(isEditableMemberStatus(editingMember.status) ? editingMember.status : "suspended");
-    setDraftGrants(new Set(editingMember.grants.map((grant) => grant.permissionKey)));
   }, [editingMember]);
 
   useEffect(() => {
@@ -239,20 +201,20 @@ export function CompanyAccess() {
   }, [removingMember]);
 
   if (!selectedCompanyId) {
-    return <div className="text-sm text-muted-foreground">{t("selectCompany", "Select a company to manage access.")}</div>;
+    return <div className="text-sm text-muted-foreground">Select a company to manage access.</div>;
   }
 
   if (membersQuery.isLoading) {
-    return <div className="text-sm text-muted-foreground">{t("loading", "Loading company access…")}</div>;
+    return <div className="text-sm text-muted-foreground">Loading company access…</div>;
   }
 
   if (membersQuery.error) {
     const message =
       membersQuery.error instanceof ApiError && membersQuery.error.status === 403
-        ? t("noPermission", "You do not have permission to manage company members.")
+        ? "You do not have permission to manage company members."
         : membersQuery.error instanceof Error
           ? membersQuery.error.message
-          : t("loadFailed", "Failed to load company members.");
+          : "Failed to load company members.";
     return <div className="text-sm text-destructive">{message}</div>;
   }
 
@@ -262,8 +224,6 @@ export function CompanyAccess() {
     joinRequestsQuery.data?.filter((request) => request.requestType === "human") ?? [];
   const joinRequestActionPending =
     approveJoinRequestMutation.isPending || rejectJoinRequestMutation.isPending;
-  const implicitGrantKeys = getImplicitGrantKeys(draftRole);
-  const implicitGrantSet = new Set(implicitGrantKeys);
   const activeReassignmentUsers = members.filter(
     (member) =>
       member.status === "active" &&
@@ -278,16 +238,19 @@ export function CompanyAccess() {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">{t("title", "Company Access")}</h1>
+          <h1 className="text-lg font-semibold">Company Members</h1>
         </div>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          {t("subtitle", "Manage company user memberships, membership status, and explicit permission grants for {{company}}.", { company: selectedCompany?.name })}
+          Manage the people who can work in {selectedCompany?.name}. Members can collaborate across the company by default.
         </p>
+        <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          Core keeps this page focused on membership, invite approvals, and safe member removal.
+        </div>
       </div>
 
       {access && !access.currentUserRole && (
         <div className="rounded-xl border border-amber-500/40 px-4 py-3 text-sm text-amber-200">
-          {t("instanceAdminNotice", "This account can manage access here through instance-admin privileges, but it does not currently hold an active company membership.")}
+          This account can manage access here through instance-admin privileges, but it does not currently hold an active company membership.
         </div>
       )}
 
@@ -295,10 +258,10 @@ export function CompanyAccess() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-base font-semibold">{t("humansHeading", "Humans")}</h2>
+            <h2 className="text-base font-semibold">Humans</h2>
           </div>
           <p className="max-w-3xl text-sm text-muted-foreground">
-            {t("humansSubtitle", "Manage human company memberships, status, and grants here.")}
+            Manage human company memberships and status here.
           </p>
         </div>
 
@@ -306,12 +269,12 @@ export function CompanyAccess() {
           <div className="space-y-3 rounded-xl border border-border px-4 py-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-semibold">{t("pendingJoinsHeading", "Pending human joins")}</h3>
+                <h3 className="text-sm font-semibold">Pending human joins</h3>
                 <p className="text-sm text-muted-foreground">
-                  {t("pendingJoinsSubtitle", "Review human join requests before they become active company members.")}
+                  Review pending join requests before they become active company members.
                 </p>
               </div>
-              <Badge variant="outline">{t("pendingCount", "{{count}} pending", { count: pendingHumanJoinRequests.length })}</Badge>
+              <Badge variant="outline">{pendingHumanJoinRequests.length} pending</Badge>
             </div>
             <div className="space-y-3">
               {pendingHumanJoinRequests.map((request) => (
@@ -321,22 +284,22 @@ export function CompanyAccess() {
                     request.requesterUser?.name ||
                     request.requestEmailSnapshot ||
                     request.requestingUserId ||
-                    t("unknownRequester", "Unknown human requester")
+                    "Unknown human requester"
                   }
                   subtitle={
                     request.requesterUser?.email ||
                     request.requestEmailSnapshot ||
                     request.requestingUserId ||
-                    t("noEmailAvailable", "No email available")
+                    "No email available"
                   }
                   context={
                     request.invite
-                      ? `${t("joinInvite", "{{types}} join invite", { types: request.invite.allowedJoinTypes })}${request.invite.humanRole ? t("defaultRoleSuffix", " • default role {{role}}", { role: request.invite.humanRole }) : ""}`
-                      : t("inviteMetadataUnavailable", "Invite metadata unavailable")
+                      ? `${request.invite.allowedJoinTypes} join invite${request.invite.humanRole ? ` • default role ${request.invite.humanRole}` : ""}`
+                      : "Invite metadata unavailable"
                   }
-                  detail={t("submittedAt", "Submitted {{date}}", { date: new Date(request.createdAt).toLocaleString() })}
-                  approveLabel={t("approveHuman", "Approve human")}
-                  rejectLabel={t("rejectHuman", "Reject human")}
+                  detail={`Submitted ${new Date(request.createdAt).toLocaleString()}`}
+                  approveLabel="Approve human"
+                  rejectLabel="Reject human"
                   disabled={joinRequestActionPending}
                   onApprove={() => approveJoinRequestMutation.mutate(request.id)}
                   onReject={() => rejectJoinRequestMutation.mutate(request.id)}
@@ -347,15 +310,14 @@ export function CompanyAccess() {
         ) : null}
 
         <div className="overflow-hidden rounded-xl border border-border">
-          <div className="grid grid-cols-[minmax(0,1.5fr)_120px_120px_minmax(0,1.2fr)_180px] gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            <div>{t("colUserAccount", "User account")}</div>
-            <div>{t("colRole", "Role")}</div>
-            <div>{t("colStatus", "Status")}</div>
-            <div>{t("colGrants", "Grants")}</div>
-            <div className="text-right">{t("colAction", "Action")}</div>
+          <div className="grid grid-cols-[minmax(0,1.5fr)_120px_120px_180px] gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <div>User account</div>
+            <div>Role</div>
+            <div>Status</div>
+            <div className="text-right">Action</div>
           </div>
           {members.length === 0 ? (
-            <div className="px-4 py-8 text-sm text-muted-foreground">{t("noMemberships", "No user memberships found for this company yet.")}</div>
+            <div className="px-4 py-8 text-sm text-muted-foreground">No user memberships found for this company yet.</div>
           ) : (
             members.map((member) => {
               const removalReason = member.removal?.reason ?? null;
@@ -363,7 +325,7 @@ export function CompanyAccess() {
               return (
                 <div
                   key={member.id}
-                  className="grid grid-cols-[minmax(0,1.5fr)_120px_120px_minmax(0,1.2fr)_180px] gap-3 border-b border-border px-4 py-3 last:border-b-0"
+                  className="grid grid-cols-[minmax(0,1.5fr)_120px_120px_180px] gap-3 border-b border-border px-4 py-3 last:border-b-0"
                 >
                   <div className="min-w-0">
                     <div className="truncate font-medium">{member.user?.name?.trim() || member.user?.email || member.principalId}</div>
@@ -372,18 +334,17 @@ export function CompanyAccess() {
                   <div className="text-sm">
                     {member.membershipRole
                       ? HUMAN_COMPANY_MEMBERSHIP_ROLE_LABELS[member.membershipRole]
-                      : t("unset", "Unset")}
+                      : "Unset"}
                   </div>
                   <div>
                     <Badge variant={member.status === "active" ? "secondary" : member.status === "suspended" ? "destructive" : "outline"}>
                       {member.status.replace("_", " ")}
                     </Badge>
                   </div>
-                  <div className="min-w-0 text-sm text-muted-foreground">{formatGrantSummary(member, permissionLabels, t("noExplicitGrants", "No explicit grants"))}</div>
                   <div className="space-y-1 text-right">
                     <div className="flex justify-end gap-2">
                       <Button size="sm" variant="outline" onClick={() => setEditingMemberId(member.id)}>
-                        {t("edit", "Edit")}
+                        Edit
                       </Button>
                       <Button
                         size="sm"
@@ -393,7 +354,7 @@ export function CompanyAccess() {
                         title={removalReason ?? undefined}
                       >
                         <Trash2 className="mr-1 h-3.5 w-3.5" />
-                        {t("remove", "Remove")}
+                        Remove
                       </Button>
                     </div>
                     {removalReason ? (
@@ -410,16 +371,16 @@ export function CompanyAccess() {
       <Dialog open={!!editingMember} onOpenChange={(open) => !open && setEditingMemberId(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t("editMemberTitle", "Edit member")}</DialogTitle>
+            <DialogTitle>Edit member</DialogTitle>
             <DialogDescription>
-              {t("editMemberDescription", "Update company role, membership status, and explicit grants for {{name}}.", { name: editingMember?.user?.name || editingMember?.user?.email || editingMember?.principalId })}
+              Update company role and membership status for {editingMember?.user?.name || editingMember?.user?.email || editingMember?.principalId}.
             </DialogDescription>
           </DialogHeader>
           {editingMember && (
             <div className="space-y-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2 text-sm">
-                  <span className="font-medium">{t("companyRoleLabel", "Company role")}</span>
+                  <span className="font-medium">Company role</span>
                   <select
                     className="w-full rounded-md border border-border bg-background px-3 py-2"
                     value={draftRole ?? ""}
@@ -427,7 +388,7 @@ export function CompanyAccess() {
                       setDraftRole((event.target.value || null) as CompanyMember["membershipRole"])
                     }
                   >
-                    <option value="">{t("unset", "Unset")}</option>
+                    <option value="">Unset</option>
                     {Object.entries(HUMAN_COMPANY_MEMBERSHIP_ROLE_LABELS).map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
@@ -436,7 +397,7 @@ export function CompanyAccess() {
                   </select>
                 </label>
                 <label className="space-y-2 text-sm">
-                  <span className="font-medium">{t("membershipStatusLabel", "Membership status")}</span>
+                  <span className="font-medium">Membership status</span>
                   <select
                     className="w-full rounded-md border border-border bg-background px-3 py-2"
                     value={draftStatus}
@@ -444,77 +405,17 @@ export function CompanyAccess() {
                       setDraftStatus(event.target.value as EditableMemberStatus)
                     }
                   >
-                    <option value="active">{t("statusActive", "Active")}</option>
-                    <option value="pending">{t("statusPending", "Pending")}</option>
-                    <option value="suspended">{t("statusSuspended", "Suspended")}</option>
+                    <option value="active">Active</option>
+                    <option value="pending">Pending</option>
+                    <option value="suspended">Suspended</option>
                   </select>
                 </label>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-sm font-medium">{t("grantsHeading", "Grants")}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {t("grantsDescription", "Roles provide implicit grants automatically. Explicit grants below are only for overrides and extra access that should persist even if the role changes.")}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border px-3 py-3">
-                  <div className="text-sm font-medium">{t("implicitGrantsHeading", "Implicit grants from role")}</div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {draftRole
-                      ? t("implicitGrantsForRole", "{{role}} currently includes these permissions automatically.", { role: HUMAN_COMPANY_MEMBERSHIP_ROLE_LABELS[draftRole] })
-                      : t("noRoleSelected", "No role is selected, so this member has no implicit grants right now.")}
-                  </p>
-                  {implicitGrantKeys.length > 0 ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {implicitGrantKeys.map((permissionKey) => (
-                        <Badge key={permissionKey} variant="outline">
-                          {permissionLabels[permissionKey]}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {PERMISSION_KEYS.map((permissionKey) => (
-                    <label
-                      key={permissionKey}
-                      className="flex items-start gap-3 rounded-lg border border-border px-3 py-2"
-                    >
-                      <Checkbox
-                        checked={draftGrants.has(permissionKey)}
-                        onCheckedChange={(checked) => {
-                          setDraftGrants((current) => {
-                            const next = new Set(current);
-                            if (checked) next.add(permissionKey);
-                            else next.delete(permissionKey);
-                            return next;
-                          });
-                        }}
-                      />
-                      <span className="space-y-1">
-                        <span className="block text-sm font-medium">{permissionLabels[permissionKey]}</span>
-                        <span className="block text-xs text-muted-foreground">{permissionKey}</span>
-                        {implicitGrantSet.has(permissionKey) ? (
-                          <span className="block text-xs text-muted-foreground">
-                            {t("includedImplicitly", "Included implicitly by the {{role}} role. Add an explicit grant only if it should stay after the role changes.", { role: draftRole ? HUMAN_COMPANY_MEMBERSHIP_ROLE_LABELS[draftRole] : t("selectedRoleFallback", "selected") })}
-                          </span>
-                        ) : null}
-                        {draftGrants.has(permissionKey) ? (
-                          <span className="block text-xs text-muted-foreground">
-                            {t("storedExplicitly", "Stored explicitly for this member.")}
-                          </span>
-                        ) : null}
-                      </span>
-                    </label>
-                  ))}
-                </div>
               </div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingMemberId(null)}>
-              {t("cancel", "Cancel")}
+              Cancel
             </Button>
             <Button
               onClick={() => {
@@ -523,12 +424,11 @@ export function CompanyAccess() {
                   memberId: editingMember.id,
                   membershipRole: draftRole,
                   status: draftStatus,
-                  grants: [...draftGrants],
                 });
               }}
               disabled={updateMemberMutation.isPending}
             >
-              {updateMemberMutation.isPending ? t("saving", "Saving…") : t("saveAccess", "Save access")}
+              {updateMemberMutation.isPending ? "Saving…" : "Save member"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -537,9 +437,9 @@ export function CompanyAccess() {
       <Dialog open={!!removingMember} onOpenChange={(open) => !open && setRemovingMemberId(null)}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>{t("removeMemberTitle", "Remove member")}</DialogTitle>
+            <DialogTitle>Remove member</DialogTitle>
             <DialogDescription>
-              {t("removeMemberDescription", "Archive {{name}} and move active assignments before hiding this user from assignment fields.", { name: memberDisplayName(removingMember, t("thisMember", "this member")) })}
+              Archive {memberDisplayName(removingMember)} and move active assignments before hiding this user from assignment fields.
             </DialogDescription>
           </DialogHeader>
           {removingMember && (
@@ -549,22 +449,22 @@ export function CompanyAccess() {
                 <div className="text-sm text-muted-foreground">{removingMember.user?.email || removingMember.principalId}</div>
                 <div className="mt-2 text-sm text-muted-foreground">
                   {assignedIssuesQuery.isLoading
-                    ? t("checkingAssignedIssues", "Checking assigned issues...")
-                    : t("openAssignedIssues", "{{count}} open assigned issue", { count: assignedIssues.length })}
+                    ? "Checking assigned tasks..."
+                    : `${assignedIssues.length} open assigned task${assignedIssues.length === 1 ? "" : "s"}`}
                 </div>
               </div>
 
               {assignedIssues.length > 0 ? (
                 <div className="space-y-2">
-                  <div className="text-sm font-medium">{t("issueReassignment", "Issue reassignment")}</div>
+                  <div className="text-sm font-medium">Task reassignment</div>
                   <select
                     className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                     value={reassignmentTarget}
                     onChange={(event) => setReassignmentTarget(event.target.value)}
                   >
-                    <option value="__unassigned">{t("leaveUnassigned", "Leave unassigned")}</option>
+                    <option value="__unassigned">Leave unassigned</option>
                     {activeReassignmentUsers.length > 0 ? (
-                      <optgroup label={t("humansOptgroup", "Humans")}>
+                      <optgroup label="Humans">
                         {activeReassignmentUsers.map((member) => (
                           <option key={member.id} value={`user:${member.principalId}`}>
                             {memberDisplayName(member)}
@@ -573,7 +473,7 @@ export function CompanyAccess() {
                       </optgroup>
                     ) : null}
                     {activeReassignmentAgents.length > 0 ? (
-                      <optgroup label={t("agentsOptgroup", "Agents")}>
+                      <optgroup label="Agents">
                         {activeReassignmentAgents.map((agent) => (
                           <option key={agent.id} value={`agent:${agent.id}`}>
                             {agent.name} ({agent.role})
@@ -591,7 +491,7 @@ export function CompanyAccess() {
                     ))}
                     {assignedIssues.length > 6 ? (
                       <div className="px-3 py-2 text-sm text-muted-foreground">
-                        {t("moreIssues", "{{count}} more issue", { count: assignedIssues.length - 6 })}
+                        {assignedIssues.length - 6} more task{assignedIssues.length - 6 === 1 ? "" : "s"}
                       </div>
                     ) : null}
                   </div>
@@ -601,7 +501,7 @@ export function CompanyAccess() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemovingMemberId(null)}>
-              {t("cancel", "Cancel")}
+              Cancel
             </Button>
             <Button
               variant="destructive"
@@ -614,7 +514,7 @@ export function CompanyAccess() {
               }}
               disabled={archiveMemberMutation.isPending || assignedIssuesQuery.isLoading}
             >
-              {archiveMemberMutation.isPending ? t("removingMember", "Removing...") : t("removeMemberButton", "Remove member")}
+              {archiveMemberMutation.isPending ? "Removing..." : "Remove member"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -623,8 +523,68 @@ export function CompanyAccess() {
   );
 }
 
-function memberDisplayName(member: CompanyMember | null, fallback = "this member") {
-  if (!member) return fallback;
+export function CompanyAccessLegacyRoute() {
+  const { selectedCompanyId } = useCompany();
+  const { setBreadcrumbs } = useBreadcrumbs();
+  const { slots, isLoading, errorMessage } = usePluginSlots({
+    slotTypes: ["companySettingsPage"],
+    companyId: selectedCompanyId,
+    enabled: !!selectedCompanyId,
+  });
+
+  useEffect(() => {
+    setBreadcrumbs([
+      { label: "Settings", href: "/company/settings" },
+      { label: "Access" },
+    ]);
+  }, [setBreadcrumbs]);
+
+  const permissionsSlot = slots.find((slot) => slot.routePath === "permissions");
+  if (permissionsSlot) {
+    return <Navigate to="/company/settings/permissions" replace />;
+  }
+
+  if (isLoading) {
+    return <div className="text-sm text-muted-foreground">Checking for advanced permission extensions...</div>;
+  }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Shield className="h-5 w-5 text-muted-foreground" />
+          <h1 className="text-lg font-semibold">Advanced Permissions</h1>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Advanced access, scoped assignment, and explicit grant controls are provided by installed company settings extensions.
+        </p>
+      </div>
+
+      <div className="space-y-4 rounded-xl border border-border px-5 py-5">
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold">Advanced permissions unavailable</h2>
+          <p className="text-sm text-muted-foreground">
+            Core Paperclip keeps enforcing company boundaries and any existing restrictive policy data, but editing advanced permissions requires an installed extension.
+          </p>
+          {errorMessage ? (
+            <p className="text-sm text-destructive">Plugin extensions unavailable: {errorMessage}</p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild>
+            <Link to="/company/settings/members">Open Members</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/company/settings/invites">Open Invites</Link>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function memberDisplayName(member: CompanyMember | null) {
+  if (!member) return "this member";
   return member.user?.name?.trim() || member.user?.email || member.principalId;
 }
 

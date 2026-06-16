@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from "react";
-import { useTranslation } from "react-i18next";
 import { Link, Navigate } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
 import type { ExecutionWorkspace, Issue, Project } from "@paperclipai/shared";
@@ -73,7 +72,6 @@ function buildProjectWorkspaceGroups(input: {
 }
 
 export function Workspaces() {
-  const { t } = useTranslation("workspacesPage");
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const experimentalSettingsQuery = useQuery({
@@ -105,8 +103,8 @@ export function Workspaces() {
   });
 
   useEffect(() => {
-    setBreadcrumbs([{ label: t("breadcrumb", "Workspaces") }]);
-  }, [setBreadcrumbs, t]);
+    setBreadcrumbs([{ label: "Workspaces" }]);
+  }, [setBreadcrumbs]);
 
   const groups = useMemo(
     () => buildProjectWorkspaceGroups({ projects, issues, executionWorkspaces }),
@@ -123,11 +121,11 @@ export function Workspaces() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold">{t("title", "Workspaces")}</h2>
+        <h2 className="text-xl font-bold">Workspaces</h2>
       </div>
 
       {groups.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("empty", "No workspace activity yet.")}</p>
+        <p className="text-sm text-muted-foreground">No workspace activity yet.</p>
       ) : (
         <div className="space-y-8">
           {groups.map((group) => (
@@ -147,9 +145,7 @@ export function Workspaces() {
                   ) : null}
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {group.summaries.length === 1
-                    ? t("workspaceCount_one", "{{count}} workspace", { count: group.summaries.length })
-                    : t("workspaceCount_other", "{{count}} workspaces", { count: group.summaries.length })}
+                  {group.summaries.length} workspace{group.summaries.length === 1 ? "" : "s"}
                 </span>
               </div>
               <ProjectWorkspacesContent

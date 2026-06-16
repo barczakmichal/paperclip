@@ -13,12 +13,19 @@ coverage/
 data/
 .paperclip/
 .pnpm-store/
-.superpowers/
 tmp-*
 cli/tmp/
+.trae/
+test_scripts/
+
+
+graphify-out/
+.codegraph/
 
 # Scratch/seed scripts (but not scripts/ dir)
 check-*.mjs
+!.github/scripts/check-*.mjs
+!.github/scripts/tests/check-*.mjs
 !scripts/check-*.mjs
 new-agent*.json
 newcompany.json
@@ -56,4 +63,6 @@ tests/e2e/playwright-report/
 tests/release-smoke/test-results/
 tests/release-smoke/playwright-report/
 .superset/
+.superpowers/
 .claude/worktrees/
+.herenow

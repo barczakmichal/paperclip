@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex, jsonb, numeric } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const companies = pgTable(
   "companies",
@@ -26,14 +26,6 @@ export const companies = pgTable(
     feedbackDataSharingConsentByUserId: text("feedback_data_sharing_consent_by_user_id"),
     feedbackDataSharingTermsVersion: text("feedback_data_sharing_terms_version"),
     brandColor: text("brand_color"),
-    brandKitJson: jsonb("brand_kit_json").$type<{
-      colors?: { primary?: string; secondary?: string };
-      toneOfVoice?: string;
-      mandatoryPhrases?: string[];
-      doNots?: string[];
-      [key: string]: unknown;
-    }>(),
-    marketingMonthlyCaplPln: numeric("marketing_monthly_cap_pln", { precision: 12, scale: 2 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  Agent,
   DocumentRevision,
   FeedbackDataSharingPreference,
   FeedbackVote,
@@ -15,9 +15,11 @@ import { ApiError } from "../api/client";
 import { issuesApi } from "../api/issues";
 import { useAutosaveIndicator } from "../hooks/useAutosaveIndicator";
 import { deriveDocumentRevisionState } from "../lib/document-revisions";
+import type { CompanyUserProfile } from "../lib/company-members";
 import { queryKeys } from "../lib/queryKeys";
 import { cn, relativeTime } from "../lib/utils";
 import { FoldCurtain } from "./FoldCurtain";
+import { DocumentAnnotationsCountChip, IssueDocumentAnnotations } from "./IssueDocumentAnnotations";
 import { MarkdownBody } from "./MarkdownBody";
 import { MarkdownEditor, type MentionOption } from "./MarkdownEditor";
 import { OutputFeedbackButtons } from "./OutputFeedbackButtons";
@@ -33,8 +35,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Check, ChevronDown, ChevronRight, Copy, Diff, Download, FilePenLine, FileText, MoreHorizontal, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, Diff, Download, FilePenLine, FileText, Lock, MoreHorizontal, Plus, Trash2, Unlock, X } from "lucide-react";
 import { DocumentDiffModal } from "./DocumentDiffModal";
+import { SourceTrustBadge } from "./SourceTrustBadge";
+import { useTranslation } from "@/i18n";
 
 type DraftState = {
   key: string;
@@ -92,6 +96,10 @@ function isDocumentConflictError(error: unknown) {
   return error instanceof ApiError && error.status === 409;
 }
 
+function isLockedDocumentError(error: unknown) {
+  return error instanceof ApiError && error.status === 409 && error.message === "Document is locked";
+}
+
 function downloadDocumentFile(key: string, body: string) {
   const blob = new Blob([body], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -129,6 +137,10 @@ function toDocumentSummary(document: IssueDocument) {
     createdByUserId: document.createdByUserId,
     updatedByAgentId: document.updatedByAgentId,
     updatedByUserId: document.updatedByUserId,
+    lockedAt: document.lockedAt,
+    lockedByAgentId: document.lockedByAgentId,
+    lockedByUserId: document.lockedByUserId,
+    sourceTrust: document.sourceTrust,
     createdAt: document.createdAt,
     updatedAt: document.updatedAt,
   };
@@ -137,6 +149,7 @@ function toDocumentSummary(document: IssueDocument) {
 export function IssueDocumentsSection({
   issue,
   canDeleteDocuments,
+  canManageDocumentLocks = false,
   feedbackVotes = [],
   feedbackDataSharingPreference = "prompt",
   feedbackTermsUrl = null,
@@ -144,9 +157,15 @@ export function IssueDocumentsSection({
   imageUploadHandler,
   onVote,
   extraActions,
+  agentMap,
+  userProfileMap,
+  defaultAnnotationPanelOpenKeys,
+  defaultAnnotationFocusedThreadIds,
+  forceEditDocumentKey,
 }: {
   issue: Issue;
   canDeleteDocuments: boolean;
+  canManageDocumentLocks?: boolean;
   feedbackVotes?: FeedbackVote[];
   feedbackDataSharingPreference?: FeedbackDataSharingPreference;
   feedbackTermsUrl?: string | null;
@@ -158,8 +177,19 @@ export function IssueDocumentsSection({
     options?: { allowSharing?: boolean; reason?: string },
   ) => Promise<void>;
   extraActions?: ReactNode;
+  agentMap?: ReadonlyMap<string, Pick<Agent, "id" | "name">>;
+  userProfileMap?: ReadonlyMap<string, CompanyUserProfile>;
+  /**
+   * Seed which document annotation panels are open on first render. Mostly useful
+   * for Storybook / screenshot harnesses; runtime callers usually omit this.
+   */
+  defaultAnnotationPanelOpenKeys?: string[];
+  /** Per-doc seed for the focused annotation thread id (Storybook-only). */
+  defaultAnnotationFocusedThreadIds?: Readonly<Record<string, string>>;
+  /** Force a doc into edit mode on mount (Storybook-only). */
+  forceEditDocumentKey?: string | null;
 }) {
-  const { t } = useTranslation("issueDocumentsSection");
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const location = useLocation();
   const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
@@ -167,6 +197,9 @@ export function IssueDocumentsSection({
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [documentConflict, setDocumentConflict] = useState<DocumentConflictState | null>(null);
   const [foldedDocumentKeys, setFoldedDocumentKeys] = useState<string[]>(() => loadFoldedDocumentKeys(issue.id));
+  const [annotationPanelOpenKeys, setAnnotationPanelOpenKeys] = useState<string[]>(
+    () => (defaultAnnotationPanelOpenKeys ?? []),
+  );
   const [autosaveDocumentKey, setAutosaveDocumentKey] = useState<string | null>(null);
   const [copiedDocumentKey, setCopiedDocumentKey] = useState<string | null>(null);
   const [highlightDocumentKey, setHighlightDocumentKey] = useState<string | null>(null);
@@ -206,8 +239,10 @@ export function IssueDocumentsSection({
       predicate: (query) =>
         Array.isArray(query.queryKey)
         && query.queryKey[0] === "issues"
-        && query.queryKey[1] === "document-revisions"
-        && query.queryKey[2] === issue.id,
+        && (
+          (query.queryKey[1] === "document-revisions" && query.queryKey[2] === issue.id)
+          || (query.queryKey[1] === "document-annotations" && query.queryKey[2] === issue.id)
+        ),
     });
   }, [issue.id, queryClient]);
 
@@ -260,7 +295,7 @@ export function IssueDocumentsSection({
       invalidateIssueDocuments();
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : t("failedToDelete", "Failed to delete document"));
+      setError(err instanceof Error ? err.message : "Failed to delete document");
     },
   });
 
@@ -277,7 +312,23 @@ export function IssueDocumentsSection({
       invalidateIssueDocuments();
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : t("failedToRestore", "Failed to restore document revision"));
+      setError(err instanceof Error ? err.message : "Failed to restore document revision");
+    },
+  });
+
+  const setDocumentLock = useMutation({
+    mutationFn: ({ key, locked }: { key: string; locked: boolean }) =>
+      locked ? issuesApi.lockDocument(issue.id, key) : issuesApi.unlockDocument(issue.id, key),
+    onSuccess: (document) => {
+      syncDocumentCaches(document);
+      setDraft((current) => current?.key === document.key ? null : current);
+      setDocumentConflict((current) => current?.key === document.key ? null : current);
+      resetAutosaveState();
+      setError(null);
+      invalidateIssueDocuments();
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : "Failed to update document lock");
     },
   });
 
@@ -302,7 +353,7 @@ export function IssueDocumentsSection({
   const isEmpty = sortedDocuments.length === 0 && !issue.legacyPlanDocument;
   const newDocumentKeyError =
     draft?.isNew && draft.key.trim().length > 0 && !DOCUMENT_KEY_PATTERN.test(draft.key.trim())
-      ? t("keyPatternError", "Use lowercase letters, numbers, -, or _, and start with a letter or number.")
+      ? "Use lowercase letters, numbers, -, or _, and start with a letter or number."
       : null;
 
   const resetAutosaveState = useCallback(() => {
@@ -345,6 +396,17 @@ export function IssueDocumentsSection({
     setError(null);
   };
 
+  const initialEditAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!forceEditDocumentKey) return;
+    if (initialEditAppliedRef.current) return;
+    const target = (documents ?? []).find((entry) => entry.key === forceEditDocumentKey);
+    if (!target) return;
+    initialEditAppliedRef.current = true;
+    beginEdit(forceEditDocumentKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceEditDocumentKey, documents]);
+
   const cancelDraft = () => {
     if (autosaveDebounceRef.current) {
       clearTimeout(autosaveDebounceRef.current);
@@ -374,9 +436,9 @@ export function IssueDocumentsSection({
 
     if (!normalizedKey || !normalizedBody) {
       if (currentDraft.isNew) {
-        setError(t("keyAndBodyRequired", "Document key and body are required"));
+        setError("Document key and body are required");
       } else if (!normalizedBody) {
-        setError(t("bodyCannotBeEmpty", "Document body cannot be empty"));
+        setError("Document body cannot be empty");
       }
       if (options?.trackAutosave) {
         resetAutosaveState();
@@ -385,7 +447,7 @@ export function IssueDocumentsSection({
     }
 
     if (!DOCUMENT_KEY_PATTERN.test(normalizedKey)) {
-      setError(t("keyFormatError", "Document key must start with a letter or number and use only lowercase letters, numbers, -, or _."));
+      setError("Document key must start with a letter or number and use only lowercase letters, numbers, -, or _.");
       if (options?.trackAutosave) {
         resetAutosaveState();
       }
@@ -444,6 +506,12 @@ export function IssueDocumentsSection({
       }
       return true;
     } catch (err) {
+      if (isLockedDocumentError(err)) {
+        setError("Document is locked. Unlock it before editing.");
+        resetAutosaveState();
+        invalidateIssueDocuments();
+        return false;
+      }
       if (isDocumentConflictError(err)) {
         try {
           const latestDocument = await issuesApi.getDocument(issue.id, normalizedKey);
@@ -464,14 +532,14 @@ export function IssueDocumentsSection({
           resetAutosaveState();
           return false;
         } catch {
-          setError(t("changedRemotelyLoadFailed", "Document changed remotely and the latest version could not be loaded"));
+          setError("Document changed remotely and the latest version could not be loaded");
           return false;
         }
       }
-      setError(err instanceof Error ? err.message : t("failedToSave", "Failed to save document"));
+      setError(err instanceof Error ? err.message : "Failed to save document");
       return false;
     }
-  }, [documentConflict, invalidateIssueDocuments, issue.id, resetAutosaveState, runSave, sortedDocuments, syncDocumentCaches, upsertDocument, t]);
+  }, [documentConflict, invalidateIssueDocuments, issue.id, resetAutosaveState, runSave, sortedDocuments, syncDocumentCaches, upsertDocument]);
 
   const reloadDocumentFromServer = useCallback((key: string) => {
     if (documentConflict?.key !== key) return;
@@ -529,9 +597,9 @@ export function IssueDocumentsSection({
         setCopiedDocumentKey((current) => current === key ? null : current);
       }, 1400);
     } catch {
-      setError(t("couldNotCopy", "Could not copy document"));
+      setError("Could not copy document");
     }
-  }, [t]);
+  }, []);
 
   const getDocumentRevisions = useCallback((key: string) => {
     const cached = queryClient.getQueryData<DocumentRevision[]>(queryKeys.issues.documentRevisions(issue.id, key));
@@ -554,7 +622,7 @@ export function IssueDocumentsSection({
       return;
     }
     if (documentConflict?.key === doc.key || documentHasUnsavedChanges(doc, draft)) {
-      setError(t("saveOrCancelBeforeOldRevision", "Save or cancel your local changes before viewing an older revision."));
+      setError("Save or cancel your local changes before viewing an older revision.");
       return;
     }
     resetAutosaveState();
@@ -563,7 +631,16 @@ export function IssueDocumentsSection({
     setFoldedDocumentKeys((current) => current.filter((entry) => entry !== doc.key));
     setSelectedRevisionIds((current) => ({ ...current, [doc.key]: selectedRevision.id }));
     setError(null);
-  }, [documentConflict, draft, getDocumentRevisions, resetAutosaveState, returnToLatestRevision, t]);
+  }, [documentConflict, draft, getDocumentRevisions, resetAutosaveState, returnToLatestRevision]);
+
+  const toggleDocumentLock = useCallback((doc: IssueDocument, locked: boolean) => {
+    if (!canManageDocumentLocks || setDocumentLock.isPending) return;
+    if (locked && (documentConflict?.key === doc.key || documentHasUnsavedChanges(doc, draft))) {
+      setError("Save or cancel local changes before changing the document lock.");
+      return;
+    }
+    setDocumentLock.mutate({ key: doc.key, locked });
+  }, [canManageDocumentLocks, documentConflict, draft, setDocumentLock]);
 
   const handleDraftBlur = async (event: React.FocusEvent<HTMLDivElement>) => {
     if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
@@ -688,6 +765,24 @@ export function IssueDocumentsSection({
         : [...current, key],
     );
   };
+  const setAnnotationPanelOpen = useCallback((key: string, nextOpen: boolean) => {
+    setAnnotationPanelOpenKeys((current) => {
+      const isOpen = current.includes(key);
+      if (nextOpen && !isOpen) return [...current, key];
+      if (!nextOpen && isOpen) return current.filter((entry) => entry !== key);
+      return current;
+    });
+    if (nextOpen) {
+      setFoldedDocumentKeys((current) => current.filter((entry) => entry !== key));
+    }
+  }, []);
+  const toggleAnnotationPanel = useCallback((key: string) => {
+    setAnnotationPanelOpenKeys((current) => {
+      if (current.includes(key)) return current.filter((entry) => entry !== key);
+      setFoldedDocumentKeys((folded) => folded.filter((entry) => entry !== key));
+      return [...current, key];
+    });
+  }, []);
 
   return (
     <div className="space-y-3">
@@ -696,19 +791,19 @@ export function IssueDocumentsSection({
           {extraActions}
           <Button variant="outline" size="sm" onClick={beginNewDocument} className="shrink-0">
             <Plus className="mr-1.5 h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{t("newDocument", "New document")}</span>
-            <span className="sm:hidden">{t("new", "New")}</span>
+            <span className="hidden sm:inline">{t("component.issue.documents.new")}</span>
+            <span className="sm:hidden">{t("component.issue.documents.newShort")}</span>
           </Button>
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2 min-w-0">
-          <h3 className="w-full text-sm font-medium text-muted-foreground shrink-0 sm:w-auto">{t("documents", "Documents")}</h3>
+          <h3 className="w-full text-sm font-medium text-muted-foreground shrink-0 sm:w-auto">{t("component.issue.documents.title")}</h3>
           <div className="flex flex-wrap items-center gap-2 min-w-0 sm:ml-auto">
             {extraActions}
             <Button variant="outline" size="sm" onClick={beginNewDocument} className="shrink-0">
               <Plus className="mr-1.5 h-3.5 w-3.5" />
-              <span className="hidden sm:inline">New document</span>
-              <span className="sm:hidden">New</span>
+              <span className="hidden sm:inline">{t("component.issue.documents.new")}</span>
+              <span className="sm:hidden">{t("component.issue.documents.newShort")}</span>
             </Button>
           </div>
         </div>
@@ -728,7 +823,7 @@ export function IssueDocumentsSection({
             onChange={(event) =>
               setDraft((current) => current ? { ...current, key: event.target.value.toLowerCase() } : current)
             }
-            placeholder={t("documentKeyPlaceholder", "Document key")}
+            placeholder="Document key"
           />
           {newDocumentKeyError && (
             <p className="text-xs text-destructive">{newDocumentKeyError}</p>
@@ -739,7 +834,7 @@ export function IssueDocumentsSection({
               onChange={(event) =>
                 setDraft((current) => current ? { ...current, title: event.target.value } : current)
               }
-              placeholder={t("optionalTitle", "Optional title")}
+              placeholder="Optional title"
             />
           )}
           <MarkdownEditor
@@ -747,7 +842,7 @@ export function IssueDocumentsSection({
             onChange={(body) =>
               setDraft((current) => current ? { ...current, body } : current)
             }
-            placeholder={t("markdownBody", "Markdown body")}
+            placeholder="Markdown body"
             bordered={false}
             className="bg-transparent"
             contentClassName="min-h-[220px] text-[15px] leading-7"
@@ -758,14 +853,14 @@ export function IssueDocumentsSection({
           <div className="flex items-center justify-end gap-2">
             <Button variant="outline" size="sm" onClick={cancelDraft}>
               <X className="mr-1.5 h-3.5 w-3.5" />
-              {t("cancel", "Cancel")}
+              Cancel
             </Button>
             <Button
               size="sm"
               onClick={() => void commitDraft(draft, { clearAfterSave: false, trackAutosave: false })}
               disabled={upsertDocument.isPending}
             >
-              {upsertDocument.isPending ? t("saving", "Saving...") : t("createDocument", "Create document")}
+              {upsertDocument.isPending ? "Saving..." : "Create document"}
             </Button>
           </div>
         </div>
@@ -782,7 +877,7 @@ export function IssueDocumentsSection({
           <div className="mb-2 flex items-center gap-2">
             <FileText className="h-4 w-4 text-amber-600" />
             <span className="rounded-full border border-amber-500/30 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">
-              {t("planBadge", "PLAN")}
+              PLAN
             </span>
           </div>
           {renderFoldableBody(issue.legacyPlanDocument.body, documentBodyContentClassName)}
@@ -791,8 +886,9 @@ export function IssueDocumentsSection({
 
       <div className="space-y-3">
         {sortedDocuments.map((doc) => {
-          const activeDraft = draft?.key === doc.key && !draft.isNew ? draft : null;
-          const activeConflict = documentConflict?.key === doc.key ? documentConflict : null;
+          const isLocked = Boolean(doc.lockedAt);
+          const activeDraft = !isLocked && draft?.key === doc.key && !draft.isNew ? draft : null;
+          const activeConflict = !isLocked && documentConflict?.key === doc.key ? documentConflict : null;
           const isFolded = foldedDocumentKeys.includes(doc.key);
           const rawRevisionHistory = getDocumentRevisions(doc.key);
           const revisionState = deriveDocumentRevisionState(doc, rawRevisionHistory);
@@ -811,6 +907,7 @@ export function IssueDocumentsSection({
           const displayedUpdatedAt = selectedHistoricalRevision?.createdAt ?? currentRevision.createdAt;
           const showTitle = !isPlanKey(doc.key) && !!displayedTitle.trim() && !titlesMatchKey(displayedTitle, doc.key);
           const canVoteOnDocument = Boolean(doc.latestRevisionId && doc.updatedByAgentId && !doc.updatedByUserId && onVote);
+          const lockActionPending = setDocumentLock.isPending && setDocumentLock.variables?.key === doc.key;
 
           return (
             <div
@@ -828,7 +925,7 @@ export function IssueDocumentsSection({
                       type="button"
                       className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
                       onClick={() => toggleFoldedDocument(doc.key)}
-                      aria-label={isFolded ? t("expandDocument", "Expand {{key}} document", { key: doc.key }) : t("collapseDocument", "Collapse {{key}} document", { key: doc.key })}
+                      aria-label={isFolded ? `Expand ${doc.key} document` : `Collapse ${doc.key} document`}
                       aria-expanded={!isFolded}
                     >
                       {isFolded ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -836,6 +933,7 @@ export function IssueDocumentsSection({
                     <span className="shrink-0 rounded-full border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                       {doc.key}
                     </span>
+                    <SourceTrustBadge sourceTrust={doc.sourceTrust} artifactLabel="document" />
                     <DropdownMenu
                       open={revisionMenuOpenKey === doc.key}
                       onOpenChange={(open) => setRevisionMenuOpenKey(open ? doc.key : null)}
@@ -849,14 +947,14 @@ export function IssueDocumentsSection({
                             isHistoricalPreview && "text-amber-300 hover:text-amber-200",
                           )}
                         >
-                          {t("rev", "rev {{number}}", { number: displayedRevisionNumber })}
+                          rev {displayedRevisionNumber}
                           <ChevronDown className="h-3 w-3" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-72">
-                        <DropdownMenuLabel>{t("revisionHistory", "Revision history")}</DropdownMenuLabel>
+                        <DropdownMenuLabel>Revision history</DropdownMenuLabel>
                         {revisionMenuOpenKey === doc.key && isFetchingDocumentRevisions && rawRevisionHistory.length === 0 ? (
-                          <DropdownMenuItem disabled>{t("loadingRevisions", "Loading revisions...")}</DropdownMenuItem>
+                          <DropdownMenuItem disabled>Loading revisions...</DropdownMenuItem>
                         ) : revisionHistory.length > 0 ? (
                           <DropdownMenuRadioGroup value={selectedRevisionId ?? currentRevision.id ?? ""}>
                             {revisionHistory.map((revision) => {
@@ -870,10 +968,10 @@ export function IssueDocumentsSection({
                                 >
                                   <div className="flex min-w-0 flex-col">
                                     <div className="flex items-center gap-2">
-                                      <span className="font-medium">{t("rev", "rev {{number}}", { number: revision.revisionNumber })}</span>
+                                      <span className="font-medium">rev {revision.revisionNumber}</span>
                                       {isCurrentRevision ? (
                                         <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                                          {t("current", "Current")}
+                                          Current
                                         </span>
                                       ) : null}
                                     </div>
@@ -886,7 +984,7 @@ export function IssueDocumentsSection({
                             })}
                           </DropdownMenuRadioGroup>
                         ) : (
-                          <DropdownMenuItem disabled>{t("noRevisionsYet", "No revisions yet")}</DropdownMenuItem>
+                          <DropdownMenuItem disabled>No revisions yet</DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -894,12 +992,40 @@ export function IssueDocumentsSection({
                       href={`#document-${encodeURIComponent(doc.key)}`}
                       className="truncate text-[11px] text-muted-foreground transition-colors hover:text-foreground hover:underline"
                     >
-                      {t("updatedTime", "updated {{time}}", { time: relativeTime(displayedUpdatedAt) })}
+                      updated {relativeTime(displayedUpdatedAt)}
                     </a>
+                    {!isSystemIssueDocumentKey(doc.key) ? (
+                      <DocumentAnnotationsCountChip
+                        issueId={issue.id}
+                        docKey={doc.key}
+                        panelOpen={annotationPanelOpenKeys.includes(doc.key)}
+                        onToggle={() => toggleAnnotationPanel(doc.key)}
+                      />
+                    ) : null}
                   </div>
                   {showTitle && <p className="mt-2 text-sm font-medium">{displayedTitle}</p>}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {canManageDocumentLocks ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className={cn(
+                        "text-muted-foreground transition-colors",
+                        isLocked && "text-amber-300 hover:text-amber-200",
+                      )}
+                      title={isLocked ? "Unlock document" : "Lock document"}
+                      aria-label={isLocked ? `Unlock ${doc.key} document` : `Lock ${doc.key} document`}
+                      onClick={() => toggleDocumentLock(doc, !isLocked)}
+                      disabled={lockActionPending}
+                    >
+                      {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+                    </Button>
+                  ) : isLocked ? (
+                    <span title="Locked document" aria-label="Locked document" className="inline-flex h-6 w-6 items-center justify-center text-amber-300">
+                      <Lock className="h-3.5 w-3.5" />
+                    </span>
+                  ) : null}
                   <Button
                     variant="ghost"
                     size="icon-xs"
@@ -907,7 +1033,7 @@ export function IssueDocumentsSection({
                       "text-muted-foreground transition-colors",
                       copiedDocumentKey === doc.key && "text-foreground",
                     )}
-                    title={copiedDocumentKey === doc.key ? t("copied", "Copied") : t("copyDocument", "Copy document")}
+                    title={copiedDocumentKey === doc.key ? "Copied" : "Copy document"}
                     onClick={() => void copyDocumentBody(doc.key, displayedBody)}
                   >
                     {copiedDocumentKey === doc.key ? (
@@ -922,39 +1048,39 @@ export function IssueDocumentsSection({
                         variant="ghost"
                         size="icon-xs"
                         className="text-muted-foreground"
-                        title={t("documentActions", "Document actions")}
+                        title="Document actions"
                       >
                         <MoreHorizontal className="h-3.5 w-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                      {!isHistoricalPreview ? (
+                      {!isHistoricalPreview && !isLocked ? (
                         <DropdownMenuItem onClick={() => beginEdit(doc.key)}>
                           <FilePenLine className="h-3.5 w-3.5" />
-                          {t("editDocument", "Edit document")}
+                          Edit document
                         </DropdownMenuItem>
                       ) : null}
-                      {!isHistoricalPreview ? <DropdownMenuSeparator /> : null}
+                      {!isHistoricalPreview && !isLocked ? <DropdownMenuSeparator /> : null}
                       <DropdownMenuItem
                         onClick={() => downloadDocumentFile(doc.key, displayedBody)}
                       >
                         <Download className="h-3.5 w-3.5" />
-                        {t("downloadDocument", "Download document")}
+                        Download document
                       </DropdownMenuItem>
                       {doc.latestRevisionNumber > 1 ? (
                         <DropdownMenuItem onClick={() => setDiffViewKey(doc.key)}>
                           <Diff className="h-3.5 w-3.5" />
-                          {t("viewDiff", "View diff")}
+                          View diff
                         </DropdownMenuItem>
                       ) : null}
-                      {canDeleteDocuments ? <DropdownMenuSeparator /> : null}
-                      {canDeleteDocuments ? (
+                      {canDeleteDocuments && !isLocked ? <DropdownMenuSeparator /> : null}
+                      {canDeleteDocuments && !isLocked ? (
                         <DropdownMenuItem
                           variant="destructive"
                           onClick={() => setConfirmDeleteKey(doc.key)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                          {t("deleteDocument", "Delete document")}
+                          Delete document
                         </DropdownMenuItem>
                       ) : null}
                     </DropdownMenuContent>
@@ -985,10 +1111,10 @@ export function IssueDocumentsSection({
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-1">
                           <p className="text-sm font-medium text-amber-200">
-                            {t("viewingRevision", "Viewing revision {{number}}", { number: selectedHistoricalRevision.revisionNumber })}
+                            Viewing revision {selectedHistoricalRevision.revisionNumber}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {t("historicalPreviewNote", "This is a historical preview. Restoring it creates a new latest revision and keeps history append-only.")}
+                            This is a historical preview. Restoring it creates a new latest revision and keeps history append-only.
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -997,20 +1123,22 @@ export function IssueDocumentsSection({
                             size="sm"
                             onClick={() => returnToLatestRevision(doc.key)}
                           >
-                            {t("returnToLatest", "Return to latest")}
+                            Return to latest
                           </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => restoreDocumentRevision.mutate({
-                              key: doc.key,
-                              revisionId: selectedHistoricalRevision.id,
-                            })}
-                            disabled={restoreDocumentRevision.isPending}
-                          >
-                            {restoreDocumentRevision.isPending && restoreDocumentRevision.variables?.key === doc.key
-                              ? t("restoring", "Restoring...")
-                              : t("restoreThisRevision", "Restore this revision")}
-                          </Button>
+                          {!isLocked ? (
+                            <Button
+                              size="sm"
+                              onClick={() => restoreDocumentRevision.mutate({
+                                key: doc.key,
+                                revisionId: selectedHistoricalRevision.id,
+                              })}
+                              disabled={restoreDocumentRevision.isPending}
+                            >
+                              {restoreDocumentRevision.isPending && restoreDocumentRevision.variables?.key === doc.key
+                                ? "Restoring..."
+                                : "Restore this revision"}
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -1019,9 +1147,9 @@ export function IssueDocumentsSection({
                     <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-1">
-                          <p className="text-sm font-medium text-amber-200">{t("outOfDate", "Out of date")}</p>
+                          <p className="text-sm font-medium text-amber-200">Out of date</p>
                           <p className="text-xs text-muted-foreground">
-                            {t("conflictNote", "This document changed while you were editing. Your local draft is preserved and autosave is paused.")}
+                            This document changed while you were editing. Your local draft is preserved and autosave is paused.
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -1036,37 +1164,37 @@ export function IssueDocumentsSection({
                               )
                             }
                           >
-                            {activeConflict.showRemote ? t("hideRemote", "Hide remote") : t("reviewRemote", "Review remote")}
+                            {activeConflict.showRemote ? "Hide remote" : "Review remote"}
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => keepConflictedDraft(doc.key)}
                           >
-                            {t("keepMyDraft", "Keep my draft")}
+                            Keep my draft
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => reloadDocumentFromServer(doc.key)}
                           >
-                            {t("reloadRemote", "Reload remote")}
+                            Reload remote
                           </Button>
                           <Button
                             size="sm"
                             onClick={() => void overwriteDocumentFromDraft(doc.key)}
                             disabled={upsertDocument.isPending}
                           >
-                            {upsertDocument.isPending ? t("saving", "Saving...") : t("overwriteRemote", "Overwrite remote")}
+                            {upsertDocument.isPending ? "Saving..." : "Overwrite remote"}
                           </Button>
                         </div>
                       </div>
                       {activeConflict.showRemote && (
                         <div className="mt-3 rounded-md border border-border/70 bg-background/60 p-3">
                           <div className="mb-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-                            <span>{t("remoteRevision", "Remote revision {{number}}", { number: activeConflict.serverDocument.latestRevisionNumber })}</span>
+                            <span>Remote revision {activeConflict.serverDocument.latestRevisionNumber}</span>
                             <span>•</span>
-                            <span>{t("updatedTime", "updated {{time}}", { time: relativeTime(activeConflict.serverDocument.updatedAt) })}</span>
+                            <span>updated {relativeTime(activeConflict.serverDocument.updatedAt)}</span>
                           </div>
                           {!isPlanKey(doc.key) && activeConflict.serverDocument.title ? (
                             <p className="mb-2 text-sm font-medium">{activeConflict.serverDocument.title}</p>
@@ -1083,7 +1211,7 @@ export function IssueDocumentsSection({
                         markDocumentDirty(doc.key);
                         setDraft((current) => current ? { ...current, title: event.target.value } : current);
                       }}
-                      placeholder={t("optionalTitle", "Optional title")}
+                      placeholder="Optional title"
                     />
                   )}
                   <div
@@ -1091,31 +1219,49 @@ export function IssueDocumentsSection({
                       activeDraft || isHistoricalPreview ? "" : "rounded-md hover:bg-accent/10"
                     }`}
                   >
-                    {isHistoricalPreview ? (
-                      renderFoldableBody(displayedBody, documentBodyContentClassName)
-                    ) : activeDraft ? (
-                      <MarkdownEditor
-                        value={displayedBody}
-                        onChange={(body) => {
-                          markDocumentDirty(doc.key);
-                          setDraft((current) => {
-                            if (current && current.key === doc.key && !current.isNew) {
-                              return { ...current, body };
-                            }
-                            return current;
-                          });
-                        }}
-                        placeholder={t("markdownBody", "Markdown body")}
-                        bordered={false}
-                        className="bg-transparent"
-                        contentClassName={documentBodyContentClassName}
-                        mentions={mentions}
-                        imageUploadHandler={imageUploadHandler}
-                        onSubmit={() => void commitDraft(activeDraft ?? draft, { clearAfterSave: false, trackAutosave: true })}
-                      />
-                    ) : (
-                      renderFoldableBody(displayedBody, documentBodyContentClassName)
-                    )}
+                    <IssueDocumentAnnotations
+                      issueId={issue.id}
+                      doc={doc}
+                      bodyMarkdown={displayedBody}
+                      draftDirty={Boolean(activeDraft) && (
+                        (activeDraft?.body ?? doc.body) !== doc.body
+                        || (autosaveDocumentKey === doc.key && autosaveState === "saving")
+                      )}
+                      draftConflicted={Boolean(activeConflict)}
+                      historicalPreview={isHistoricalPreview}
+                      locationHash={location.hash}
+                      panelOpen={annotationPanelOpenKeys.includes(doc.key)}
+                      onPanelOpenChange={(next) => setAnnotationPanelOpen(doc.key, next)}
+                      agentMap={agentMap}
+                      userProfileMap={userProfileMap}
+                      defaultFocusedThreadId={defaultAnnotationFocusedThreadIds?.[doc.key]}
+                    >
+                      {isHistoricalPreview ? (
+                        renderFoldableBody(displayedBody, documentBodyContentClassName)
+                      ) : activeDraft ? (
+                        <MarkdownEditor
+                          value={displayedBody}
+                          onChange={(body) => {
+                            markDocumentDirty(doc.key);
+                            setDraft((current) => {
+                              if (current && current.key === doc.key && !current.isNew) {
+                                return { ...current, body };
+                              }
+                              return current;
+                            });
+                          }}
+                          placeholder="Markdown body"
+                          bordered={false}
+                          className="bg-transparent"
+                          contentClassName={documentBodyContentClassName}
+                          mentions={mentions}
+                          imageUploadHandler={imageUploadHandler}
+                          onSubmit={() => void commitDraft(activeDraft ?? draft, { clearAfterSave: false, trackAutosave: true })}
+                        />
+                      ) : (
+                        renderFoldableBody(displayedBody, documentBodyContentClassName)
+                      )}
+                    </IssueDocumentAnnotations>
                   </div>
                   <div className="flex min-h-4 items-center justify-end px-1">
                     <span
@@ -1162,7 +1308,7 @@ export function IssueDocumentsSection({
               {confirmDeleteKey === doc.key && (
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/20 bg-destructive/5 px-4 py-3">
                   <p className="text-sm text-destructive font-medium">
-                    {t("deleteConfirm", "Delete this document? This cannot be undone.")}
+                    Delete this document? This cannot be undone.
                   </p>
                   <div className="flex items-center gap-2 shrink-0">
                     <Button
@@ -1171,7 +1317,7 @@ export function IssueDocumentsSection({
                       onClick={() => setConfirmDeleteKey(null)}
                       disabled={deleteDocument.isPending}
                     >
-                      {t("cancel", "Cancel")}
+                      Cancel
                     </Button>
                     <Button
                       variant="destructive"
@@ -1179,7 +1325,7 @@ export function IssueDocumentsSection({
                       onClick={() => deleteDocument.mutate(doc.key)}
                       disabled={deleteDocument.isPending}
                     >
-                      {deleteDocument.isPending ? t("deleting", "Deleting...") : t("delete", "Delete")}
+                      {deleteDocument.isPending ? "Deleting..." : "Delete"}
                     </Button>
                   </div>
                 </div>

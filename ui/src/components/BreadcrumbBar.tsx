@@ -1,6 +1,5 @@
 import { Link } from "@/lib/router";
 import { Menu } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useSidebar } from "../context/SidebarContext";
 import { useCompany } from "../context/CompanyContext";
@@ -32,7 +31,6 @@ function GlobalToolbarPlugins({ context }: { context: GlobalToolbarContext }) {
 }
 
 export function BreadcrumbBar() {
-  const { t } = useTranslation("breadcrumbBar");
   const { breadcrumbs, mobileToolbar } = useBreadcrumbs();
   const { toggleSidebar, isMobile } = useSidebar();
   const { selectedCompanyId, selectedCompany } = useCompany();
@@ -57,7 +55,7 @@ export function BreadcrumbBar() {
 
   if (breadcrumbs.length === 0) {
     return (
-      <div className="border-b border-border bg-background px-4 md:px-6 h-12 shrink-0 flex items-center justify-end">
+      <div className="border-b border-border px-4 md:px-6 h-12 shrink-0 flex items-center justify-end">
         {globalToolbarSlots}
       </div>
     );
@@ -69,7 +67,7 @@ export function BreadcrumbBar() {
       size="icon-sm"
       className="mr-2 shrink-0"
       onClick={toggleSidebar}
-      aria-label={t("openSidebar", "Open sidebar")}
+      aria-label="Open sidebar"
     >
       <Menu className="h-5 w-5" />
     </Button>
@@ -78,7 +76,7 @@ export function BreadcrumbBar() {
   // Single breadcrumb = page title (uppercase)
   if (breadcrumbs.length === 1) {
     return (
-      <div className="border-b border-border bg-background px-4 md:px-6 h-12 shrink-0 flex items-center">
+      <div className="border-b border-border px-4 md:px-6 h-12 shrink-0 flex items-center">
         {menuButton}
         <div className="min-w-0 overflow-hidden flex-1">
           <h1 className="text-sm font-semibold uppercase tracking-wider truncate">
@@ -92,7 +90,7 @@ export function BreadcrumbBar() {
 
   // Multiple breadcrumbs = breadcrumb trail
   return (
-    <div className="border-b border-border bg-background px-4 md:px-6 h-12 shrink-0 flex items-center">
+    <div className="border-b border-border px-4 md:px-6 h-12 shrink-0 flex items-center">
       {menuButton}
       <div className="min-w-0 overflow-hidden flex-1">
         <Breadcrumb className="min-w-0 overflow-hidden">
@@ -101,12 +99,12 @@ export function BreadcrumbBar() {
               const isLast = i === breadcrumbs.length - 1;
               return (
                 <Fragment key={i}>
-                  {i > 0 && <BreadcrumbSeparator className="text-muted-foreground/40" />}
+                  {i > 0 && <BreadcrumbSeparator />}
                   <BreadcrumbItem className={isLast ? "min-w-0" : "shrink-0"}>
                     {isLast || !crumb.href ? (
-                      <BreadcrumbPage className="truncate font-medium">{crumb.label}</BreadcrumbPage>
+                      <BreadcrumbPage className="truncate">{crumb.label}</BreadcrumbPage>
                     ) : (
-                      <BreadcrumbLink asChild className="text-muted-foreground hover:text-foreground transition-colors">
+                      <BreadcrumbLink asChild>
                         <Link to={crumb.href}>{crumb.label}</Link>
                       </BreadcrumbLink>
                     )}

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useCallback, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useLocation, useSearchParams } from "@/lib/router";
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { issuesApi } from "../api/issues";
@@ -59,7 +58,6 @@ export function buildIssuesSearchUrl(currentHref: string, search: string): strin
 export function Issues() {
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
-  const { t } = useTranslation("issuesPage");
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -110,16 +108,16 @@ export function Issues() {
   const issueLinkState = useMemo(
     () =>
       createIssueDetailLocationState(
-        t("breadcrumb", "Issues"),
+        "Tasks",
         `${location.pathname}${location.search}${location.hash}`,
         "issues",
       ),
-    [location.pathname, location.search, location.hash, t],
+    [location.pathname, location.search, location.hash],
   );
 
   useEffect(() => {
-    setBreadcrumbs([{ label: t("breadcrumb", "Issues") }]);
-  }, [setBreadcrumbs, t]);
+    setBreadcrumbs([{ label: "Tasks" }]);
+  }, [setBreadcrumbs]);
 
   const issuePageSize = workspaceIdFilter ? WORKSPACE_FILTER_ISSUE_LIMIT : ISSUES_PAGE_SIZE;
 
@@ -147,6 +145,8 @@ export function Issues() {
       includeRoutineExecutions: true,
       limit: issuePageSize,
       offset: pageParam,
+      sortField: "updated",
+      sortDir: "desc",
     }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, _allPages, lastPageParam) =>
@@ -175,7 +175,7 @@ export function Issues() {
   });
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={CircleDot} message={t("selectCompany", "Select a company to view issues.")} />;
+    return <EmptyState icon={CircleDot} message="Select a company to view tasks." />;
   }
 
   return (

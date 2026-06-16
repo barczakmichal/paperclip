@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import type { Agent, Issue } from "@paperclipai/shared";
 import { useQuery } from "@tanstack/react-query";
 import { accessApi } from "../api/access";
@@ -33,7 +32,6 @@ export function ExecutionParticipantPicker({
   currentUserId,
   onUpdate,
 }: ExecutionParticipantPickerProps) {
-  const { t } = useTranslation("executionParticipantPicker");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -70,7 +68,7 @@ export function ExecutionParticipantPicker({
 
   const participantLabel = (value: string) => {
     if (value.startsWith("agent:")) return agentName(value.slice("agent:".length));
-    if (value.startsWith("user:")) return userLabel(value.slice("user:".length)) ?? t("user", "User");
+    if (value.startsWith("user:")) return userLabel(value.slice("user:".length)) ?? "User";
     return value;
   };
 
@@ -91,8 +89,7 @@ export function ExecutionParticipantPicker({
     updatePolicy(next);
   };
 
-  const label = stageType === "review" ? t("reviewers", "Reviewers") : t("approvers", "Approvers");
-  const lowerLabel = stageType === "review" ? t("reviewersLower", "reviewers") : t("approversLower", "approvers");
+  const label = stageType === "review" ? "Reviewers" : "Approvers";
   const Icon = stageType === "review" ? Eye : ShieldCheck;
 
   return (
@@ -119,7 +116,7 @@ export function ExecutionParticipantPicker({
       <PopoverContent className="p-1 w-56" align="start" collisionPadding={16}>
         <input
           className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border-b border-border mb-1 placeholder:text-muted-foreground/50"
-          placeholder={t("searchPlaceholder", "Search {{label}}...", { label: lowerLabel })}
+          placeholder={`Search ${label.toLowerCase()}...`}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           autoFocus
@@ -132,7 +129,7 @@ export function ExecutionParticipantPicker({
             )}
             onClick={() => updatePolicy([])}
           >
-            {t("noParticipants", "No {{label}}", { label: lowerLabel })}
+            No {label.toLowerCase()}
           </button>
           {currentUserId && (
             <button
@@ -143,7 +140,7 @@ export function ExecutionParticipantPicker({
               onClick={() => toggle(`user:${currentUserId}`)}
             >
               <User className="h-3 w-3 shrink-0 text-muted-foreground" />
-              {t("assignToMe", "Assign to me")}
+              Assign to me
             </button>
           )}
           {issue.createdByUserId && issue.createdByUserId !== currentUserId && (
@@ -155,7 +152,7 @@ export function ExecutionParticipantPicker({
               onClick={() => toggle(`user:${issue.createdByUserId}`)}
             >
               <User className="h-3 w-3 shrink-0 text-muted-foreground" />
-              {creatorUserLabel ?? t("requester", "Requester")}
+              {creatorUserLabel ?? "Requester"}
             </button>
           )}
           {otherUserOptions

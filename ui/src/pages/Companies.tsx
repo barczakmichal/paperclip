@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "../context/CompanyContext";
 import { useDialogActions } from "../context/DialogContext";
@@ -28,9 +27,10 @@ import {
   DollarSign,
   Calendar,
 } from "lucide-react";
+import { useTranslation } from "@/i18n";
 
 export function Companies() {
-  const { t } = useTranslation("companiesPage");
+  const { t } = useTranslation();
   const {
     companies,
     selectedCompanyId,
@@ -71,7 +71,7 @@ export function Companies() {
   });
 
   useEffect(() => {
-    setBreadcrumbs([{ label: t("breadcrumb", "Companies") }]);
+    setBreadcrumbs([{ label: t("page.companies.breadcrumb") }]);
   }, [setBreadcrumbs, t]);
 
   function startEdit(companyId: string, currentName: string) {
@@ -94,12 +94,12 @@ export function Companies() {
       <div className="flex items-center justify-end">
         <Button size="sm" onClick={() => openOnboarding()}>
           <Plus className="h-3.5 w-3.5 mr-1.5" />
-          {t("newCompany", "New Company")}
+          {t("page.companies.newCompany")}
         </Button>
       </div>
 
       <div className="h-6">
-        {loading && <p className="text-sm text-muted-foreground">{t("loading", "Loading companies...")}</p>}
+        {loading && <p className="text-sm text-muted-foreground">{t("page.companies.loading")}</p>}
         {error && <p className="text-sm text-destructive">{error.message}</p>}
       </div>
 
@@ -178,7 +178,7 @@ export function Companies() {
                               : "bg-muted text-muted-foreground"
                         }`}
                       >
-                        {company.status}
+                        {t(`common.status.${company.status}`)}
                       </span>
                       <Button
                         variant="ghost"
@@ -217,7 +217,7 @@ export function Companies() {
                         onClick={() => startEdit(company.id, company.name)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
-                        {t("rename", "Rename")}
+                        {t("page.companies.rename")}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -225,7 +225,7 @@ export function Companies() {
                         onClick={() => setConfirmDeleteId(company.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        {t("deleteCompany", "Delete Company")}
+                        {t("page.companies.delete")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -237,17 +237,13 @@ export function Companies() {
                 <div className="flex items-center gap-1.5">
                   <Users className="h-3.5 w-3.5" />
                   <span>
-                    {agentCount === 1
-                      ? t("agentCount_one", "{{count}} agent", { count: agentCount })
-                      : t("agentCount_other", "{{count}} agents", { count: agentCount })}
+                    {agentCount} {agentCount === 1 ? t("common.count.agents_one") : t("common.count.agents_other")}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <CircleDot className="h-3.5 w-3.5" />
                   <span>
-                    {issueCount === 1
-                      ? t("issueCount_one", "{{count}} issue", { count: issueCount })
-                      : t("issueCount_other", "{{count}} issues", { count: issueCount })}
+                    {issueCount} {issueCount === 1 ? "task" : "tasks"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 tabular-nums">
@@ -256,12 +252,12 @@ export function Companies() {
                     {formatCents(company.spentMonthlyCents)}
                     {company.budgetMonthlyCents > 0
                       ? <> / {formatCents(company.budgetMonthlyCents)} <span className="text-xs">({budgetPct}%)</span></>
-                      : <span className="text-xs ml-1">{t("unlimitedBudget", "Unlimited budget")}</span>}
+                      : <span className="text-xs ml-1">{t("page.companies.unlimitedBudget")}</span>}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 ml-auto">
                   <Calendar className="h-3.5 w-3.5" />
-                  <span>{t("created", "Created {{time}}", { time: relativeTime(company.createdAt) })}</span>
+                  <span>{t("page.companies.created")} {relativeTime(company.createdAt)}</span>
                 </div>
               </div>
 
@@ -272,7 +268,7 @@ export function Companies() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <p className="text-sm text-destructive font-medium">
-                    {t("deleteConfirm", "Delete this company and all its data? This cannot be undone.")}
+                    {t("page.companies.deleteConfirmTitle")}
                   </p>
                   <div className="flex items-center gap-2 ml-4 shrink-0">
                     <Button
@@ -281,7 +277,7 @@ export function Companies() {
                       onClick={() => setConfirmDeleteId(null)}
                       disabled={deleteMutation.isPending}
                     >
-                      {t("cancel", "Cancel")}
+                      {t("common.actions.cancel")}
                     </Button>
                     <Button
                       variant="destructive"
@@ -289,7 +285,7 @@ export function Companies() {
                       onClick={() => deleteMutation.mutate(company.id)}
                       disabled={deleteMutation.isPending}
                     >
-                      {deleteMutation.isPending ? t("deleting", "Deleting…") : t("delete", "Delete")}
+                      {deleteMutation.isPending ? t("common.actions.deleting") : t("common.actions.delete")}
                     </Button>
                   </div>
                 </div>

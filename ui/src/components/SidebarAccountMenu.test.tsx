@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,8 +40,43 @@ vi.mock("../context/ThemeContext", () => ({
   }),
 }));
 
+vi.mock("@/i18n", () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        "component.sidebarAccountMenu.board": "Board",
+        "component.sidebarAccountMenu.signedIn": "Signed in",
+        "component.sidebarAccountMenu.localWorkspaceBoard": "Local workspace board",
+        "component.sidebarAccountMenu.account": "Account",
+        "component.sidebarAccountMenu.local": "Local",
+        "component.sidebarAccountMenu.viewProfile": "View profile",
+        "component.sidebarAccountMenu.viewProfileDesc": "Open your activity, task, and usage ledger.",
+        "component.sidebarAccountMenu.editProfile": "Edit profile",
+        "component.sidebarAccountMenu.editProfileDesc": "Update your display name and avatar.",
+        "component.sidebarAccountMenu.instanceSettings": "Instance settings",
+        "component.sidebarAccountMenu.instanceSettingsDesc": "Jump back to the last settings page you opened.",
+        "component.sidebarAccountMenu.documentation": "Documentation",
+        "component.sidebarAccountMenu.documentationDesc": "Open Paperclip docs in a new tab.",
+        "component.sidebarAccountMenu.switchToLightMode": "Switch to light mode",
+        "component.sidebarAccountMenu.switchToDarkMode": "Switch to dark mode",
+        "component.sidebarAccountMenu.toggleThemeDesc": "Toggle the app appearance.",
+        "component.sidebarAccountMenu.signOut": "Sign out",
+        "component.sidebarAccountMenu.signOutPending": "Signing out...",
+        "component.sidebarAccountMenu.signOutDesc": "End this browser session.",
+      };
+      return translations[key] || key;
+    },
+  }),
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+
+async function act(callback: () => void | Promise<void>) {
+  await callback();
+  await Promise.resolve();
+  await new Promise((resolve) => window.setTimeout(resolve, 0));
+}
 
 async function flushReact() {
   await act(async () => {
@@ -57,6 +91,7 @@ describe("SidebarAccountMenu", () => {
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
+    localStorage.removeItem("paperclip_locale");
     mockAuthApi.getSession.mockResolvedValue({
       session: { id: "session-1", userId: "user-1" },
       user: {
@@ -85,7 +120,6 @@ describe("SidebarAccountMenu", () => {
         <QueryClientProvider client={queryClient}>
           <SidebarAccountMenu
             deploymentMode="authenticated"
-            instanceSettingsTarget="/instance/settings/general"
             version="1.2.3"
           />
         </QueryClientProvider>,
@@ -106,9 +140,28 @@ describe("SidebarAccountMenu", () => {
     await flushReact();
 
     expect(document.body.textContent).toContain("Edit profile");
+    expect(document.body.textContent).not.toContain("Instance settings");
     expect(document.body.textContent).toContain("Documentation");
+    expect(document.body.textContent).toContain("Feedback");
+
+    // Feedback link opens in a new tab pointing at the feedback URL
+    const feedbackAnchor = document.body.querySelector('a[href="https://paperclip.ing/feedback"]') as HTMLAnchorElement | null;
+    expect(feedbackAnchor).not.toBeNull();
+    expect(feedbackAnchor?.getAttribute("target")).toBe("_blank");
+
+    // Feedback appears after Documentation and before the theme toggle
+    const menuText = document.body.querySelector('[data-slot="popover-content"]')?.textContent ?? "";
+    const docsPos = menuText.indexOf("Documentation");
+    const feedbackPos = menuText.indexOf("Feedback");
+    const themePos = menuText.indexOf("Switch to");
+    expect(docsPos).toBeLessThan(feedbackPos);
+    expect(feedbackPos).toBeLessThan(themePos);
+
     expect(document.body.textContent).toContain("Paperclip v1.2.3");
     expect(document.body.textContent).toContain("jane@example.com");
+    expect(document.body.querySelector('[data-slot="popover-content"]')?.className)
+      .toContain("w-[277px]");
+    expect(document.body.querySelector('a[href="/company/settings/instance/profile"]')).not.toBeNull();
 
     await act(async () => {
       root.unmount();

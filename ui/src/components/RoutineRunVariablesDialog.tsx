@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import {
   WORKSPACE_BRANCH_ROUTINE_VARIABLE,
   type Agent,
+  type ExecutionWorkspace,
+  type ExecutionWorkspaceMode,
   type IssueExecutionWorkspaceSettings,
   type Project,
   type RoutineVariable,
@@ -34,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useTranslation } from "@/i18n";
 
 function buildInitialValues(variables: RoutineVariable[]) {
   return Object.fromEntries(variables.map((variable) => [variable.name, variable.defaultValue ?? ""]));
@@ -57,7 +59,7 @@ function defaultProjectWorkspaceIdForProject(project: Project | null | undefined
     ?? null;
 }
 
-function defaultExecutionWorkspaceModeForProject(project: Project | null | undefined) {
+function defaultExecutionWorkspaceModeForProject(project: Project | null | undefined): ExecutionWorkspaceMode {
   const defaultMode = project?.executionWorkspacePolicy?.enabled ? project.executionWorkspacePolicy.defaultMode : null;
   if (
     defaultMode === "isolated_workspace" ||
@@ -69,19 +71,60 @@ function defaultExecutionWorkspaceModeForProject(project: Project | null | undef
   return "shared_workspace";
 }
 
-function buildInitialWorkspaceConfig(project: Project | null | undefined) {
+function issueModeForExistingWorkspace(mode: string | null | undefined): ExecutionWorkspaceMode {
+  if (mode === "isolated_workspace" || mode === "operator_branch" || mode === "shared_workspace") return mode;
+  if (mode === "adapter_managed" || mode === "cloud_sandbox") return "agent_default";
+  return "shared_workspace";
+}
+
+function issueWorkspacePreferenceFromDraft(value: unknown, fallback: ExecutionWorkspaceMode): ExecutionWorkspaceMode {
+  if (
+    value === "inherit" ||
+    value === "shared_workspace" ||
+    value === "isolated_workspace" ||
+    value === "operator_branch" ||
+    value === "reuse_existing" ||
+    value === "agent_default"
+  ) {
+    return value;
+  }
+  return fallback;
+}
+
+type RoutineRunWorkspaceConfig = {
+  executionWorkspaceId: string | null;
+  executionWorkspacePreference: ExecutionWorkspaceMode;
+  executionWorkspaceSettings: IssueExecutionWorkspaceSettings;
+  projectWorkspaceId: string | null;
+};
+
+function buildInitialWorkspaceConfig(
+  project: Project | null | undefined,
+  defaultExecutionWorkspace?: ExecutionWorkspace | null,
+): RoutineRunWorkspaceConfig {
+  if (defaultExecutionWorkspace && defaultExecutionWorkspace.projectId === project?.id) {
+    return {
+      executionWorkspaceId: defaultExecutionWorkspace.id,
+      executionWorkspacePreference: "reuse_existing",
+      executionWorkspaceSettings: {
+        mode: issueModeForExistingWorkspace(defaultExecutionWorkspace.mode),
+      },
+      projectWorkspaceId: defaultExecutionWorkspace.projectWorkspaceId ?? defaultProjectWorkspaceIdForProject(project),
+    };
+  }
+
   const defaultMode = defaultExecutionWorkspaceModeForProject(project);
   return {
     executionWorkspaceId: null as string | null,
     executionWorkspacePreference: defaultMode,
-    executionWorkspaceSettings: { mode: defaultMode } as IssueExecutionWorkspaceSettings,
+    executionWorkspaceSettings: { mode: defaultMode },
     projectWorkspaceId: defaultProjectWorkspaceIdForProject(project),
   };
 }
 
 function workspaceConfigEquals(
-  a: ReturnType<typeof buildInitialWorkspaceConfig>,
-  b: ReturnType<typeof buildInitialWorkspaceConfig>,
+  a: RoutineRunWorkspaceConfig,
+  b: RoutineRunWorkspaceConfig,
 ) {
   return a.executionWorkspaceId === b.executionWorkspaceId
     && a.executionWorkspacePreference === b.executionWorkspacePreference
@@ -90,15 +133,16 @@ function workspaceConfigEquals(
 }
 
 function applyWorkspaceDraft(
-  current: ReturnType<typeof buildInitialWorkspaceConfig>,
+  current: RoutineRunWorkspaceConfig,
   data: Record<string, unknown>,
 ) {
   const next = {
     ...current,
     executionWorkspaceId: (data.executionWorkspaceId as string | null | undefined) ?? null,
-    executionWorkspacePreference:
-      (data.executionWorkspacePreference as string | null | undefined)
-      ?? current.executionWorkspacePreference,
+    executionWorkspacePreference: issueWorkspacePreferenceFromDraft(
+      data.executionWorkspacePreference,
+      current.executionWorkspacePreference,
+    ),
     executionWorkspaceSettings:
       (data.executionWorkspaceSettings as IssueExecutionWorkspaceSettings | null | undefined)
       ?? current.executionWorkspaceSettings,
@@ -144,6 +188,7 @@ export function RoutineRunVariablesDialog({
   agents,
   defaultProjectId,
   defaultAssigneeAgentId,
+  defaultExecutionWorkspace,
   variables,
   isPending,
   onSubmit,
@@ -156,11 +201,12 @@ export function RoutineRunVariablesDialog({
   agents: Agent[];
   defaultProjectId?: string | null;
   defaultAssigneeAgentId?: string | null;
+  defaultExecutionWorkspace?: ExecutionWorkspace | null;
   variables: RoutineVariable[];
   isPending: boolean;
   onSubmit: (data: RoutineRunDialogSubmitData) => void;
 }) {
-  const { t } = useTranslation("routineRunVariablesDialog");
+  const { t } = useTranslation();
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [selection, setSelection] = useState(() => buildInitialRunSelection({
     defaultAssigneeAgentId,
@@ -195,7 +241,8 @@ export function RoutineRunVariablesDialog({
   const currentAssignee = selection.assigneeAgentId
     ? agents.find((agent) => agent.id === selection.assigneeAgentId) ?? null
     : null;
-  const [workspaceConfig, setWorkspaceConfig] = useState(() => buildInitialWorkspaceConfig(selectedProject));
+  const [workspaceConfig, setWorkspaceConfig] = useState(() =>
+    buildInitialWorkspaceConfig(selectedProject, defaultExecutionWorkspace));
   const [workspaceConfigValid, setWorkspaceConfigValid] = useState(true);
   const [workspaceBranchName, setWorkspaceBranchName] = useState<string | null>(null);
 
@@ -215,10 +262,13 @@ export function RoutineRunVariablesDialog({
     setValues(buildInitialValues(variables));
     const nextSelection = buildInitialRunSelection({ defaultAssigneeAgentId, defaultProjectId });
     setSelection(nextSelection);
-    setWorkspaceConfig(buildInitialWorkspaceConfig(projects.find((project) => project.id === nextSelection.projectId) ?? null));
+    setWorkspaceConfig(buildInitialWorkspaceConfig(
+      projects.find((project) => project.id === nextSelection.projectId) ?? null,
+      defaultExecutionWorkspace,
+    ));
     setWorkspaceConfigValid(true);
-    setWorkspaceBranchName(null);
-  }, [defaultAssigneeAgentId, defaultProjectId, open, projects, variables]);
+    setWorkspaceBranchName(defaultExecutionWorkspace?.branchName ?? null);
+  }, [defaultAssigneeAgentId, defaultExecutionWorkspace, defaultProjectId, open, projects, variables]);
 
   const workspaceBranchAutoValue = workspaceSelectionEnabled && workspaceBranchName
     ? workspaceBranchName
@@ -247,9 +297,13 @@ export function RoutineRunVariablesDialog({
     executionWorkspaceId: workspaceConfig.executionWorkspaceId,
     executionWorkspacePreference: workspaceConfig.executionWorkspacePreference,
     executionWorkspaceSettings: workspaceConfig.executionWorkspaceSettings,
-    currentExecutionWorkspace: null,
+    currentExecutionWorkspace:
+      workspaceConfig.executionWorkspaceId && workspaceConfig.executionWorkspaceId === defaultExecutionWorkspace?.id
+        ? defaultExecutionWorkspace
+        : null,
   }), [
     companyId,
+    defaultExecutionWorkspace,
     selectedProject?.id,
     workspaceConfig.executionWorkspaceId,
     workspaceConfig.executionWorkspacePreference,
@@ -273,36 +327,39 @@ export function RoutineRunVariablesDialog({
     setWorkspaceConfig((current) => applyWorkspaceDraft(current, data));
     setWorkspaceConfigValid((current) => (current === meta.canSave ? current : meta.canSave));
     setWorkspaceBranchName((current) => {
-      const next = meta.workspaceBranchName ?? null;
+      const defaultWorkspaceBranchName = defaultExecutionWorkspace?.branchName ?? null;
+      const next = meta.workspaceBranchName
+        ?? (data.executionWorkspaceId === defaultExecutionWorkspace?.id ? defaultWorkspaceBranchName : null)
+        ?? null;
       return current === next ? current : next;
     });
-  }, []);
+  }, [defaultExecutionWorkspace]);
 
   return (
     <Dialog open={open} onOpenChange={(next) => !isPending && onOpenChange(next)}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
+      <DialogContent className="flex h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[min(calc(100dvh-2rem),42rem)]">
+        <DialogHeader className="shrink-0 border-b border-border/60 px-6 pb-4 pr-12 pt-6">
           {routineName && (
             <p className="text-muted-foreground text-sm">{routineName}</p>
           )}
-          <DialogTitle>{t("runRoutine", "Run routine")}</DialogTitle>
+          <DialogTitle>{t("routineRunVariablesDialog.runRoutine")}</DialogTitle>
           <DialogDescription>
-            {t("dialogDescription", "Choose the agent and optional project for this one run. Routine defaults are prefilled and won't be changed.")}
+            {t("routineRunVariablesDialog.description")}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <Label className="text-xs">{t("agentRequired", "Agent *")}</Label>
+              <Label className="text-xs">{t("routineRunVariablesDialog.agent")} *</Label>
               <InlineEntitySelector
                 value={selection.assigneeAgentId}
                 options={assigneeOptions}
                 recentOptionIds={recentAssigneeIds}
-                placeholder={t("agent", "Agent")}
-                noneLabel={t("selectAnAgent", "Select an agent")}
-                searchPlaceholder={t("searchAgents", "Search agents...")}
-                emptyMessage={t("noAgentsFound", "No agents found.")}
+                placeholder={t("routineRunVariablesDialog.agent")}
+                noneLabel={t("routineRunVariablesDialog.selectAnAgent")}
+                searchPlaceholder={t("routineRunVariablesDialog.searchAgents")}
+                emptyMessage={t("routineRunVariablesDialog.noAgentsFound")}
                 disablePortal
                 openOnFocus={false}
                 onChange={(assigneeAgentId) => {
@@ -320,7 +377,7 @@ export function RoutineRunVariablesDialog({
                       <span className="truncate">{option.label}</span>
                     )
                   ) : (
-                    <span className="text-muted-foreground">{t("selectAnAgent", "Select an agent")}</span>
+                    <span className="text-muted-foreground">{t("routineRunVariablesDialog.selectAnAgent")}</span>
                   )
                 }
                 renderOption={(option) => {
@@ -336,24 +393,28 @@ export function RoutineRunVariablesDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">{t("project", "Project")}</Label>
+              <Label className="text-xs">{t("routineRunVariablesDialog.project")}</Label>
               <InlineEntitySelector
                 value={selection.projectId}
                 options={projectOptions}
                 recentOptionIds={recentProjectIds}
-                placeholder={t("project", "Project")}
-                noneLabel={t("noProject", "No project")}
-                searchPlaceholder={t("searchProjects", "Search projects...")}
-                emptyMessage={t("noProjectsFound", "No projects found.")}
+                placeholder={t("routineRunVariablesDialog.project")}
+                noneLabel={t("routineRunVariablesDialog.noProject")}
+                searchPlaceholder={t("routineRunVariablesDialog.searchProjects")}
+                emptyMessage={t("routineRunVariablesDialog.noProjectsFound")}
                 disablePortal
                 openOnFocus={false}
                 onChange={(projectId) => {
                   const project = projects.find((entry) => entry.id === projectId) ?? null;
                   if (projectId) trackRecentProject(projectId);
                   setSelection((current) => ({ ...current, projectId }));
-                  setWorkspaceConfig(buildInitialWorkspaceConfig(project));
+                  setWorkspaceConfig(buildInitialWorkspaceConfig(project, defaultExecutionWorkspace));
                   setWorkspaceConfigValid(true);
-                  setWorkspaceBranchName(null);
+                  setWorkspaceBranchName(
+                    defaultExecutionWorkspace && defaultExecutionWorkspace.projectId === project?.id
+                      ? defaultExecutionWorkspace.branchName
+                      : null,
+                  );
                 }}
                 renderTriggerValue={(option) =>
                   option && selectedProject ? (
@@ -365,7 +426,7 @@ export function RoutineRunVariablesDialog({
                       <span className="truncate">{option.label}</span>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">{t("noProject", "No project")}</span>
+                    <span className="text-muted-foreground">{t("routineRunVariablesDialog.noProject")}</span>
                   )
                 }
                 renderOption={(option) => {
@@ -415,9 +476,9 @@ export function RoutineRunVariablesDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__unset__">{t("noValue", "No value")}</SelectItem>
-                    <SelectItem value="true">{t("true", "True")}</SelectItem>
-                    <SelectItem value="false">{t("false", "False")}</SelectItem>
+                    <SelectItem value="__unset__">{t("routineRunVariablesDialog.noValue")}</SelectItem>
+                    <SelectItem value="true">{t("routineRunVariablesDialog.true")}</SelectItem>
+                    <SelectItem value="false">{t("routineRunVariablesDialog.false")}</SelectItem>
                   </SelectContent>
                 </Select>
               ) : variable.type === "select" ? (
@@ -429,10 +490,10 @@ export function RoutineRunVariablesDialog({
                   }))}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={t("chooseAValue", "Choose a value")} />
+                    <SelectValue placeholder={t("routineRunVariablesDialog.chooseAValue")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__unset__">{t("noValue", "No value")}</SelectItem>
+                    <SelectItem value="__unset__">{t("routineRunVariablesDialog.noValue")}</SelectItem>
                     {variable.options.map((option) => (
                       <SelectItem key={option} value={option}>{option}</SelectItem>
                     ))}
@@ -461,22 +522,25 @@ export function RoutineRunVariablesDialog({
           ) : null}
         </div>
 
-        <DialogFooter showCloseButton={false}>
+        <DialogFooter
+          showCloseButton={false}
+          className="shrink-0 border-t border-border/60 bg-background px-6 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4"
+        >
           {!selection.assigneeAgentId ? (
-            <p className="mr-auto text-xs text-amber-600">{t("defaultAgentRequired", "Default agent required for this run.")}</p>
+            <p className="mr-auto text-xs text-amber-600">{t("routineRunVariablesDialog.defaultAgentRequired")}</p>
           ) : missingRequired.length > 0 ? (
             <p className="mr-auto text-xs text-amber-600">
-              {t("missing", "Missing: {{fields}}", { fields: missingRequired.join(", ") })}
+              {t("routineRunVariablesDialog.missing", { fields: missingRequired.join(", ") })}
             </p>
           ) : workspaceSelectionEnabled && !workspaceConfigValid ? (
             <p className="mr-auto text-xs text-amber-600">
-              {t("chooseExistingWorkspace", "Choose an existing workspace before running.")}
+              {t("routineRunVariablesDialog.chooseExistingWorkspace")}
             </p>
           ) : (
             <span className="mr-auto" />
           )}
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isPending}>
-            {t("cancel", "Cancel")}
+            {t("common.actions.cancel")}
           </Button>
           <Button
             onClick={() => {
@@ -511,7 +575,7 @@ export function RoutineRunVariablesDialog({
             }}
             disabled={isPending || !canSubmit}
           >
-            {isPending ? t("running", "Running...") : t("runRoutine", "Run routine")}
+            {isPending ? t("routineRunVariablesDialog.running") : t("routineRunVariablesDialog.runRoutine")}
           </Button>
         </DialogFooter>
       </DialogContent>

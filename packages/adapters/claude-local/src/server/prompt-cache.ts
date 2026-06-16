@@ -1,12 +1,14 @@
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { createHash, type Hash } from "node:crypto";
 import type { AdapterExecutionContext } from "@paperclipai/adapter-utils";
-import { ensurePaperclipSkillSymlink, type PaperclipSkillEntry } from "@paperclipai/adapter-utils/server-utils";
-
-const DEFAULT_PAPERCLIP_INSTANCE_ID = "default";
+import {
+  ensurePaperclipSkillSymlink,
+  materializePaperclipSkillCopy,
+  resolvePaperclipInstanceRootForAdapter,
+  type PaperclipSkillEntry,
+} from "@paperclipai/adapter-utils/server-utils";
 
 type SkillEntry = PaperclipSkillEntry;
 
@@ -25,12 +27,13 @@ function resolveManagedClaudePromptCacheRoot(
   env: NodeJS.ProcessEnv,
   companyId: string,
 ): string {
-  const paperclipHome = nonEmpty(env.PAPERCLIP_HOME) ?? path.resolve(os.homedir(), ".paperclip");
-  const instanceId = nonEmpty(env.PAPERCLIP_INSTANCE_ID) ?? DEFAULT_PAPERCLIP_INSTANCE_ID;
+  const instanceRoot = resolvePaperclipInstanceRootForAdapter({
+    homeDir: nonEmpty(env.PAPERCLIP_HOME) ?? undefined,
+    instanceId: nonEmpty(env.PAPERCLIP_INSTANCE_ID) ?? undefined,
+    env,
+  });
   return path.resolve(
-    paperclipHome,
-    "instances",
-    instanceId,
+    instanceRoot,
     "companies",
     companyId,
     "claude-prompt-cache",
@@ -147,12 +150,45 @@ export async function prepareClaudePromptBundle(input: {
   for (const entry of skills) {
     const target = path.join(skillsHome, entry.runtimeName);
     try {
-      await ensurePaperclipSkillSymlink(entry.source, target);
+      const result = await ensurePaperclipSkillSymlink(entry.source, target);
+      if (result !== "skipped") {
+        await onLog(
+          "stderr",
+          `[paperclip] Materialized Claude skill "${entry.key}" via symlink (${result})\n`,
+        );
+      }
     } catch (err) {
-      await onLog(
-        "stderr",
-        `[paperclip] Failed to materialize Claude skill "${entry.key}" into ${skillsHome}: ${err instanceof Error ? err.message : String(err)}\n`,
-      );
+      const errMessage = err instanceof Error ? err.message : String(err);
+      const isWindowsSymlinkError =
+        process.platform === "win32" &&
+        (err instanceof Error &&
+          ((err as NodeJS.ErrnoException).code === "EPERM" ||
+            (err as NodeJS.ErrnoException).code === "ERR_INVALID_CALLBACK" ||
+            errMessage.includes("operation not permitted")));
+
+      if (isWindowsSymlinkError) {
+        await onLog(
+          "stderr",
+          `[paperclip] Symlink failed for "${entry.key}" on Windows (${errMessage}), falling back to file copy\n`,
+        );
+        try {
+          await materializePaperclipSkillCopy(entry.source, target);
+          await onLog(
+            "stderr",
+            `[paperclip] Successfully copied Claude skill "${entry.key}" as fallback\n`,
+          );
+        } catch (copyErr) {
+          await onLog(
+            "stderr",
+            `[paperclip] Also failed to copy Claude skill "${entry.key}": ${copyErr instanceof Error ? copyErr.message : String(copyErr)}\n`,
+          );
+        }
+      } else {
+        await onLog(
+          "stderr",
+          `[paperclip] Failed to materialize Claude skill "${entry.key}" into ${skillsHome}: ${errMessage}\n`,
+        );
+      }
     }
   }
 

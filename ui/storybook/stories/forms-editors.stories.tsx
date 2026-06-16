@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buildExecutionPolicy } from "@/lib/issue-execution-policy";
 import { createIssue, storybookAgents } from "../fixtures/paperclipData";
+import { useTranslation } from "@/i18n";
 
 function Section({
   eyebrow,
@@ -199,28 +200,44 @@ const adapterErrors = {
 };
 
 const storybookSecrets: CompanySecret[] = [
-  {
-    id: "secret-openai",
-    companyId: "company-storybook",
-    name: "OPENAI_API_KEY",
-    provider: "local_encrypted",
-    externalRef: null,
-    latestVersion: 3,
-    description: null,
-    createdByAgentId: null,
+	  {
+	    id: "secret-openai",
+	    companyId: "company-storybook",
+	    key: "openai-api-key",
+	    name: "OPENAI_API_KEY",
+	    provider: "local_encrypted",
+	    status: "active",
+	    managedMode: "paperclip_managed",
+	    externalRef: null,
+	    providerConfigId: null,
+	    providerMetadata: null,
+	    latestVersion: 3,
+	    description: null,
+	    lastResolvedAt: new Date("2026-04-20T09:00:00.000Z"),
+	    lastRotatedAt: new Date("2026-04-18T10:00:00.000Z"),
+	    deletedAt: null,
+	    createdByAgentId: null,
     createdByUserId: "user-board",
     createdAt: new Date("2026-04-18T10:00:00.000Z"),
     updatedAt: new Date("2026-04-20T10:00:00.000Z"),
   },
-  {
-    id: "secret-github",
-    companyId: "company-storybook",
-    name: "GITHUB_TOKEN",
-    provider: "local_encrypted",
-    externalRef: null,
-    latestVersion: 1,
-    description: null,
-    createdByAgentId: null,
+	  {
+	    id: "secret-github",
+	    companyId: "company-storybook",
+	    key: "github-token",
+	    name: "GITHUB_TOKEN",
+	    provider: "local_encrypted",
+	    status: "active",
+	    managedMode: "paperclip_managed",
+	    externalRef: null,
+	    providerConfigId: null,
+	    providerMetadata: null,
+	    latestVersion: 1,
+	    description: null,
+	    lastResolvedAt: null,
+	    lastRotatedAt: new Date("2026-04-19T10:00:00.000Z"),
+	    deletedAt: null,
+	    createdByAgentId: null,
     createdByUserId: "user-board",
     createdAt: new Date("2026-04-19T10:00:00.000Z"),
     updatedAt: new Date("2026-04-19T10:00:00.000Z"),
@@ -280,6 +297,7 @@ const storybookProject: Project = {
   leadAgentId: "agent-codex",
   targetDate: null,
   color: "#0f766e",
+  icon: null,
   env: null,
   pauseReason: null,
   pausedAt: null,
@@ -469,6 +487,7 @@ function EnvVarEditorGallery() {
 }
 
 function ScheduleEditorGallery() {
+  const { t } = useTranslation();
   const [emptyCron, setEmptyCron] = useState("");
   const [weeklyCron, setWeeklyCron] = useState("30 9 * * 1");
   const [customCron, setCustomCron] = useState("15 16 1 * *");
@@ -476,13 +495,13 @@ function ScheduleEditorGallery() {
   return (
     <Section eyebrow="ScheduleEditor" title="Cron picker with human-readable previews">
       <div className="grid gap-4 lg:grid-cols-3">
-        <StatePanel label="Empty default" detail={describeSchedule(emptyCron)}>
+        <StatePanel label="Empty default" detail={describeSchedule(emptyCron, t)}>
           <ScheduleEditor value={emptyCron} onChange={setEmptyCron} />
         </StatePanel>
-        <StatePanel label="Weekly filled" detail={describeSchedule(weeklyCron)}>
+        <StatePanel label="Weekly filled" detail={describeSchedule(weeklyCron, t)}>
           <ScheduleEditor value={weeklyCron} onChange={setWeeklyCron} />
         </StatePanel>
-        <StatePanel label="Custom disabled preview" detail={describeSchedule(customCron)} disabled>
+        <StatePanel label="Custom disabled preview" detail={describeSchedule(customCron, t)} disabled>
           <ScheduleEditor value={customCron} onChange={setCustomCron} />
         </StatePanel>
       </div>

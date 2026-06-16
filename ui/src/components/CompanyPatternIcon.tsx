@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 
 const BAYER_4X4 = [
@@ -169,7 +168,6 @@ export function CompanyPatternIcon({
   className,
   logoFit = "cover",
 }: CompanyPatternIconProps) {
-  const { t } = useTranslation("companyPatternIcon");
   const initial = companyName.trim().charAt(0).toUpperCase() || "?";
   const [imageError, setImageError] = useState(false);
   const logo = !imageError && typeof logoUrl === "string" && logoUrl.trim().length > 0 ? logoUrl : null;
@@ -191,7 +189,7 @@ export function CompanyPatternIcon({
       {logo ? (
         <img
           src={logo}
-          alt={t("logoAlt", "{{name}} logo", { name: companyName })}
+          alt={`${companyName} logo`}
           onError={() => setImageError(true)}
           className={cn(
             "absolute inset-0 h-full w-full",

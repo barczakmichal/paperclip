@@ -1,9 +1,0 @@
-{
-  "status_backlog": "Zaległości",
-  "status_todo": "Do zrobienia",
-  "status_in_progress": "W toku",
-  "status_in_review": "W przeglądzie",
-  "status_blocked": "Zablokowane",
-  "status_done": "Ukończone",
-  "status_cancelled": "Anulowane"
-}

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ExecutionWorkspace } from "@paperclipai/shared";
 import { executionWorkspacesApi } from "../api/execution-workspaces";
@@ -20,7 +19,6 @@ export function ProjectWorkspacesContent({
   projectRef: string;
   summaries: ProjectWorkspaceSummary[];
 }) {
-  const { t } = useTranslation("projectWorkspacesContent");
   const queryClient = useQueryClient();
   const [runtimeActionKey, setRuntimeActionKey] = useState<string | null>(null);
   const [closingWorkspace, setClosingWorkspace] = useState<{
@@ -53,7 +51,7 @@ export function ProjectWorkspacesContent({
   });
 
   if (summaries.length === 0) {
-    return <p className="text-sm text-muted-foreground">{t("noActivity", "No non-default workspace activity yet.")}</p>;
+    return <p className="text-sm text-muted-foreground">No non-default workspace activity yet.</p>;
   }
 
   const activeSummaries = summaries.filter((summary) => summary.executionWorkspaceStatus !== "cleanup_failed");
@@ -78,7 +76,7 @@ export function ProjectWorkspacesContent({
         {cleanupFailedSummaries.length > 0 ? (
           <div className="space-y-2">
             <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              {t("cleanupAttentionNeeded", "Cleanup attention needed")}
+              Cleanup attention needed
             </div>
             <div className="space-y-3">
               {cleanupFailedSummaries.map((summary) => (

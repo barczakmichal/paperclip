@@ -1,7 +1,6 @@
-import { memo, useState, useEffect, useRef, useCallback, useMemo, type ChangeEvent, type DragEvent, type RefObject } from "react";
-import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
+import { memo, useState, useEffect, useRef, useCallback, useMemo, type ChangeEvent, type CSSProperties, type DragEvent, type RefObject } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { IssueWorkMode } from "@paperclipai/shared";
 import { pickTextColorForSolidBg } from "@/lib/color-contrast";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
@@ -14,8 +13,9 @@ import { agentsApi } from "../api/agents";
 import { accessApi } from "../api/access";
 import { authApi } from "../api/auth";
 import { assetsApi } from "../api/assets";
-import { buildCompanyUserInlineOptions, buildMarkdownMentionOptions } from "../lib/company-members";
+import { buildCompanyUserInlineOptions, buildMarkdownMentionOptions, isAgentTaskTarget } from "../lib/company-members";
 import { queryKeys } from "../lib/queryKeys";
+import { orderReusableExecutionWorkspaces } from "../lib/reusable-execution-workspaces";
 import { useProjectOrder } from "../hooks/useProjectOrder";
 import { getRecentAssigneeIds, sortAgentsByRecency, trackRecentAssignee } from "../lib/recent-assignees";
 import { getRecentProjectIds, trackRecentProject } from "../lib/recent-projects";
@@ -44,6 +44,8 @@ import {
   ChevronRight,
   ChevronDown,
   CircleDot,
+  ClipboardList,
+  Hammer,
   Minus,
   ArrowUp,
   ArrowDown,
@@ -52,21 +54,27 @@ import {
   Calendar,
   Paperclip,
   FileText,
+  Flag,
   Loader2,
   ListTree,
   X,
   Eye,
+  ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { extractProviderIdWithFallback } from "../lib/model-utils";
-import { issueStatusText, issueStatusTextDefault, priorityColor, priorityColorDefault } from "../lib/status-colors";
+import { issueStatusText, issueStatusTextClassic, issueStatusTextDefault, priorityColor, priorityColorDefault } from "../lib/status-colors";
+import { useConferenceRoomChatEnabled } from "../hooks/useConferenceRoomChatEnabled";
 import { MarkdownEditor, type MarkdownEditorRef, type MentionOption } from "./MarkdownEditor";
 import { AgentIcon } from "./AgentIconPicker";
 import { InlineEntitySelector, type InlineEntityOption } from "./InlineEntitySelector";
+import { getTrustPreset } from "../lib/trust-policy-ui";
+import { useTranslation } from "@/i18n";
 
 const DRAFT_KEY = "paperclip:issue-draft";
 const DEBOUNCE_MS = 800;
+const MOBILE_DIALOG_HEIGHT = "calc(100dvh - max(1rem, env(safe-area-inset-top)) - max(1rem, env(safe-area-inset-bottom)))";
 
 
 interface IssueDraft {
@@ -87,6 +95,7 @@ interface IssueDraft {
   executionWorkspaceMode?: string;
   selectedExecutionWorkspaceId?: string;
   useIsolatedExecutionWorkspace?: boolean;
+  workMode?: IssueWorkMode;
 }
 
 type StagedIssueFile = {
@@ -105,31 +114,67 @@ import {
 
 const STAGED_FILE_ACCEPT = "image/*,application/pdf,text/plain,text/markdown,application/json,text/csv,text/html,.md,.markdown";
 
-const ISSUE_THINKING_EFFORT_OPTIONS = {
-  claude_local: [
-    { value: "", label: "Default" },
-    { value: "low", label: "Low" },
-    { value: "medium", label: "Medium" },
-    { value: "high", label: "High" },
-  ],
-  codex_local: [
-    { value: "", label: "Default" },
-    { value: "minimal", label: "Minimal" },
-    { value: "low", label: "Low" },
-    { value: "medium", label: "Medium" },
-    { value: "high", label: "High" },
-    { value: "xhigh", label: "X-High" },
-  ],
-  opencode_local: [
-    { value: "", label: "Default" },
-    { value: "minimal", label: "Minimal" },
-    { value: "low", label: "Low" },
-    { value: "medium", label: "Medium" },
-    { value: "high", label: "High" },
-    { value: "xhigh", label: "X-High" },
-    { value: "max", label: "Max" },
-  ],
-} as const;
+function getValidThinkingEffortValues(adapterType: string): string[] {
+  if (adapterType === "codex_local") {
+    return ["", "minimal", "low", "medium", "high", "xhigh"];
+  }
+  if (adapterType === "opencode_local") {
+    return ["", "minimal", "low", "medium", "high", "xhigh", "max"];
+  }
+  return ["", "low", "medium", "high"];
+}
+
+function getIssueThinkingEffortOptions(adapterType: string, t: (key: string) => string) {
+  const getLabel = (value: string) => {
+    if (value === "") return t("issue.newIssue.thinkingEffort.default");
+    return t(`issue.newIssue.thinkingEffort.${value}`);
+  };
+
+  if (adapterType === "codex_local") {
+    return [
+      { value: "", label: getLabel("") },
+      { value: "minimal", label: getLabel("minimal") },
+      { value: "low", label: getLabel("low") },
+      { value: "medium", label: getLabel("medium") },
+      { value: "high", label: getLabel("high") },
+      { value: "xhigh", label: getLabel("xhigh") },
+    ];
+  }
+  if (adapterType === "opencode_local") {
+    return [
+      { value: "", label: getLabel("") },
+      { value: "minimal", label: getLabel("minimal") },
+      { value: "low", label: getLabel("low") },
+      { value: "medium", label: getLabel("medium") },
+      { value: "high", label: getLabel("high") },
+      { value: "xhigh", label: getLabel("xhigh") },
+      { value: "max", label: getLabel("max") },
+    ];
+  }
+  return [
+    { value: "", label: getLabel("") },
+    { value: "low", label: getLabel("low") },
+    { value: "medium", label: getLabel("medium") },
+    { value: "high", label: getLabel("high") },
+  ];
+}
+
+function isIssueWorkMode(value: unknown): value is IssueWorkMode {
+  return value === "standard" || value === "planning";
+}
+
+// "Agent mode"/"Plan mode" relabels ship behind the Conference Room Chat flag
+// (PAP-132/PAP-139); OFF keeps master's "Standard"/"Planning".
+function issueWorkModeOptions(conferenceRoomChat: boolean): ReadonlyArray<{
+  value: IssueWorkMode;
+  label: string;
+  icon: typeof Hammer;
+}> {
+  return [
+    { value: "standard", label: conferenceRoomChat ? "Agent mode" : "Standard", icon: Hammer },
+    { value: "planning", label: conferenceRoomChat ? "Plan mode" : "Planning", icon: ClipboardList },
+  ];
+}
 
 function loadDraft(): IssueDraft | null {
   try {
@@ -202,44 +247,47 @@ function formatFileSize(file: File) {
   return `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function buildStatuses(t: TFunction) {
+// PAP-75 brand hues ship behind the Conference Room Chat flag (PAP-139); OFF
+// keeps master's palette (`issueStatusTextClassic`).
+function buildStatusOptions(
+  conferenceRoomChat: boolean,
+  t: (key: string) => string,
+): ReadonlyArray<{ value: string; label: string; color: string; description?: string }> {
+  const palette = conferenceRoomChat ? issueStatusText : issueStatusTextClassic;
   return [
-    { value: "backlog", label: t("statusBacklog", "Backlog"), color: issueStatusText.backlog ?? issueStatusTextDefault },
-    { value: "todo", label: t("statusTodo", "Todo"), color: issueStatusText.todo ?? issueStatusTextDefault },
-    { value: "in_progress", label: t("statusInProgress", "In Progress"), color: issueStatusText.in_progress ?? issueStatusTextDefault },
-    { value: "in_review", label: t("statusInReview", "In Review"), color: issueStatusText.in_review ?? issueStatusTextDefault },
-    { value: "done", label: t("statusDone", "Done"), color: issueStatusText.done ?? issueStatusTextDefault },
+    {
+      value: "backlog",
+      label: t("issue.newIssue.status.backlog"),
+      color: palette.backlog ?? issueStatusTextDefault,
+      description: t("issue.newIssue.status.backlogDesc"),
+    },
+    {
+      value: "todo",
+      label: t("issue.newIssue.status.todo"),
+      color: palette.todo ?? issueStatusTextDefault,
+      description: t("issue.newIssue.status.todoDesc"),
+    },
+    { value: "in_progress", label: t("issue.newIssue.status.inProgress"), color: palette.in_progress ?? issueStatusTextDefault },
+    { value: "in_review", label: t("issue.newIssue.status.inReview"), color: palette.in_review ?? issueStatusTextDefault },
+    { value: "done", label: t("issue.newIssue.status.done"), color: palette.done ?? issueStatusTextDefault },
   ];
 }
 
-function buildPriorities(t: TFunction) {
+function getPriorities(t: (key: string) => string) {
   return [
-    { value: "critical", label: t("priorityCritical", "Critical"), icon: AlertTriangle, color: priorityColor.critical ?? priorityColorDefault },
-    { value: "high", label: t("priorityHigh", "High"), icon: ArrowUp, color: priorityColor.high ?? priorityColorDefault },
-    { value: "medium", label: t("priorityMedium", "Medium"), icon: Minus, color: priorityColor.medium ?? priorityColorDefault },
-    { value: "low", label: t("priorityLow", "Low"), icon: ArrowDown, color: priorityColor.low ?? priorityColorDefault },
+    { value: "critical", label: t("issue.newIssue.priority.critical"), icon: AlertTriangle, color: priorityColor.critical ?? priorityColorDefault },
+    { value: "high", label: t("issue.newIssue.priority.high"), icon: ArrowUp, color: priorityColor.high ?? priorityColorDefault },
+    { value: "medium", label: t("issue.newIssue.priority.medium"), icon: Minus, color: priorityColor.medium ?? priorityColorDefault },
+    { value: "low", label: t("issue.newIssue.priority.low"), icon: ArrowDown, color: priorityColor.low ?? priorityColorDefault },
   ];
 }
 
-function buildExecutionWorkspaceModes(t: TFunction) {
+function getExecutionWorkspaceModes(t: (key: string) => string) {
   return [
-    { value: "shared_workspace", label: t("wsProjectDefault", "Project default") },
-    { value: "isolated_workspace", label: t("wsNewIsolated", "New isolated workspace") },
-    { value: "reuse_existing", label: t("wsReuseExisting", "Reuse existing workspace") },
-  ] as const;
-}
-
-function thinkingEffortLabel(value: string, t: TFunction): string {
-  switch (value) {
-    case "": return t("effortDefault", "Default");
-    case "minimal": return t("effortMinimal", "Minimal");
-    case "low": return t("effortLow", "Low");
-    case "medium": return t("effortMedium", "Medium");
-    case "high": return t("effortHigh", "High");
-    case "xhigh": return t("effortXHigh", "X-High");
-    case "max": return t("effortMax", "Max");
-    default: return value;
-  }
+    { value: "shared_workspace" as const, label: t("issue.newIssue.executionWorkspaceMode.shared_workspace") },
+    { value: "isolated_workspace" as const, label: t("issue.newIssue.executionWorkspaceMode.isolated_workspace") },
+    { value: "reuse_existing" as const, label: t("issue.newIssue.executionWorkspaceMode.reuse_existing") },
+  ];
 }
 
 function defaultProjectWorkspaceIdForProject(project: { workspaces?: Array<{ id: string; isPrimary: boolean }>; executionWorkspacePolicy?: { defaultProjectWorkspaceId?: string | null } | null } | null | undefined) {
@@ -262,6 +310,21 @@ function defaultExecutionWorkspaceModeForProject(project: { executionWorkspacePo
   return "shared_workspace";
 }
 
+function defaultExecutionWorkspaceModeForIssueDefaults(
+  defaults: {
+    executionWorkspaceId?: unknown;
+    executionWorkspaceMode?: unknown;
+  },
+  project: { executionWorkspacePolicy?: { enabled?: boolean; defaultMode?: string | null } | null } | null | undefined,
+) {
+  if (typeof defaults.executionWorkspaceId === "string" && defaults.executionWorkspaceId.length > 0) {
+    return "reuse_existing";
+  }
+  return typeof defaults.executionWorkspaceMode === "string" && defaults.executionWorkspaceMode.length > 0
+    ? defaults.executionWorkspaceMode
+    : defaultExecutionWorkspaceModeForProject(project);
+}
+
 const IssueTitleTextarea = memo(function IssueTitleTextarea({
   value,
   pending,
@@ -281,7 +344,6 @@ const IssueTitleTextarea = memo(function IssueTitleTextarea({
   projectSelectorRef: RefObject<HTMLButtonElement | null>;
   onChange: (value: string) => void;
 }) {
-  const { t } = useTranslation("newIssueDialog");
   const [draftValue, setDraftValue] = useState(value);
 
   useEffect(() => {
@@ -291,7 +353,7 @@ const IssueTitleTextarea = memo(function IssueTitleTextarea({
   return (
     <textarea
       className="w-full text-lg font-semibold bg-transparent outline-none resize-none overflow-hidden placeholder:text-muted-foreground/50"
-      placeholder={t("issueTitle", "Issue title")}
+      placeholder="Task title"
       rows={1}
       value={draftValue}
       onChange={(e) => {
@@ -345,7 +407,7 @@ const IssueDescriptionEditor = memo(function IssueDescriptionEditor({
   imageUploadHandler: (file: File) => Promise<string>;
   onChange: (value: string) => void;
 }) {
-  const { t } = useTranslation("newIssueDialog");
+  const { t } = useTranslation();
   const [draftValue, setDraftValue] = useState(value);
 
   useEffect(() => {
@@ -360,7 +422,7 @@ const IssueDescriptionEditor = memo(function IssueDescriptionEditor({
         setDraftValue(nextValue);
         onChange(nextValue);
       }}
-      placeholder={t("addDescription", "Add description...")}
+      placeholder={t("issue.newIssue.description")}
       bordered={false}
       mentions={mentions}
       contentClassName={cn("text-sm text-muted-foreground pb-12", expanded ? "min-h-[220px]" : "min-h-[120px]")}
@@ -380,12 +442,13 @@ function issueExecutionWorkspaceModeForExistingWorkspace(mode: string | null | u
 }
 
 export function NewIssueDialog() {
-  const { t } = useTranslation("newIssueDialog");
-  const statuses = useMemo(() => buildStatuses(t), [t]);
-  const priorities = useMemo(() => buildPriorities(t), [t]);
-  const executionWorkspaceModes = useMemo(() => buildExecutionWorkspaceModes(t), [t]);
+  const { t } = useTranslation();
   const { newIssueOpen, newIssueDefaults, closeNewIssue } = useDialog();
   const { companies, selectedCompanyId, selectedCompany } = useCompany();
+  // Conference Room Chat flag (PAP-139): selects work-mode labels + status hues.
+  const { enabled: conferenceRoomChatEnabled } = useConferenceRoomChatEnabled();
+  const workModeOptions = useMemo(() => issueWorkModeOptions(conferenceRoomChatEnabled), [conferenceRoomChatEnabled]);
+  const statuses = useMemo(() => buildStatusOptions(conferenceRoomChatEnabled, t), [conferenceRoomChatEnabled, t]);
   const queryClient = useQueryClient();
   const { pushToast } = useToastActions();
   const [title, setTitle] = useState("");
@@ -411,6 +474,7 @@ export function NewIssueDialog() {
   const [assigneeChrome, setAssigneeChrome] = useState(false);
   const [executionWorkspaceMode, setExecutionWorkspaceMode] = useState<string>("shared_workspace");
   const [selectedExecutionWorkspaceId, setSelectedExecutionWorkspaceId] = useState("");
+  const [workMode, setWorkMode] = useState<IssueWorkMode>("standard");
   const [expanded, setExpanded] = useState(false);
   const [dialogCompanyId, setDialogCompanyId] = useState<string | null>(null);
   const [stagedFiles, setStagedFiles] = useState<StagedIssueFile[]>([]);
@@ -430,6 +494,7 @@ export function NewIssueDialog() {
   // Popover states
   const [statusOpen, setStatusOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
+  const [workModeOpen, setWorkModeOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [companyOpen, setCompanyOpen] = useState(false);
   const descriptionEditorRef = useRef<MarkdownEditorRef>(null);
@@ -449,13 +514,13 @@ export function NewIssueDialog() {
     enabled: !!effectiveCompanyId && newIssueOpen,
   });
   const { data: reusableExecutionWorkspaces } = useQuery({
-    queryKey: queryKeys.executionWorkspaces.list(effectiveCompanyId!, {
+    queryKey: queryKeys.executionWorkspaces.summaryList(effectiveCompanyId!, {
       projectId,
       projectWorkspaceId: projectWorkspaceId || undefined,
       reuseEligible: true,
     }),
     queryFn: () =>
-      executionWorkspacesApi.list(effectiveCompanyId!, {
+      executionWorkspacesApi.listSummaries(effectiveCompanyId!, {
         projectId,
         projectWorkspaceId: projectWorkspaceId || undefined,
         reuseEligible: true,
@@ -572,13 +637,11 @@ export function NewIssueDialog() {
         const prefix = (companies.find((company) => company.id === companyId)?.issuePrefix ?? "").trim();
         const issueRef = issue.identifier ?? issue.id;
         pushToast({
-          title: t("createdWithWarnings", "Created {{issueRef}} with upload warnings", { issueRef }),
-          body: failures.length === 1
-            ? t("filesNotAddedOne", "{{count}} staged file could not be added.", { count: failures.length })
-            : t("filesNotAddedMany", "{{count}} staged files could not be added.", { count: failures.length }),
+          title: `Created ${issueRef} with upload warnings`,
+          body: `${failures.length} staged ${failures.length === 1 ? "file" : "files"} could not be added.`,
           tone: "warn",
           action: prefix
-            ? { label: t("openIssue", "Open {{issueRef}}", { issueRef }), href: `/${prefix}/issues/${issueRef}` }
+            ? { label: `Open ${issueRef}`, href: `/${prefix}/issues/${issueRef}` }
             : undefined,
         });
       }
@@ -639,6 +702,7 @@ export function NewIssueDialog() {
       assigneeChrome,
       executionWorkspaceMode,
       selectedExecutionWorkspaceId,
+      workMode,
     });
   }, [
     newIssueOpen,
@@ -655,6 +719,7 @@ export function NewIssueDialog() {
     assigneeChrome,
     executionWorkspaceMode,
     selectedExecutionWorkspaceId,
+    workMode,
   ]);
 
   const handleTitleChange = useCallback((nextTitle: string) => {
@@ -691,6 +756,7 @@ export function NewIssueDialog() {
     assigneeChrome,
     executionWorkspaceMode,
     selectedExecutionWorkspaceId,
+    workMode,
     newIssueOpen,
     queueDraftSave,
   ]);
@@ -709,14 +775,13 @@ export function NewIssueDialog() {
 
     const draft = loadDraft();
     if (newIssueDefaults.parentId) {
+      const nextWorkMode = isIssueWorkMode(newIssueDefaults.workMode) ? newIssueDefaults.workMode : "standard";
       const defaultProjectId = newIssueDefaults.projectId ?? "";
       const defaultProject = orderedProjects.find((project) => project.id === defaultProjectId);
       const hasExplicitProjectWorkspaceId = newIssueDefaults.projectWorkspaceId !== undefined;
       const defaultProjectWorkspaceId = newIssueDefaults.projectWorkspaceId
         ?? defaultProjectWorkspaceIdForProject(defaultProject);
-      const defaultExecutionWorkspaceMode = newIssueDefaults.executionWorkspaceId
-        ? "reuse_existing"
-        : (newIssueDefaults.executionWorkspaceMode ?? defaultExecutionWorkspaceModeForProject(defaultProject));
+      const defaultExecutionWorkspaceMode = defaultExecutionWorkspaceModeForIssueDefaults(newIssueDefaults, defaultProject);
       setIssueText(newIssueDefaults.title ?? "", newIssueDefaults.description ?? "");
       setStatus(newIssueDefaults.status ?? "todo");
       setPriority(newIssueDefaults.priority ?? "");
@@ -728,18 +793,21 @@ export function NewIssueDialog() {
       setAssigneeThinkingEffort("");
       setAssigneeChrome(false);
       setExecutionWorkspaceMode(defaultExecutionWorkspaceMode);
+      setWorkMode(nextWorkMode);
       setSelectedExecutionWorkspaceId(newIssueDefaults.executionWorkspaceId ?? "");
       executionWorkspaceDefaultProjectId.current = hasExplicitProjectWorkspaceId || defaultProject
         ? defaultProjectId || null
         : null;
     } else if (newIssueDefaults.title) {
+      const nextWorkMode = isIssueWorkMode(newIssueDefaults.workMode) ? newIssueDefaults.workMode : "standard";
       setIssueText(newIssueDefaults.title, newIssueDefaults.description ?? "");
       setStatus(newIssueDefaults.status ?? "todo");
       setPriority(newIssueDefaults.priority ?? "");
       const defaultProjectId = newIssueDefaults.projectId ?? "";
       const defaultProject = orderedProjects.find((project) => project.id === defaultProjectId);
+      const hasExplicitProjectWorkspaceId = newIssueDefaults.projectWorkspaceId !== undefined;
       setProjectId(defaultProjectId);
-      setProjectWorkspaceId(defaultProjectWorkspaceIdForProject(defaultProject));
+      setProjectWorkspaceId(newIssueDefaults.projectWorkspaceId ?? defaultProjectWorkspaceIdForProject(defaultProject));
       setAssigneeValue(assigneeValueFromSelection(newIssueDefaults));
       setReviewerValue("");
       setApproverValue("");
@@ -748,12 +816,19 @@ export function NewIssueDialog() {
       setAssigneeModelOverride("");
       setAssigneeThinkingEffort("");
       setAssigneeChrome(false);
-      setExecutionWorkspaceMode(defaultExecutionWorkspaceModeForProject(defaultProject));
-      setSelectedExecutionWorkspaceId("");
-      executionWorkspaceDefaultProjectId.current = defaultProject ? defaultProjectId || null : null;
+      setExecutionWorkspaceMode(defaultExecutionWorkspaceModeForIssueDefaults(newIssueDefaults, defaultProject));
+      setWorkMode(nextWorkMode);
+      setSelectedExecutionWorkspaceId(newIssueDefaults.executionWorkspaceId ?? "");
+      executionWorkspaceDefaultProjectId.current = hasExplicitProjectWorkspaceId || newIssueDefaults.executionWorkspaceId || defaultProject
+        ? defaultProjectId || null
+        : null;
     } else if (draft && draft.title.trim()) {
+      const nextWorkMode = isIssueWorkMode(draft.workMode) ? draft.workMode : "standard";
       const restoredProjectId = newIssueDefaults.projectId ?? draft.projectId;
       const restoredProject = orderedProjects.find((project) => project.id === restoredProjectId);
+      const hasExplicitProjectWorkspaceId = newIssueDefaults.projectWorkspaceId !== undefined;
+      const hasExplicitExecutionWorkspaceId = newIssueDefaults.executionWorkspaceId !== undefined;
+      const hasExplicitExecutionWorkspaceMode = newIssueDefaults.executionWorkspaceMode !== undefined;
       setIssueText(draft.title, draft.description);
       setStatus(draft.status || "todo");
       setPriority(draft.priority);
@@ -767,27 +842,42 @@ export function NewIssueDialog() {
       setShowReviewerRow(!!(draft.reviewerValue));
       setShowApproverRow(!!(draft.approverValue));
       setProjectId(restoredProjectId);
-      setProjectWorkspaceId(draft.projectWorkspaceId ?? defaultProjectWorkspaceIdForProject(restoredProject));
+      setProjectWorkspaceId(
+        hasExplicitProjectWorkspaceId
+          ? (newIssueDefaults.projectWorkspaceId ?? "")
+          : (draft.projectWorkspaceId ?? defaultProjectWorkspaceIdForProject(restoredProject)),
+      );
       setAssigneeModelLane(draft.assigneeModelLane ?? "primary");
       setAssigneeModelOverride(draft.assigneeModelOverride ?? "");
       setAssigneeThinkingEffort(draft.assigneeThinkingEffort ?? "");
       setAssigneeChrome(draft.assigneeChrome ?? false);
       setExecutionWorkspaceMode(
-        draft.executionWorkspaceMode
-          ?? (draft.useIsolatedExecutionWorkspace ? "isolated_workspace" : defaultExecutionWorkspaceModeForProject(restoredProject)),
+        hasExplicitExecutionWorkspaceId || hasExplicitExecutionWorkspaceMode
+          ? defaultExecutionWorkspaceModeForIssueDefaults(newIssueDefaults, restoredProject)
+          : (
+              draft.executionWorkspaceMode
+              ?? (draft.useIsolatedExecutionWorkspace ? "isolated_workspace" : defaultExecutionWorkspaceModeForProject(restoredProject))
+            ),
       );
-      setSelectedExecutionWorkspaceId(draft.selectedExecutionWorkspaceId ?? "");
-      executionWorkspaceDefaultProjectId.current = draft.projectWorkspaceId || restoredProject
+      setWorkMode(nextWorkMode);
+      setSelectedExecutionWorkspaceId(
+        hasExplicitExecutionWorkspaceId
+          ? (newIssueDefaults.executionWorkspaceId ?? "")
+          : (draft.selectedExecutionWorkspaceId ?? ""),
+      );
+      executionWorkspaceDefaultProjectId.current = hasExplicitProjectWorkspaceId || hasExplicitExecutionWorkspaceId || draft.projectWorkspaceId || restoredProject
         ? restoredProjectId || null
         : null;
     } else {
+      setWorkMode("standard");
       const defaultProjectId = newIssueDefaults.projectId ?? "";
       const defaultProject = orderedProjects.find((project) => project.id === defaultProjectId);
+      const hasExplicitProjectWorkspaceId = newIssueDefaults.projectWorkspaceId !== undefined;
       setIssueText("", "");
       setStatus(newIssueDefaults.status ?? "todo");
       setPriority(newIssueDefaults.priority ?? "");
       setProjectId(defaultProjectId);
-      setProjectWorkspaceId(defaultProjectWorkspaceIdForProject(defaultProject));
+      setProjectWorkspaceId(newIssueDefaults.projectWorkspaceId ?? defaultProjectWorkspaceIdForProject(defaultProject));
       setAssigneeValue(assigneeValueFromSelection(newIssueDefaults));
       setReviewerValue("");
       setApproverValue("");
@@ -796,9 +886,11 @@ export function NewIssueDialog() {
       setAssigneeModelOverride("");
       setAssigneeThinkingEffort("");
       setAssigneeChrome(false);
-      setExecutionWorkspaceMode(defaultExecutionWorkspaceModeForProject(defaultProject));
-      setSelectedExecutionWorkspaceId("");
-      executionWorkspaceDefaultProjectId.current = defaultProject ? defaultProjectId || null : null;
+      setExecutionWorkspaceMode(defaultExecutionWorkspaceModeForIssueDefaults(newIssueDefaults, defaultProject));
+      setSelectedExecutionWorkspaceId(newIssueDefaults.executionWorkspaceId ?? "");
+      executionWorkspaceDefaultProjectId.current = hasExplicitProjectWorkspaceId || newIssueDefaults.executionWorkspaceId || defaultProject
+        ? defaultProjectId || null
+        : null;
     }
   }, [newIssueOpen, newIssueDefaults, orderedProjects, selectedCompanyId, setIssueText]);
 
@@ -815,13 +907,8 @@ export function NewIssueDialog() {
       setAssigneeModelLane("primary");
     }
 
-    const validThinkingValues =
-      assigneeAdapterType === "codex_local"
-        ? ISSUE_THINKING_EFFORT_OPTIONS.codex_local
-        : assigneeAdapterType === "opencode_local"
-          ? ISSUE_THINKING_EFFORT_OPTIONS.opencode_local
-          : ISSUE_THINKING_EFFORT_OPTIONS.claude_local;
-    if (!validThinkingValues.some((option) => option.value === assigneeThinkingEffort)) {
+    const validThinkingValues = getValidThinkingEffortValues(assigneeAdapterType ?? "");
+    if (!validThinkingValues.includes(assigneeThinkingEffort)) {
       setAssigneeThinkingEffort("");
     }
   }, [
@@ -857,6 +944,7 @@ export function NewIssueDialog() {
     setAssigneeChrome(false);
     setExecutionWorkspaceMode("shared_workspace");
     setSelectedExecutionWorkspaceId("");
+    setWorkMode("standard");
     setExpanded(false);
     setDialogCompanyId(null);
     setStagedFiles([]);
@@ -883,6 +971,7 @@ export function NewIssueDialog() {
     setAssigneeChrome(false);
     setExecutionWorkspaceMode("shared_workspace");
     setSelectedExecutionWorkspaceId("");
+    setWorkMode("standard");
   }
 
   function discardDraft() {
@@ -933,6 +1022,7 @@ export function NewIssueDialog() {
       description: currentDescription || undefined,
       status,
       priority: priority || "medium",
+      workMode,
       ...(selectedAssigneeAgentId ? { assigneeAgentId: selectedAssigneeAgentId } : {}),
       ...(selectedAssigneeUserId ? { assigneeUserId: selectedAssigneeUserId } : {}),
       ...(newIssueDefaults.parentId ? { parentId: newIssueDefaults.parentId } : {}),
@@ -1020,11 +1110,13 @@ export function NewIssueDialog() {
   }
 
   const hasDraft = draftHasText || stagedFiles.length > 0;
+  const priorities = getPriorities(t);
   const currentStatus = statuses.find((s) => s.value === status) ?? statuses[1]!;
   const currentPriority = priorities.find((p) => p.value === priority);
   const currentAssignee = selectedAssigneeAgentId
     ? (agents ?? []).find((a) => a.id === selectedAssigneeAgentId)
     : null;
+  const currentAssigneeLowTrust = getTrustPreset(currentAssignee?.permissions) === "low_trust_review";
   const currentProject = orderedProjects.find((project) => project.id === projectId);
   const currentProjectExecutionWorkspacePolicy =
     experimentalSettings?.enableIsolatedWorkspaces === true
@@ -1032,16 +1124,7 @@ export function NewIssueDialog() {
       : null;
   const currentProjectSupportsExecutionWorkspace = Boolean(currentProjectExecutionWorkspacePolicy?.enabled);
   const deduplicatedReusableWorkspaces = useMemo(() => {
-    const workspaces = reusableExecutionWorkspaces ?? [];
-    const seen = new Map<string, typeof workspaces[number]>();
-    for (const ws of workspaces) {
-      const key = ws.cwd ?? ws.id;
-      const existing = seen.get(key);
-      if (!existing || new Date(ws.lastUsedAt) > new Date(existing.lastUsedAt)) {
-        seen.set(key, ws);
-      }
-    }
-    return Array.from(seen.values());
+    return orderReusableExecutionWorkspaces(reusableExecutionWorkspaces ?? []);
   }, [reusableExecutionWorkspaces]);
   const selectedReusableExecutionWorkspace = deduplicatedReusableWorkspaces.find(
     (workspace) => workspace.id === selectedExecutionWorkspaceId,
@@ -1054,19 +1137,10 @@ export function NewIssueDialog() {
     && Boolean(parentExecutionWorkspaceId)
     && !isUsingParentExecutionWorkspace;
   const assigneeOptionsTitle =
-    assigneeAdapterType === "claude_local"
-      ? t("claudeOptions", "Claude options")
-      : assigneeAdapterType === "codex_local"
-        ? t("codexOptions", "Codex options")
-        : assigneeAdapterType === "opencode_local"
-          ? t("opencodeOptions", "OpenCode options")
-        : t("agentOptions", "Agent options");
-  const thinkingEffortOptions =
-    assigneeAdapterType === "codex_local"
-      ? ISSUE_THINKING_EFFORT_OPTIONS.codex_local
-      : assigneeAdapterType === "opencode_local"
-        ? ISSUE_THINKING_EFFORT_OPTIONS.opencode_local
-      : ISSUE_THINKING_EFFORT_OPTIONS.claude_local;
+    assigneeAdapterType === "claude_local" || assigneeAdapterType === "codex_local" || assigneeAdapterType === "opencode_local"
+      ? t(`issue.newIssue.assigneeOptions.${assigneeAdapterType}`)
+      : t("issue.newIssue.assigneeOptions.default");
+  const thinkingEffortOptions = getIssueThinkingEffortOptions(assigneeAdapterType ?? "", t);
   const recentAssigneeIds = useMemo(() => getRecentAssigneeIds(), [newIssueOpen]);
   const recentAssigneeOptionIds = useMemo(
     () => recentAssigneeIds.map((id) => assigneeValueFromSelection({ assigneeAgentId: id })),
@@ -1078,7 +1152,7 @@ export function NewIssueDialog() {
       ...currentUserAssigneeOption(currentUserId),
       ...buildCompanyUserInlineOptions(companyMembers?.users, { excludeUserIds: [currentUserId] }),
       ...sortAgentsByRecency(
-        (agents ?? []).filter((agent) => agent.status !== "terminated"),
+        (agents ?? []).filter(isAgentTaskTarget),
         recentAssigneeIds,
       ).map((agent) => ({
         id: assigneeValueFromSelection({ assigneeAgentId: agent.id }),
@@ -1101,7 +1175,7 @@ export function NewIssueDialog() {
   const hasSavedDraft = Boolean(savedDraft?.title.trim() || savedDraft?.description.trim());
   const canDiscardDraft = hasDraft || hasSavedDraft;
   const createIssueErrorMessage =
-    createIssue.error instanceof Error ? createIssue.error.message : t("failedToCreate", "Failed to create issue. Try again.");
+    createIssue.error instanceof Error ? createIssue.error.message : "Failed to create task. Try again.";
   const stagedDocuments = stagedFiles.filter((file) => file.kind === "document");
   const stagedAttachments = stagedFiles.filter((file) => file.kind === "attachment");
 
@@ -1149,6 +1223,9 @@ export function NewIssueDialog() {
     },
     [assigneeAdapterModels],
   );
+  const currentWorkMode = workModeOptions[workMode === "planning" ? 1 : 0]!;
+  const CurrentWorkModeIcon = currentWorkMode.icon;
+  const executionWorkspaceModes = getExecutionWorkspaceModes(t);
 
   return (
     <Dialog
@@ -1160,10 +1237,11 @@ export function NewIssueDialog() {
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
+        style={{ "--new-issue-dialog-height": MOBILE_DIALOG_HEIGHT } as CSSProperties}
         className={cn(
-          "flex h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:h-auto",
+          "flex h-[var(--new-issue-dialog-height)] max-h-[var(--new-issue-dialog-height)] flex-col gap-0 overflow-hidden p-0 sm:h-auto",
           expanded
-            ? "sm:max-w-2xl sm:h-[calc(100dvh-2rem)]"
+            ? "sm:max-w-2xl sm:h-[var(--new-issue-dialog-height)]"
             : "sm:max-w-lg"
         )}
         onKeyDown={handleKeyDown}
@@ -1179,12 +1257,12 @@ export function NewIssueDialog() {
           }
           // Radix Dialog's modal DismissableLayer calls preventDefault() on
           // pointerdown events that originate outside the Dialog DOM tree.
-          // Popover portals render at the body level (outside the Dialog), so
-          // touch events on popover content get their default prevented — which
-          // kills scroll gesture recognition on mobile.  Telling Radix "this
-          // event is handled" skips that preventDefault, restoring touch scroll.
+          // Popover and editor autocomplete portals render at the body level
+          // (outside the Dialog), so touch/click events on their content get
+          // their default prevented. Telling Radix "this event is handled" skips
+          // that preventDefault, restoring popover scroll and autocomplete taps.
           const target = event.detail.originalEvent.target as HTMLElement | null;
-          if (target?.closest("[data-radix-popper-content-wrapper]")) {
+          if (target?.closest("[data-radix-popper-content-wrapper], [data-paperclip-floating-ui]")) {
             event.preventDefault();
           }
         }}
@@ -1247,7 +1325,7 @@ export function NewIssueDialog() {
               </PopoverContent>
             </Popover>
             <span className="text-muted-foreground/60">&rsaquo;</span>
-            <span>{isSubIssueMode ? t("newSubIssue", "New sub-issue") : t("newIssue", "New issue")}</span>
+            <span>{isSubIssueMode ? "New sub-task" : "New task"}</span>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -1289,23 +1367,27 @@ export function NewIssueDialog() {
           <div className="px-4 pb-2">
             <div className="overflow-x-auto overscroll-x-contain">
               <div className="inline-flex items-center gap-2 text-sm text-muted-foreground flex-wrap sm:flex-nowrap sm:min-w-max">
-              <span className="w-6 shrink-0 text-center">{t("for", "For")}</span>
+              <span className="w-6 shrink-0 text-center">{t("issue.newIssue.for")}</span>
               <InlineEntitySelector
                 ref={assigneeSelectorRef}
                 value={assigneeValue}
                 options={assigneeOptions}
                 recentOptionIds={recentAssigneeOptionIds}
-                placeholder={t("assignee", "Assignee")}
+                placeholder={t("common.form.assignee")}
                 disablePortal
-                noneLabel={t("noAssignee", "No assignee")}
-                searchPlaceholder={t("searchAssignees", "Search assignees...")}
-                emptyMessage={t("noAssigneesFound", "No assignees found.")}
+                noneLabel={t("issue.newIssue.noAssignee")}
+                searchPlaceholder={t("issue.newIssue.searchAssignees")}
+                emptyMessage={t("issue.newIssue.noAssigneesFound")}
                 onChange={(value) => {
                   const nextAssignee = parseAssigneeValue(value);
                   if (nextAssignee.assigneeAgentId) {
                     trackRecentAssignee(nextAssignee.assigneeAgentId);
                   }
                   setAssigneeValue(value);
+                  const hasAssignee = Boolean(nextAssignee.assigneeAgentId || nextAssignee.assigneeUserId);
+                  if (hasAssignee && status === "backlog") {
+                    setStatus("todo");
+                  }
                 }}
                 onConfirm={() => {
                   if (projectId) {
@@ -1325,7 +1407,7 @@ export function NewIssueDialog() {
                       <span className="truncate">{option.label}</span>
                     )
                   ) : (
-                    <span className="text-muted-foreground">{t("assignee", "Assignee")}</span>
+                    <span className="text-muted-foreground">{t("common.form.assignee")}</span>
                   )
                 }
                 renderOption={(option) => {
@@ -1337,21 +1419,24 @@ export function NewIssueDialog() {
                     <>
                       {assignee ? <AgentIcon icon={assignee.icon} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : null}
                       <span className="truncate">{option.label}</span>
+                      {assignee && getTrustPreset(assignee.permissions) === "low_trust_review" ? (
+                        <ShieldAlert className="ml-auto h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" aria-label="Low-trust review agent" />
+                      ) : null}
                     </>
                   );
                 }}
               />
-              <span>{t("in", "in")}</span>
+              <span>in</span>
               <InlineEntitySelector
                 ref={projectSelectorRef}
                 value={projectId}
                 options={projectOptions}
                 recentOptionIds={recentProjectIds}
-                placeholder={t("project", "Project")}
+                placeholder={t("common.form.project")}
                 disablePortal
-                noneLabel={t("noProject", "No project")}
-                searchPlaceholder={t("searchProjects", "Search projects...")}
-                emptyMessage={t("noProjectsFound", "No projects found.")}
+                noneLabel={t("issue.newIssue.noProject")}
+                searchPlaceholder={t("issue.newIssue.searchProjects")}
+                emptyMessage={t("issue.newIssue.noProjectsFound")}
                 onChange={handleProjectChange}
                 onConfirm={() => {
                   descriptionEditorRef.current?.focus();
@@ -1366,7 +1451,7 @@ export function NewIssueDialog() {
                       <span className="truncate">{option.label}</span>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">{t("project", "Project")}</span>
+                    <span className="text-muted-foreground">{t("common.form.project")}</span>
                   )
                 }
                 renderOption={(option) => {
@@ -1390,7 +1475,7 @@ export function NewIssueDialog() {
                   <button
                     type="button"
                     className="inline-flex items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-accent/50 transition-colors"
-                    title={t("addReviewerOrApprover", "Add reviewer or approver")}
+                    title={t("issue.newIssue.addReviewerOrApprover")}
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
@@ -1408,7 +1493,7 @@ export function NewIssueDialog() {
                     }}
                   >
                     <Eye className="h-3 w-3" />
-                    {t("reviewer", "Reviewer")}
+                    {t("issue.newIssue.reviewer")}
                   </button>
                   <button
                     className={cn(
@@ -1422,7 +1507,7 @@ export function NewIssueDialog() {
                     }}
                   >
                     <ShieldCheck className="h-3 w-3" />
-                    {t("approver", "Approver")}
+                    {t("issue.newIssue.approver")}
                   </button>
                 </PopoverContent>
               </Popover>
@@ -1437,11 +1522,11 @@ export function NewIssueDialog() {
                 value={reviewerValue}
                 options={assigneeOptions}
                 recentOptionIds={recentAssigneeOptionIds}
-                placeholder={t("reviewer", "Reviewer")}
+                placeholder={t("issue.newIssue.reviewer")}
                 disablePortal
-                noneLabel={t("noReviewer", "No reviewer")}
-                searchPlaceholder={t("searchReviewers", "Search reviewers...")}
-                emptyMessage={t("noReviewersFound", "No reviewers found.")}
+                noneLabel={t("issue.newIssue.noReviewer")}
+                searchPlaceholder={t("issue.newIssue.searchReviewers")}
+                emptyMessage={t("issue.newIssue.noReviewersFound")}
                 onChange={setReviewerValue}
                 renderTriggerValue={(option) =>
                   option ? (
@@ -1455,7 +1540,7 @@ export function NewIssueDialog() {
                       <span className="truncate">{option.label}</span>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">{t("reviewer", "Reviewer")}</span>
+                    <span className="text-muted-foreground">{t("issue.newIssue.reviewer")}</span>
                   )
                 }
                 renderOption={(option) => {
@@ -1482,11 +1567,11 @@ export function NewIssueDialog() {
                 value={approverValue}
                 options={assigneeOptions}
                 recentOptionIds={recentAssigneeOptionIds}
-                placeholder={t("approver", "Approver")}
+                placeholder={t("issue.newIssue.approver")}
                 disablePortal
-                noneLabel={t("noApprover", "No approver")}
-                searchPlaceholder={t("searchApprovers", "Search approvers...")}
-                emptyMessage={t("noApproversFound", "No approvers found.")}
+                noneLabel={t("issue.newIssue.noApprover")}
+                searchPlaceholder={t("issue.newIssue.searchApprovers")}
+                emptyMessage={t("issue.newIssue.noApproversFound")}
                 onChange={setApproverValue}
                 renderTriggerValue={(option) =>
                   option ? (
@@ -1500,7 +1585,7 @@ export function NewIssueDialog() {
                       <span className="truncate">{option.label}</span>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">{t("approver", "Approver")}</span>
+                    <span className="text-muted-foreground">{t("issue.newIssue.approver")}</span>
                   )
                 }
                 renderOption={(option) => {
@@ -1525,7 +1610,7 @@ export function NewIssueDialog() {
             <div className="max-w-full rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5">
                 <ListTree className="h-3.5 w-3.5 shrink-0" />
-                <span className="shrink-0">{t("subIssueOf", "Sub-issue of")}</span>
+                <span className="shrink-0">Sub-task of</span>
                 <span className="font-medium text-foreground">{parentIssueLabel}</span>
               </div>
               {newIssueDefaults.parentTitle ? (
@@ -1540,9 +1625,9 @@ export function NewIssueDialog() {
           {currentProject && currentProjectSupportsExecutionWorkspace && (
             <div className="px-4 py-3 space-y-2">
             <div className="space-y-1.5">
-              <div className="text-xs font-medium">{t("executionWorkspace", "Execution workspace")}</div>
+              <div className="text-xs font-medium">{t("issue.newIssue.executionWorkspace")}</div>
               <div className="text-[11px] text-muted-foreground">
-                {t("executionWorkspaceDesc", "Control whether this issue runs in the shared workspace, a new isolated workspace, or an existing one.")}
+                Control whether this task runs in the shared workspace, a new isolated workspace, or an existing one.
               </div>
               <select
                 className="w-full rounded border border-border bg-transparent px-2 py-1.5 text-xs outline-none"
@@ -1566,7 +1651,7 @@ export function NewIssueDialog() {
                   value={selectedExecutionWorkspaceId}
                   onChange={(e) => setSelectedExecutionWorkspaceId(e.target.value)}
                 >
-                  <option value="">{t("chooseExistingWorkspace", "Choose an existing workspace")}</option>
+                  <option value="">Choose an existing workspace</option>
                   {deduplicatedReusableWorkspaces.map((workspace) => (
                     <option key={workspace.id} value={workspace.id}>
                       {workspace.name} · {workspace.status} · {workspace.branchName ?? workspace.cwd ?? workspace.id.slice(0, 8)}
@@ -1576,14 +1661,15 @@ export function NewIssueDialog() {
               )}
               {executionWorkspaceMode === "reuse_existing" && selectedReusableExecutionWorkspace && (
                 <div className="text-[11px] text-muted-foreground">
-                  {t("reusingFrom", "Reusing {{name}} from {{source}}.", { name: selectedReusableExecutionWorkspace.name, source: selectedReusableExecutionWorkspace.branchName ?? selectedReusableExecutionWorkspace.cwd ?? t("existingExecutionWorkspace", "existing execution workspace") })}
+                  {t("issue.newIssue.reusingWorkspace", {
+                    name: selectedReusableExecutionWorkspace.name,
+                    location: selectedReusableExecutionWorkspace.branchName ?? selectedReusableExecutionWorkspace.cwd ?? "existing execution workspace",
+                  })}
                 </div>
               )}
               {showParentWorkspaceWarning ? (
                 <div className="rounded-md border border-amber-300/60 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100">
-                  {parentExecutionWorkspaceLabel
-                    ? t("parentWorkspaceWarningLabeled", "Warning: this sub-issue will no longer use the parent issue workspace ({{label}}).", { label: parentExecutionWorkspaceLabel })
-                    : t("parentWorkspaceWarning", "Warning: this sub-issue will no longer use the parent issue workspace.")}
+                  Warning: this sub-task will no longer use the parent task workspace{parentExecutionWorkspaceLabel ? ` (${parentExecutionWorkspaceLabel})` : ""}.
                 </div>
               ) : null}
             </div>
@@ -1602,11 +1688,11 @@ export function NewIssueDialog() {
             {assigneeOptionsOpen && (
               <div className="mt-2 rounded-md border border-border p-3 bg-muted/20 space-y-3">
                 <div className="space-y-1.5">
-                  <div className="text-xs text-muted-foreground">{t("modelLane", "Model lane")}</div>
+                  <div className="text-xs text-muted-foreground">{t("issue.newIssue.modelLane")}</div>
                   <div
                     className="flex w-full overflow-hidden rounded-md border border-border"
                     role="radiogroup"
-                    aria-label={t("modelLane", "Model lane")}
+                    aria-label={t("issue.newIssue.modelLane")}
                   >
                     {(["primary", ...(assigneeSupportsCheapLane ? (["cheap"] as const) : ([] as const)), "custom"] as const).map((lane) => (
                       <button
@@ -1621,48 +1707,48 @@ export function NewIssueDialog() {
                         onClick={() => setAssigneeModelLane(lane)}
                       >
                         {lane === "primary"
-                          ? t("lanePrimary", "Primary")
+                          ? t("issue.newIssue.primary")
                           : lane === "cheap"
-                            ? t("laneCheap", "Cheap")
-                            : t("laneCustom", "Custom")}
+                            ? t("issue.newIssue.cheap")
+                            : t("issue.newIssue.custom")}
                       </button>
                     ))}
                   </div>
                   {assigneeModelLane === "cheap" && (
                     <p className="text-[11px] text-muted-foreground">
-                      {t("sends", "Sends")} <code>modelProfile: "cheap"</code>{" "}
+                      Sends <code>modelProfile: "cheap"</code>{" "}
                       {assigneeCheapProfile?.adapterConfig && typeof (assigneeCheapProfile.adapterConfig as Record<string, unknown>).model === "string"
-                        ? <>{t("adapterDefaultPrefix", "· adapter default")} <code>{String((assigneeCheapProfile.adapterConfig as Record<string, unknown>).model)}</code></>
+                        ? <>· adapter default <code>{String((assigneeCheapProfile.adapterConfig as Record<string, unknown>).model)}</code></>
                         : assigneeCheapProfile
-                          ? <>{t("usesConfiguredCheap", "· uses the agent's configured cheap profile")}</>
-                          : <>{t("fallsBackToPrimary", "· falls back to the primary model if no cheap profile is configured")}</>}
+                          ? <>· uses the agent's configured cheap profile</>
+                          : <>· falls back to the primary model if no cheap profile is configured</>}
                     </p>
                   )}
                   {assigneeModelLane === "primary" && (
-                    <p className="text-[11px] text-muted-foreground">{t("runsOnPrimary", "Runs on the agent's primary model.")}</p>
+                    <p className="text-[11px] text-muted-foreground">Runs on the agent's primary model.</p>
                   )}
                   {assigneeModelLane === "custom" && (
-                    <p className="text-[11px] text-muted-foreground">{t("overrideModelEffort", "Override the model and effort for this issue only.")}</p>
+                    <p className="text-[11px] text-muted-foreground">Override the model and effort for this task only.</p>
                   )}
                 </div>
                 {assigneeModelLane === "custom" && (
                   <div className="space-y-1.5">
-                    <div className="text-xs text-muted-foreground">{t("model", "Model")}</div>
+                    <div className="text-xs text-muted-foreground">{t("common.form.model")}</div>
                     <InlineEntitySelector
                       value={assigneeModelOverride}
                       options={modelOverrideOptions}
-                      placeholder={t("defaultModel", "Default model")}
+                      placeholder={t("issue.newIssue.defaultModel")}
                       disablePortal
-                      noneLabel={t("defaultModel", "Default model")}
-                      searchPlaceholder={t("searchModels", "Search models...")}
-                      emptyMessage={t("noModelsFound", "No models found.")}
+                      noneLabel={t("issue.newIssue.defaultModel")}
+                      searchPlaceholder={t("issue.newIssue.searchModels")}
+                      emptyMessage={t("issue.newIssue.noModelsFound")}
                       onChange={setAssigneeModelOverride}
                     />
                   </div>
                 )}
                 {assigneeModelLane === "custom" && (
                   <div className="space-y-1.5">
-                    <div className="text-xs text-muted-foreground">{t("thinkingEffort", "Thinking effort")}</div>
+                    <div className="text-xs text-muted-foreground">{t("issue.newIssue.thinkingEffort")}</div>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {thinkingEffortOptions.map((option) => (
                         <button
@@ -1673,7 +1759,7 @@ export function NewIssueDialog() {
                           )}
                           onClick={() => setAssigneeThinkingEffort(option.value)}
                         >
-                          {thinkingEffortLabel(option.value, t)}
+                          {option.label}
                         </button>
                       ))}
                     </div>
@@ -1681,7 +1767,7 @@ export function NewIssueDialog() {
                 )}
                 {assigneeAdapterType === "claude_local" && assigneeModelLane === "custom" && (
                   <div className="flex items-center justify-between rounded-md border border-border px-2 py-1.5">
-                    <div className="text-xs text-muted-foreground">{t("enableChrome", "Enable Chrome (--chrome)")}</div>
+                    <div className="text-xs text-muted-foreground">{t("issue.newIssue.enableChrome")}</div>
                     <ToggleSwitch
                       checked={assigneeChrome}
                       onCheckedChange={() => setAssigneeChrome((value) => !value)}
@@ -1720,7 +1806,7 @@ export function NewIssueDialog() {
               <div className="mt-4 space-y-3 rounded-lg border border-border/70 p-3">
               {stagedDocuments.length > 0 ? (
                 <div className="space-y-2">
-                  <div className="text-xs font-medium text-muted-foreground">{t("documents", "Documents")}</div>
+                  <div className="text-xs font-medium text-muted-foreground">{t("issue.newIssue.documents")}</div>
                   <div className="space-y-2">
                     {stagedDocuments.map((file) => (
                       <div key={file.id} className="flex items-start justify-between gap-3 rounded-md border border-border/70 px-3 py-2">
@@ -1744,7 +1830,7 @@ export function NewIssueDialog() {
                           className="shrink-0 text-muted-foreground"
                           onClick={() => removeStagedFile(file.id)}
                           disabled={createIssue.isPending}
-                          title={t("removeDocument", "Remove document")}
+                          title={t("issue.newIssue.removeDocument")}
                         >
                           <X className="h-3.5 w-3.5" />
                         </Button>
@@ -1756,7 +1842,7 @@ export function NewIssueDialog() {
 
               {stagedAttachments.length > 0 ? (
                 <div className="space-y-2">
-                  <div className="text-xs font-medium text-muted-foreground">{t("attachments", "Attachments")}</div>
+                  <div className="text-xs font-medium text-muted-foreground">{t("issue.newIssue.attachments")}</div>
                   <div className="space-y-2">
                     {stagedAttachments.map((file) => (
                       <div key={file.id} className="flex items-start justify-between gap-3 rounded-md border border-border/70 px-3 py-2">
@@ -1775,7 +1861,7 @@ export function NewIssueDialog() {
                           className="shrink-0 text-muted-foreground"
                           onClick={() => removeStagedFile(file.id)}
                           disabled={createIssue.isPending}
-                          title={t("removeAttachment", "Remove attachment")}
+                          title={t("issue.newIssue.removeAttachment")}
                         >
                           <X className="h-3.5 w-3.5" />
                         </Button>
@@ -1799,18 +1885,23 @@ export function NewIssueDialog() {
                 {currentStatus.label}
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-36 p-1" align="start">
+            <PopoverContent className="w-56 p-1" align="start">
               {statuses.map((s) => (
                 <button
                   key={s.value}
                   className={cn(
-                    "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50",
+                    "flex w-full items-start gap-2 px-2 py-1.5 text-xs rounded hover:bg-accent/50",
                     s.value === status && "bg-accent"
                   )}
                   onClick={() => { setStatus(s.value); setStatusOpen(false); }}
                 >
-                  <CircleDot className={cn("h-3 w-3", s.color)} />
-                  {s.label}
+                  <CircleDot className={cn("h-3 w-3 mt-0.5 shrink-0", s.color)} />
+                  <span className="flex flex-col text-left leading-tight">
+                    <span>{s.label}</span>
+                    {s.description ? (
+                      <span className="text-[10px] text-muted-foreground">{s.description}</span>
+                    ) : null}
+                  </span>
                 </button>
               ))}
             </PopoverContent>
@@ -1819,7 +1910,11 @@ export function NewIssueDialog() {
           {/* Priority chip */}
           <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors">
+              <button
+                type="button"
+                data-testid="new-issue-priority-chip"
+                className="hidden items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-accent/50 sm:inline-flex"
+              >
                 {currentPriority ? (
                   <>
                     <currentPriority.icon className={cn("h-3 w-3", currentPriority.color)} />
@@ -1828,7 +1923,7 @@ export function NewIssueDialog() {
                 ) : (
                   <>
                     <Minus className="h-3 w-3 text-muted-foreground" />
-                    {t("priority", "Priority")}
+                    {t("common.form.priority")}
                   </>
                 )}
               </button>
@@ -1870,28 +1965,128 @@ export function NewIssueDialog() {
             disabled={createIssue.isPending}
           >
             <Paperclip className="h-3 w-3" />
-            {t("upload", "Upload")}
+            {t("issue.newIssue.upload")}
           </button>
 
-          {/* More (dates) */}
+          {/* Work mode chip */}
+          <Popover open={workModeOpen} onOpenChange={setWorkModeOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                data-issue-work-mode-chip={workMode}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
+                  workMode === "planning"
+                    ? "border-amber-500/60 bg-amber-500/15 text-amber-800 hover:bg-amber-500/25 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-200 dark:hover:bg-amber-500/25"
+                    : "border-border text-muted-foreground hover:bg-accent/50",
+                )}
+              >
+                <CurrentWorkModeIcon className="h-3 w-3" />
+                {currentWorkMode.label}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-36 p-1" align="start">
+              {workModeOptions.map((option) => {
+                const Icon = option.icon;
+                return (
+                  <button
+                    key={option.value}
+                    data-issue-work-mode={option.value}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-accent/50",
+                      option.value === workMode && "bg-accent",
+                      option.value === "planning" && "text-amber-700 dark:text-amber-300",
+                    )}
+                    onClick={() => {
+                      setWorkMode(option.value);
+                      setWorkModeOpen(false);
+                    }}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {option.label}
+                  </button>
+                );
+              })}
+            </PopoverContent>
+          </Popover>
+
+          {/* More */}
           <Popover open={moreOpen} onOpenChange={setMoreOpen}>
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center justify-center rounded-md border border-border p-1 text-xs hover:bg-accent/50 transition-colors text-muted-foreground">
+              <button
+                type="button"
+                data-testid="new-issue-more-menu-trigger"
+                className="inline-flex items-center justify-center rounded-md border border-border p-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50"
+              >
                 <MoreHorizontal className="h-3 w-3" />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-44 p-1" align="start">
+            <PopoverContent className="w-44 p-1" align="start" data-testid="new-issue-more-menu">
+              <div className="sm:hidden">
+                <div className="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground">
+                  Priority
+                </div>
+                {priorities.map((p) => (
+                  <button
+                    type="button"
+                    key={p.value}
+                    data-testid={`new-issue-more-priority-${p.value}`}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-accent/50",
+                      p.value === priority && "bg-accent",
+                    )}
+                    onClick={() => {
+                      setPriority(p.value);
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <p.icon className={cn("h-3 w-3", p.color)} />
+                    {p.label}
+                  </button>
+                ))}
+                <div className="my-1 border-t border-border" />
+              </div>
               <button className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-muted-foreground">
                 <Calendar className="h-3 w-3" />
-                {t("startDate", "Start date")}
+                {t("issue.newIssue.startDate")}
               </button>
               <button className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-muted-foreground">
                 <Calendar className="h-3 w-3" />
-                {t("dueDate", "Due date")}
+                {t("issue.newIssue.dueDate")}
               </button>
             </PopoverContent>
           </Popover>
         </div>
+
+        {assigneeValue && status === "backlog" ? (
+          <div
+            data-testid="new-issue-assigned-backlog-note"
+            className="mx-4 mb-2 flex items-start gap-2 rounded-md border border-amber-300/70 bg-amber-50/90 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+          >
+            <Flag className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
+            <span className="leading-snug">
+              {t("issue.newIssue.backlogNotePart1")}
+              <span className="font-medium">{t("common.status.backlog")}</span>
+              {t("issue.newIssue.backlogNotePart2")}
+              <span className="font-medium">{t("common.status.todo")}</span>
+              {t("issue.newIssue.backlogNotePart3")}
+              <span className="font-medium">{t("common.status.inProgress")}</span>
+              {t("issue.newIssue.backlogNotePart4")}
+            </span>
+          </div>
+        ) : null}
+
+        {currentAssigneeLowTrust ? (
+          <div
+            data-testid="new-issue-low-trust-assignee-note"
+            className="mx-4 mb-2 flex items-start gap-2 rounded-md border border-amber-300/70 bg-amber-50/90 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+          >
+            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
+            <span className="leading-snug">
+              Low-trust review agent. It can only act inside its assigned review boundary; issue, project, or run policy defines the concrete scope.
+            </span>
+          </div>
+        ) : null}
 
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border shrink-0">
@@ -1902,14 +2097,14 @@ export function NewIssueDialog() {
             onClick={discardDraft}
             disabled={createIssue.isPending || !canDiscardDraft}
           >
-            {t("discardDraft", "Discard Draft")}
+            Discard Draft
           </Button>
           <div className="flex items-center gap-3">
             <div className="min-h-5 text-right">
               {createIssue.isPending ? (
                 <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  {t("creatingIssue", "Creating issue...")}
+                  {t("issue.newIssue.creatingIssue")}
                 </span>
               ) : createIssue.isError ? (
                 <span className="text-xs text-destructive">{createIssueErrorMessage}</span>
@@ -1924,7 +2119,7 @@ export function NewIssueDialog() {
             >
               <span className="inline-flex items-center justify-center gap-1.5">
                 {createIssue.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                <span>{createIssue.isPending ? t("creating", "Creating...") : isSubIssueMode ? t("createSubIssue", "Create Sub-Issue") : t("createIssue", "Create Issue")}</span>
+                <span>{createIssue.isPending ? t("issue.newIssue.creating") : isSubIssueMode ? "Create Sub-Task" : "Create Task"}</span>
               </span>
             </Button>
           </div>

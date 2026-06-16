@@ -1,6 +1,0 @@
-{
-  "title": "Subskrypcja Anthropic",
-  "subtitle": "Okna limitów Claude na żywo.",
-  "resets": "Reset {{date}}",
-  "percentUsed": "{{percent}}% wykorzystane"
-}

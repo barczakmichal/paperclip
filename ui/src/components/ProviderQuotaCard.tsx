@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { useTranslation } from "react-i18next";
 import type { CostByProviderModel, CostWindowSpendRow, QuotaWindow } from "@paperclipai/shared";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTranslation } from "@/i18n";
 import { QuotaBar } from "./QuotaBar";
 import { ClaudeSubscriptionPanel } from "./ClaudeSubscriptionPanel";
 import { CodexSubscriptionPanel } from "./CodexSubscriptionPanel";
@@ -49,7 +49,6 @@ export function ProviderQuotaCard({
   quotaSource = null,
   quotaLoading = false,
 }: ProviderQuotaCardProps) {
-  const { t } = useTranslation("providerQuotaCard");
   // single-pass aggregation over rows — memoized so the 8 derived values are not
   // recomputed on every parent render tick (providers tab polls every 30s, and each
   // card is mounted twice: once in the "all" tab grid and once in its per-provider tab).
@@ -130,9 +129,10 @@ export function ProviderQuotaCard({
   const supportsSubscriptionQuota = provider === "anthropic" || provider === "openai";
   const showSubscriptionQuotaSection =
     supportsSubscriptionQuota && (quotaLoading || quotaWindows.length > 0 || quotaError != null);
+  const { t } = useTranslation();
 
   return (
-    <Card className="border border-border rounded-lg">
+    <Card>
       <CardHeader className="px-4 pt-4 pb-0 gap-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -140,24 +140,22 @@ export function ProviderQuotaCard({
               {providerDisplayName(provider)}
             </CardTitle>
             <CardDescription className="text-xs mt-0.5">
-              <span className="font-mono">{formatTokens(totalInputTokens)}</span> {t("in", "in")}
+              <span className="font-mono">{formatTokens(totalInputTokens)}</span> {t("component.providerQuotaCard.in")}
               {" · "}
-              <span className="font-mono">{formatTokens(totalOutputTokens)}</span> {t("out", "out")}
+              <span className="font-mono">{formatTokens(totalOutputTokens)}</span> {t("component.providerQuotaCard.out")}
               {(totalApiRuns > 0 || totalSubRuns > 0) && (
                 <span className="ml-1.5">
                   ·{" "}
-                  {totalApiRuns > 0 && t("apiRuns", "~{{count}} api", { count: totalApiRuns })}
+                  {totalApiRuns > 0 && `~${totalApiRuns} ${t("component.providerQuotaCard.api")}`}
                   {totalApiRuns > 0 && totalSubRuns > 0 && " / "}
-                  {totalSubRuns > 0 && t("subRuns", "~{{count}} sub", { count: totalSubRuns })}
-                  {" "}{t("runs", "runs")}
+                  {totalSubRuns > 0 && `~${totalSubRuns} ${t("component.providerQuotaCard.sub")}`}
+                  {" "}
+                  {t("component.providerQuotaCard.runs")}
                 </span>
               )}
             </CardDescription>
           </div>
-          <span
-            className="text-xl font-bold tabular-nums shrink-0 bg-clip-text text-transparent"
-            style={{ backgroundImage: "var(--grad-cost)" }}
-          >
+          <span className="text-xl font-bold tabular-nums shrink-0">
             {formatCents(totalCostCents)}
           </span>
         </div>
@@ -167,17 +165,17 @@ export function ProviderQuotaCard({
         {hasBudget && (
           <div className="space-y-3">
             <QuotaBar
-              label={t("periodSpend", "Period spend")}
+              label={t("component.providerQuotaCard.periodSpend")}
               percentUsed={budgetPct}
               leftLabel={formatCents(totalCostCents)}
-              rightLabel={t("percentOfAllocation", "{{percent}}% of allocation", { percent: Math.round(budgetPct) })}
+              rightLabel={`${Math.round(budgetPct)}% ${t("component.providerQuotaCard.ofAllocation")}`}
               showDeficitNotch={showDeficitNotch}
             />
             <QuotaBar
-              label={t("thisWeek", "This week")}
+              label={t("component.providerQuotaCard.thisWeek")}
               percentUsed={weekPct}
               leftLabel={formatCents(weekSpendCents)}
-              rightLabel={t("perWeek", "~{{amount}} / wk", { amount: formatCents(Math.round(weeklyBudgetShare)) })}
+              rightLabel={`~${formatCents(Math.round(weeklyBudgetShare))} ${t("component.providerQuotaCard.perWk")}`}
               showDeficitNotch={weekPct >= 100}
             />
           </div>
@@ -189,7 +187,7 @@ export function ProviderQuotaCard({
             <div className="border-t border-border" />
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                {t("rollingWindows", "Rolling windows")}
+                {t("component.providerQuotaCard.rollingWindows")}
               </p>
               <div className="space-y-2.5">
                 {ROLLING_WINDOWS.map((w) => {
@@ -204,11 +202,11 @@ export function ProviderQuotaCard({
                       <div className="flex items-center justify-between gap-2 text-xs">
                         <span className="font-mono text-muted-foreground w-6 shrink-0">{w}</span>
                         <span className="text-muted-foreground font-mono flex-1">
-                          {t("tokAbbrev", "{{tokens}} tok", { tokens: formatTokens(tokens) })}
+                          {formatTokens(tokens)} {t("component.providerQuotaCard.tok")}
                         </span>
                         <span className="font-medium tabular-nums">{formatCents(cents)}</span>
                       </div>
-                      <div className="h-2 w-full bg-muted overflow-hidden">
+                      <div className="h-2 w-full border border-border overflow-hidden">
                         <div
                           className="h-full bg-primary/60 transition-[width] duration-150"
                           style={{ width: `${barPct}%` }}
@@ -228,31 +226,31 @@ export function ProviderQuotaCard({
             <div className="border-t border-border" />
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                {t("subscription", "Subscription")}
+                {t("component.providerQuotaCard.subscription")}
               </p>
               <p className="text-xs text-muted-foreground">
-                <span className="font-mono text-foreground">{totalSubRuns}</span> {t("runs", "runs")}
+                <span className="font-mono text-foreground">{totalSubRuns}</span> {t("component.providerQuotaCard.runs")}
                 {" · "}
                 {totalSubTokens > 0 && (
                   <>
-                    <span className="font-mono text-foreground">{formatTokens(totalSubTokens)}</span> {t("total", "total")}
+                    <span className="font-mono text-foreground">{formatTokens(totalSubTokens)}</span> {t("component.providerQuotaCard.total")}
                     {" · "}
                   </>
                 )}
-                <span className="font-mono text-foreground">{formatTokens(totalSubInputTokens)}</span> {t("in", "in")}
+                <span className="font-mono text-foreground">{formatTokens(totalSubInputTokens)}</span> {t("component.providerQuotaCard.in")}
                 {" · "}
-                <span className="font-mono text-foreground">{formatTokens(totalSubOutputTokens)}</span> {t("out", "out")}
+                <span className="font-mono text-foreground">{formatTokens(totalSubOutputTokens)}</span> {t("component.providerQuotaCard.out")}
               </p>
               {subSharePct > 0 && (
                 <>
-                  <div className="h-1.5 w-full bg-muted overflow-hidden">
+                  <div className="h-1.5 w-full border border-border overflow-hidden">
                     <div
                       className="h-full bg-primary/60 transition-[width] duration-150"
                       style={{ width: `${subSharePct}%` }}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {t("percentTokenUsageViaSubscription", "{{percent}}% of token usage via subscription", { percent: Math.round(subSharePct) })}
+                    {Math.round(subSharePct)}% {t("component.providerQuotaCard.ofTokenUsageViaSubscription")}
                   </p>
                 </>
               )}
@@ -283,23 +281,23 @@ export function ProviderQuotaCard({
                       </div>
                       <div className="flex items-center gap-3 shrink-0 tabular-nums text-xs">
                         <span className="text-muted-foreground">
-                          {t("tokAbbrev", "{{tokens}} tok", { tokens: formatTokens(rowTokens) })}
+                          {formatTokens(rowTokens)} {t("component.providerQuotaCard.tok")}
                         </span>
                         <span className="font-medium">{formatCents(row.costCents)}</span>
                       </div>
                     </div>
                     {/* token share bar */}
-                    <div className="relative h-2 w-full bg-muted overflow-hidden">
+                    <div className="relative h-2 w-full border border-border overflow-hidden">
                       <div
                         className="absolute inset-y-0 left-0 bg-primary/60 transition-[width] duration-150"
                         style={{ width: `${tokenPct}%` }}
-                        title={t("percentOfProviderTokens", "{{percent}}% of provider tokens", { percent: Math.round(tokenPct) })}
+                        title={`${Math.round(tokenPct)}% ${t("component.providerQuotaCard.ofProviderTokens")}`}
                       />
                       {/* cost share overlay — narrower, opaque, shows relative cost weight */}
                       <div
                         className="absolute inset-y-0 left-0 bg-primary/85 transition-[width] duration-150"
                         style={{ width: `${costPct}%` }}
-                        title={t("percentOfProviderCost", "{{percent}}% of provider cost", { percent: Math.round(costPct) })}
+                        title={`${Math.round(costPct)}% ${t("component.providerQuotaCard.ofProviderCost")}`}
                       />
                     </div>
                   </div>
@@ -316,7 +314,7 @@ export function ProviderQuotaCard({
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {t("subscriptionQuota", "Subscription quota")}
+                  {t("component.providerQuotaCard.subscriptionQuota")}
                 </p>
                 {quotaSource && !isClaudeQuotaPanel && !isCodexQuotaPanel ? (
                   <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
@@ -355,11 +353,11 @@ export function ProviderQuotaCard({
                             {qw.valueLabel != null ? (
                               <span className="font-medium tabular-nums">{qw.valueLabel}</span>
                             ) : qw.usedPercent != null ? (
-                              <span className="font-medium tabular-nums">{t("percentUsed", "{{percent}}% used", { percent: qw.usedPercent })}</span>
+                              <span className="font-medium tabular-nums">{qw.usedPercent}% {t("component.providerQuotaCard.used")}</span>
                             ) : null}
                           </div>
                           {qw.usedPercent != null && fillColor != null && (
-                            <div className="h-2 w-full bg-muted overflow-hidden">
+                            <div className="h-2 w-full border border-border overflow-hidden">
                               <div
                                 className={`h-full transition-[width] duration-150 ${fillColor}`}
                                 style={{ width: `${qw.usedPercent}%` }}
@@ -372,7 +370,7 @@ export function ProviderQuotaCard({
                             </p>
                           ) : qw.resetsAt ? (
                             <p className="text-xs text-muted-foreground">
-                              {t("resets", "resets {{date}}", { date: new Date(qw.resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) })}
+                              {t("component.providerQuotaCard.resets")} {new Date(qw.resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                             </p>
                           ) : null}
                         </div>

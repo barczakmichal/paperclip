@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useTranslation } from "@/i18n";
 
 function statusDotColor(status?: string): string {
   switch (status) {
@@ -32,7 +32,7 @@ interface CompanySwitcherProps {
 }
 
 export function CompanySwitcher({ open: controlledOpen, onOpenChange }: CompanySwitcherProps = {}) {
-  const { t } = useTranslation("companySwitcher");
+  const { t } = useTranslation();
   const [internalOpen, setInternalOpen] = useState(false);
   const { companies, selectedCompany, setSelectedCompanyId } = useCompany();
   const sidebarCompanies = companies.filter((company) => company.status !== "archived");
@@ -44,46 +44,46 @@ export function CompanySwitcher({ open: controlledOpen, onOpenChange }: CompanyS
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="w-full justify-between px-2 py-1.5 h-auto text-left bg-card border border-border rounded-md hover:bg-accent/40 transition-colors"
+          className="w-full justify-between px-2 py-1.5 h-auto text-left"
         >
           <div className="flex items-center gap-2 min-w-0">
             {selectedCompany && (
               <span className={`h-2 w-2 rounded-full shrink-0 ${statusDotColor(selectedCompany.status)}`} />
             )}
             <span className="text-sm font-medium truncate">
-              {selectedCompany?.name ?? t("selectCompany", "Select company")}
+              {selectedCompany?.name ?? t("companySwitcher.selectCompany")}
             </span>
           </div>
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[220px]">
-        <DropdownMenuLabel>{t("companies", "Companies")}</DropdownMenuLabel>
+        <DropdownMenuLabel>{t("companySwitcher.companies")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {sidebarCompanies.map((company) => (
           <DropdownMenuItem
             key={company.id}
             onClick={() => setSelectedCompanyId(company.id)}
-            className={company.id === selectedCompany?.id ? "bg-accent" : "hover:bg-accent/40"}
+            className={company.id === selectedCompany?.id ? "bg-accent" : ""}
           >
             <span className={`h-2 w-2 rounded-full shrink-0 mr-2 ${statusDotColor(company.status)}`} />
             <span className="truncate">{company.name}</span>
           </DropdownMenuItem>
         ))}
         {sidebarCompanies.length === 0 && (
-          <DropdownMenuItem disabled>{t("noCompanies", "No companies")}</DropdownMenuItem>
+          <DropdownMenuItem disabled>{t("companySwitcher.noCompanies")}</DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="/company/settings" className="no-underline text-inherit">
             <Settings className="h-4 w-4 mr-2" />
-            {t("companySettings", "Company Settings")}
+            {t("companySwitcher.companySettings")}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to="/companies" className="no-underline text-inherit">
             <Plus className="h-4 w-4 mr-2" />
-            {t("manageCompanies", "Manage Companies")}
+            {t("companySwitcher.manageCompanies")}
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>

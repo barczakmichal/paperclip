@@ -1,5 +1,4 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
 import type { ActivityEvent, Issue, Agent } from "@paperclipai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@/lib/router";
@@ -17,6 +16,9 @@ import { cn, relativeTime } from "../lib/utils";
 import { queryKeys } from "../lib/queryKeys";
 import { keepPreviousDataForSameQueryTail } from "../lib/query-placeholder-data";
 import { describeRunRetryState } from "../lib/runRetryState";
+import { readSourceResolvedWatchdogFold } from "../lib/source-resolved-watchdog-fold";
+import { SourceResolvedFoldBadge } from "./SourceResolvedFoldBadge";
+import { useTranslation } from "@/i18n";
 
 type IssueRunLedgerProps = {
   issueId: string;
@@ -74,7 +76,7 @@ const LIVENESS_COPY: Record<RunLivenessState, LivenessCopy> = {
   completed: {
     label: "Completed",
     tone: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    description: "Issue reached a terminal state.",
+    description: "Task reached a terminal state.",
   },
   advanced: {
     label: "Advanced",
@@ -94,7 +96,7 @@ const LIVENESS_COPY: Record<RunLivenessState, LivenessCopy> = {
   blocked: {
     label: "Blocked",
     tone: "border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300",
-    description: "Run or issue declared a blocker.",
+    description: "Run or task declared a blocker.",
   },
   failed: {
     label: "Failed",
@@ -312,6 +314,7 @@ function stopReasonLabel(run: RunForIssue) {
   if (timeoutFired || stopReason === "timeout") {
     return timeoutText ? `timeout (${timeoutText})` : "timeout";
   }
+  if (stopReason === "max_turns_exhausted" || stopReason === "turn_limit_exhausted") return "max turns exhausted";
   if (stopReason === "budget_paused") return "budget paused";
   if (stopReason === "cancelled") return "cancelled";
   if (stopReason === "paused") return "paused by board";
@@ -406,7 +409,7 @@ export function IssueRunLedger({
   activityEvents,
   renderActivityEvent,
 }: IssueRunLedgerProps) {
-  const { t } = useTranslation("issueRunLedger");
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { pushToast } = useToastActions();
   const [watchdogDecisionError, setWatchdogDecisionError] = useState<string | null>(null);
@@ -450,7 +453,7 @@ export function IssueRunLedger({
       const dedupeSuffix = error instanceof ApiError ? String(error.status) : "error";
       setWatchdogDecisionError(message);
       pushToast({
-        title: t("watchdogDecisionNotRecorded", "Watchdog decision not recorded"),
+        title: "Watchdog decision not recorded",
         body: message,
         tone: "error",
         dedupeKey: `watchdog-decision:${issueId}:${dedupeSuffix}`,
@@ -490,7 +493,7 @@ export function IssueRunLedgerContent({
   watchdogDecisionError,
   onWatchdogDecision,
 }: IssueRunLedgerContentProps) {
-  const { t } = useTranslation("issueRunLedger");
+  const { t } = useTranslation();
   const ledgerRuns = useMemo(() => mergeRuns(runs, liveRuns, activeRun), [activeRun, liveRuns, runs]);
   const latestRun = ledgerRuns[0] ?? null;
   const latestSilentRun = useMemo(
@@ -535,16 +538,16 @@ export function IssueRunLedgerContent({
   }, [activityEvents, canRenderActivityEvents, ledgerRuns]);
 
   return (
-    <section className="space-y-3" aria-label={t("issueRunLedgerAria", "Issue run ledger")}>
+    <section className="space-y-3" aria-label="Task run ledger">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-sm font-medium text-muted-foreground">{t("runLedger", "Run ledger")}</h3>
+          <h3 className="text-sm font-medium text-muted-foreground">{t("component.issue.runLedger.title")}</h3>
           <p className="text-xs text-muted-foreground">
             {latestRun
               ? runSummary(latestRun, agentMap)
               : issueStatus === "in_progress"
-                ? t("waitingFirstRun", "Waiting for the first run record.")
-                : t("noRunsLinked", "No runs linked yet.")}
+                ? t("component.issue.runLedger.waiting")
+                : t("component.issue.runLedger.noRuns")}
           </p>
         </div>
         {latestRun ? (
@@ -552,7 +555,7 @@ export function IssueRunLedgerContent({
             to={`/agents/${latestRun.agentId}/runs/${latestRun.runId}`}
             className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            {t("latestRun", "Latest run")}
+            Latest run
           </Link>
         ) : null}
       </div>
@@ -560,11 +563,11 @@ export function IssueRunLedgerContent({
       {children.total > 0 ? (
         <div className="rounded-md border border-border/70 px-3 py-2">
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="font-medium text-foreground">{t("childWork", "Child work")}</span>
+            <span className="font-medium text-foreground">Child work</span>
             <span className="text-muted-foreground">
               {children.active.length > 0
-                ? t("childSummaryActive", "{{active}} active, {{done}} done, {{cancelled}} cancelled", { active: children.active.length, done: children.done, cancelled: children.cancelled })
-                : t("childSummaryTerminal", "all {{total}} terminal ({{done}} done, {{cancelled}} cancelled)", { total: children.total, done: children.done, cancelled: children.cancelled })}
+                ? `${children.active.length} active, ${children.done} done, ${children.cancelled} cancelled`
+                : `all ${children.total} terminal (${children.done} done, ${children.cancelled} cancelled)`}
             </span>
           </div>
           {children.active.length > 0 ? (
@@ -582,7 +585,7 @@ export function IssueRunLedgerContent({
               ))}
               {children.active.length > 4 ? (
                 <span className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground">
-                  {t("moreCount", "+{{count}} more", { count: children.active.length - 4 })}
+                  +{children.active.length - 4} more
                 </span>
               ) : null}
             </div>
@@ -601,23 +604,23 @@ export function IssueRunLedgerContent({
         >
           <p className="font-medium">
             {latestSilentRun.outputSilence.level === "critical"
-              ? t("staleRunAlert", "Stale-run watchdog alert")
-              : t("outputSilenceWarning", "Output silence watchdog warning")}
+              ? "Stale-run watchdog alert"
+              : "Output silence watchdog warning"}
           </p>
           <p className="mt-1">
-            {t("silentForPrefix", "Latest active run has been silent for")}{" "}
-            {formatSilenceAge(latestSilentRun.outputSilence.silenceAgeMs) ?? t("extendedPeriod", "an extended period")}.
+            Latest active run has been silent for{" "}
+            {formatSilenceAge(latestSilentRun.outputSilence.silenceAgeMs) ?? "an extended period"}.
             {latestSilentRun.outputSilence.evaluationIssueIdentifier ? (
               <>
                 {" "}
-                {t("review", "Review")}{" "}
+                Review{" "}
                 <Link
                   to={`/issues/${latestSilentRun.outputSilence.evaluationIssueIdentifier}`}
                   className="font-medium underline underline-offset-2"
                 >
                   {latestSilentRun.outputSilence.evaluationIssueIdentifier}
                 </Link>
-                {" "}{t("forRecoveryContext", "for recovery context.")}
+                {" "}for recovery context.
               </>
             ) : null}
           </p>
@@ -634,7 +637,7 @@ export function IssueRunLedgerContent({
                   })}
                 disabled={pendingWatchdogDecision != null}
               >
-                {t("continueMonitoring", "Continue monitoring")}
+                Continue monitoring
               </button>
               <button
                 type="button"
@@ -649,7 +652,7 @@ export function IssueRunLedgerContent({
                   })}
                 disabled={pendingWatchdogDecision != null}
               >
-                {t("snooze1h", "Snooze 1h")}
+                Snooze 1h
               </button>
               <button
                 type="button"
@@ -663,7 +666,7 @@ export function IssueRunLedgerContent({
                   })}
                 disabled={pendingWatchdogDecision != null}
               >
-                {t("markFalsePositive", "Mark false positive")}
+                Mark false positive
               </button>
             </div>
           ) : null}
@@ -678,8 +681,8 @@ export function IssueRunLedgerContent({
       {feedItems.length === 0 ? (
         <div className="rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
           {renderActivityEvent
-            ? t("emptyWithActivity", "Runs and activity will appear here once this issue has history.")
-            : t("emptyHistorical", "Historical runs without liveness metadata will appear here once linked to this issue.")}
+            ? "Runs and activity will appear here once this task has history."
+            : "Historical runs without liveness metadata will appear here once linked to this task."}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -695,27 +698,28 @@ export function IssueRunLedgerContent({
             const continuation = continuationLabel(run);
             const retryState = describeRunRetryState(run);
             const agentName = compactAgentName(run, agentMap);
+            const sourceResolvedFold = readSourceResolvedWatchdogFold(run.resultJson);
             return (
               <article
                 key={`run:${run.runId}`}
                 className="space-y-1.5 rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground"
               >
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="font-medium text-foreground">{t("run", "Run")}</span>
+                  <span className="font-medium text-foreground">Run</span>
                   <Link
                     to={`/agents/${run.agentId}/runs/${run.runId}`}
                     className="min-w-0 max-w-full truncate font-mono text-foreground hover:underline"
                   >
                     {run.runId.slice(0, 8)}
                   </Link>
-                  <span>{t("byAgent", "by {{agentName}}", { agentName })}</span>
+                  <span>by {agentName}</span>
                   <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] capitalize text-muted-foreground">
                     {statusLabel(run.status)}
                   </span>
                   {run.isLive ? (
                     <span className="inline-flex items-center gap-1 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[11px] text-cyan-700 dark:text-cyan-300">
                       <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
-                      {t("live", "live")}
+                      live
                     </span>
                   ) : null}
                   <span
@@ -729,7 +733,7 @@ export function IssueRunLedgerContent({
                   </span>
                   {exhausted ? (
                     <span className="rounded-md border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
-                      {t("exhausted", "Exhausted")}
+                      Exhausted
                     </span>
                   ) : null}
                   {continuation ? (
@@ -759,10 +763,10 @@ export function IssueRunLedgerContent({
                     const profile = modelProfileForRun(run);
                     if (!profile) return null;
                     const label = profile.applied === profile.requested
-                      ? t("profile", "Profile: {{requested}}", { requested: profile.requested })
+                      ? `Profile: ${profile.requested}`
                       : profile.applied
-                        ? t("profileApplied", "Profile: {{requested}} → {{applied}}", { requested: profile.requested, applied: profile.applied })
-                        : t("profileUnavailable", "Profile: {{requested}} (unavailable)", { requested: profile.requested });
+                        ? `Profile: ${profile.requested} → ${profile.applied}`
+                        : `Profile: ${profile.requested} (unavailable)`;
                     return (
                       <span
                         className={cn(
@@ -775,20 +779,21 @@ export function IssueRunLedgerContent({
                       </span>
                     );
                   })()}
+                  {sourceResolvedFold ? <SourceResolvedFoldBadge /> : null}
                   <span className="ml-auto shrink-0">{relativeTime(item.timestamp)}</span>
                 </div>
 
                 <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
                   <div className="min-w-0">
-                    <span className="text-foreground">{t("elapsed", "Elapsed")}</span>{" "}
-                    {duration ?? t("unknown", "unknown")}
+                    <span className="text-foreground">Elapsed</span>{" "}
+                    {duration ?? "unknown"}
                   </div>
                   <div className="min-w-0">
-                    <span className="text-foreground">{t("lastUsefulAction", "Last useful action")}</span>{" "}
+                    <span className="text-foreground">Last useful action</span>{" "}
                     {lastUsefulActionLabel(run)}
                   </div>
                   <div className="min-w-0">
-                    <span className="text-foreground">{t("stop", "Stop")}</span>{" "}
+                    <span className="text-foreground">Stop</span>{" "}
                     {stopStatusLabel(run, stopReason)}
                   </div>
                 </div>
@@ -799,7 +804,7 @@ export function IssueRunLedgerContent({
                     {retryState.secondary ? <p>{retryState.secondary}</p> : null}
                     {retryState.retryOfRunId ? (
                       <p>
-                        {t("retryOf", "Retry of")}{" "}
+                        Retry of{" "}
                         <Link
                           to={`/agents/${run.agentId}/runs/${retryState.retryOfRunId}`}
                           className="font-mono text-foreground hover:underline"
@@ -817,8 +822,8 @@ export function IssueRunLedgerContent({
                   return (
                     <p className="min-w-0 break-words text-[11px] leading-5 text-amber-700 dark:text-amber-300">
                       {profile.requested === "cheap"
-                        ? t("cheapProfileFellBack", "Cheap profile fell back to primary")
-                        : t("profileUnavailableShort", "{{requested}} profile unavailable", { requested: profile.requested })}
+                        ? "Cheap profile fell back to primary"
+                        : `${profile.requested} profile unavailable`}
                       {": "}
                       <span className="font-mono">{profile.fallbackReason}</span>
                     </p>
@@ -833,7 +838,7 @@ export function IssueRunLedgerContent({
 
                 {run.nextAction ? (
                   <div className="min-w-0 rounded-md bg-accent/40 px-2 py-1.5 text-xs leading-5">
-                    <span className="font-medium text-foreground">{t("nextAction", "Next action:")} </span>
+                    <span className="font-medium text-foreground">Next action: </span>
                     <span className="break-words text-muted-foreground">{run.nextAction}</span>
                   </div>
                 ) : null}
@@ -842,7 +847,7 @@ export function IssueRunLedgerContent({
           })}
           {feedItems.length > 20 ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">
-              {t("olderItemsNotShown", "{{count}} older items not shown", { count: feedItems.length - 20 })}
+              {feedItems.length - 20} older items not shown
             </div>
           ) : null}
         </div>

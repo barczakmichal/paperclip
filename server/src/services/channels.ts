@@ -10,7 +10,8 @@ import {
 } from "@paperclipai/shared";
 import { notFound } from "../errors.js";
 import { composeAgentStatusReport } from "./agent-status.js";
-import { issueService, normalizeAgentMentionToken } from "./issues.js";
+import { issueService } from "./issues.js";
+import { normalizeAgentMentionToken } from "./agent-mention-token.js";
 import { heartbeatService } from "./heartbeat.js";
 import { HEARTBEAT_RUN_RESULT_SUMMARY_MAX_CHARS } from "./heartbeat-run-summary.js";
 import { publishLiveEvent } from "./live-events.js";
@@ -318,7 +319,8 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
 
   async function listMessages(channelId: string, opts: { before?: Date | string; limit?: number }) {
     const limit = opts.limit ?? 50;
-    const conditions = [eq(channelMessages.channelId, channelId)];
+    // Soft delete: pomijamy wiadomości oznaczone jako usunięte (deletedAt != null).
+    const conditions = [eq(channelMessages.channelId, channelId), isNull(channelMessages.deletedAt)];
     if (opts.before) {
       const beforeDate = opts.before instanceof Date ? opts.before : new Date(opts.before);
       conditions.push(lt(channelMessages.createdAt, beforeDate));
@@ -347,7 +349,6 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
       .select({
         agentId: heartbeatRuns.agentId,
         nextAction: heartbeatRuns.nextAction,
-        currentThought: heartbeatRuns.currentThought,
       })
       .from(heartbeatRuns)
       .where(and(inArray(heartbeatRuns.agentId, agentIds), eq(heartbeatRuns.status, "running")))
@@ -386,7 +387,7 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
       else if (agent.status === "running" || activeRun) online = "active";
       else online = "idle";
 
-      const nowText = activeRun?.nextAction ?? activeRun?.currentThought ?? null;
+      const nowText = activeRun?.nextAction ?? null;
       const lastText = lastRun?.resultSummary ?? null;
 
       const report = composeAgentStatusReport({ now: nowText, last: lastText, online });
@@ -412,5 +413,73 @@ export function channelService(db: Db, deps?: ChannelServiceDeps) {
     return loadChannel(channelId);
   }
 
-  return { syncForCompany, list, membersOf, postMessage, listMessages, memberStatuses, getChannel };
+  // Publikuje "messages changed" dla kanału — UI ma jeden handler na
+  // channel.message.created, który invaliduje listę wiadomości aktywnego kanału.
+  // Używamy go też dla usunięć/czyszczenia (semantyka: "odśwież wiadomości kanału").
+  function publishMessagesChanged(companyId: string, channelId: string) {
+    publishLiveEvent({
+      companyId,
+      type: "channel.message.created",
+      payload: { channelId },
+    });
+  }
+
+  // Soft delete pojedynczej wiadomości. Zwraca false, gdy wiadomość nie istnieje
+  // lub nie należy do wskazanego kanału (route mapuje to na 404).
+  async function deleteMessage(channelId: string, messageId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: channelMessages.id, companyId: channelMessages.companyId, channelId: channelMessages.channelId })
+      .from(channelMessages)
+      .where(eq(channelMessages.id, messageId));
+    if (!row || row.channelId !== channelId) return false;
+    await db
+      .update(channelMessages)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(channelMessages.id, messageId), isNull(channelMessages.deletedAt)));
+    publishMessagesChanged(row.companyId, channelId);
+    return true;
+  }
+
+  // "Wyczyść kanał" — soft delete wszystkich aktywnych wiadomości kanału.
+  async function clearChannel(channelId: string): Promise<boolean> {
+    const ch = await loadChannel(channelId);
+    if (!ch) return false;
+    await db
+      .update(channelMessages)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(channelMessages.channelId, channelId), isNull(channelMessages.deletedAt)));
+    publishMessagesChanged(ch.companyId, channelId);
+    return true;
+  }
+
+  // "Nowa rozmowa" — czyści historię (soft delete) i odpina backing-issue, żeby
+  // kolejna @wzmianka utworzyła świeży wątek. Stare issue + komentarze zostają w DB
+  // (audyt); nowy backing-issue powstanie leniwie w ensureBackingIssue.
+  async function startNewConversation(channelId: string): Promise<boolean> {
+    const ch = await loadChannel(channelId);
+    if (!ch) return false;
+    await db
+      .update(channelMessages)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(channelMessages.channelId, channelId), isNull(channelMessages.deletedAt)));
+    await db
+      .update(channels)
+      .set({ backingIssueId: null, updatedAt: new Date() })
+      .where(eq(channels.id, channelId));
+    publishMessagesChanged(ch.companyId, channelId);
+    return true;
+  }
+
+  return {
+    syncForCompany,
+    list,
+    membersOf,
+    postMessage,
+    listMessages,
+    memberStatuses,
+    getChannel,
+    deleteMessage,
+    clearChannel,
+    startNewConversation,
+  };
 }

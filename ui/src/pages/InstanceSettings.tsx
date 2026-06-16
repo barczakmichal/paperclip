@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock3, ExternalLink, Settings } from "lucide-react";
 import type { InstanceSchedulerHeartbeatAgent } from "@paperclipai/shared";
@@ -13,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { queryKeys } from "../lib/queryKeys";
 import { formatDateTime, relativeTime } from "../lib/utils";
+import { useTranslation } from "@/i18n";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
@@ -28,15 +28,16 @@ function buildAgentHref(agent: InstanceSchedulerHeartbeatAgent) {
 }
 
 export function InstanceSettings() {
-  const { t } = useTranslation("instanceSettingsPage");
+  const { t } = useTranslation();
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: t("instanceSettingsBreadcrumb", "Instance Settings") },
-      { label: t("heartbeatsBreadcrumb", "Heartbeats") },
+      { label: "Settings", href: "/company/settings" },
+      { label: "Instance settings", href: "/company/settings/instance/general" },
+      { label: t("page.instanceSettings.tab.heartbeats") },
     ]);
   }, [setBreadcrumbs, t]);
 
@@ -75,7 +76,7 @@ export function InstanceSettings() {
       ]);
     },
     onError: (error) => {
-      setActionError(error instanceof Error ? error.message : t("updateHeartbeatFailed", "Failed to update heartbeat."));
+      setActionError(error instanceof Error ? error.message : "Failed to update heartbeat.");
     },
   });
 
@@ -105,11 +106,11 @@ export function InstanceSettings() {
       const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
       if (failures.length > 0) {
         const firstError = failures[0]?.reason;
-        const detail = firstError instanceof Error ? firstError.message : t("unknownError", "Unknown error");
+        const detail = firstError instanceof Error ? firstError.message : "Unknown error";
         throw new Error(
           failures.length === 1
-            ? t("disableOneFailed", "Failed to disable 1 timer heartbeat: {{detail}}", { detail })
-            : t("disableManyFailed", "Failed to disable {{failed}} of {{total}} timer heartbeats. First error: {{detail}}", { failed: failures.length, total: enabled.length, detail }),
+            ? `Failed to disable 1 timer heartbeat: ${detail}`
+            : `Failed to disable ${failures.length} of ${enabled.length} timer heartbeats. First error: ${detail}`,
         );
       }
       return enabled;
@@ -128,7 +129,7 @@ export function InstanceSettings() {
       ]);
     },
     onError: (error) => {
-      setActionError(error instanceof Error ? error.message : t("disableAllFailed", "Failed to disable all heartbeats."));
+      setActionError(error instanceof Error ? error.message : "Failed to disable all heartbeats.");
     },
   });
 
@@ -152,7 +153,7 @@ export function InstanceSettings() {
   }, [agents]);
 
   if (heartbeatsQuery.isLoading) {
-    return <div className="text-sm text-muted-foreground">{t("loading", "Loading scheduler heartbeats...")}</div>;
+    return <div className="text-sm text-muted-foreground">{t("page.instanceSettings.loading")}</div>;
   }
 
   if (heartbeatsQuery.error) {
@@ -160,7 +161,7 @@ export function InstanceSettings() {
       <div className="text-sm text-destructive">
         {heartbeatsQuery.error instanceof Error
           ? heartbeatsQuery.error.message
-          : t("loadFailed", "Failed to load scheduler heartbeats.")}
+          : t("page.instanceSettings.error.loadFailed")}
       </div>
     );
   }
@@ -170,17 +171,17 @@ export function InstanceSettings() {
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <Settings className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">{t("title", "Scheduler Heartbeats")}</h1>
+          <h1 className="text-lg font-semibold">{t("page.instanceSettings.heartbeats.title")}</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          {t("subtitle", "Agents with a timer heartbeat enabled across all of your companies.")}
+          {t("page.instanceSettings.heartbeats.description")}
         </p>
       </div>
 
       <div className="flex items-center gap-4 text-sm text-muted-foreground">
-        <span><span className="font-semibold text-foreground">{activeCount}</span> {t("activeLabel", "active")}</span>
-        <span><span className="font-semibold text-foreground">{disabledCount}</span> {t("disabledLabel", "disabled")}</span>
-        <span><span className="font-semibold text-foreground">{grouped.length}</span> {t("companiesLabel", "companies", { count: grouped.length })}</span>
+        <span><span className="font-semibold text-foreground">{activeCount}</span> {t("page.instanceSettings.heartbeats.active")}</span>
+        <span><span className="font-semibold text-foreground">{disabledCount}</span> {t("page.instanceSettings.heartbeats.disabled")}</span>
+        <span><span className="font-semibold text-foreground">{grouped.length}</span> {t("page.instanceSettings.heartbeats.companies", { count: grouped.length })}</span>
         {anyEnabled && (
           <Button
             variant="destructive"
@@ -188,13 +189,14 @@ export function InstanceSettings() {
             className="ml-auto h-7 text-xs"
             disabled={disableAllMutation.isPending}
             onClick={() => {
-              if (!window.confirm(t("disableAllConfirm", "Disable timer heartbeats for all {{count}} enabled agents?", { count: enabledCount }))) {
+              const noun = enabledCount === 1 ? t("page.instanceSettings.heartbeats.agent") : t("page.instanceSettings.heartbeats.agents");
+              if (!window.confirm(t("page.instanceSettings.heartbeats.confirmDisableAll", { count: enabledCount, noun }))) {
                 return;
               }
               disableAllMutation.mutate(agents);
             }}
           >
-            {disableAllMutation.isPending ? t("disabling", "Disabling...") : t("disableAll", "Disable All")}
+            {disableAllMutation.isPending ? t("page.instanceSettings.heartbeats.disabling") : t("page.instanceSettings.heartbeats.disableAll")}
           </Button>
         )}
       </div>
@@ -208,7 +210,7 @@ export function InstanceSettings() {
       {agents.length === 0 ? (
         <EmptyState
           icon={Clock3}
-          message={t("noHeartbeats", "No scheduler heartbeats match the current criteria.")}
+          message={t("page.instanceSettings.heartbeats.empty")}
         />
       ) : (
         <div className="space-y-4">
@@ -230,7 +232,7 @@ export function InstanceSettings() {
                           variant={agent.schedulerActive ? "default" : "outline"}
                           className="shrink-0 text-[10px] px-1.5 py-0"
                         >
-                          {agent.schedulerActive ? t("on", "On") : t("off", "Off")}
+                          {agent.schedulerActive ? "On" : "Off"}
                         </Badge>
                         <Link
                           to={buildAgentHref(agent)}
@@ -250,13 +252,13 @@ export function InstanceSettings() {
                         >
                           {agent.lastHeartbeatAt
                             ? relativeTime(agent.lastHeartbeatAt)
-                            : t("never", "never")}
+                            : "never"}
                         </span>
                         <span className="ml-auto flex items-center gap-1.5 shrink-0">
                           <Link
                             to={buildAgentHref(agent)}
                             className="text-muted-foreground hover:text-foreground"
-                            title={t("fullAgentConfig", "Full agent config")}
+                            title="Full agent config"
                           >
                             <ExternalLink className="h-3.5 w-3.5" />
                           </Link>
@@ -267,7 +269,7 @@ export function InstanceSettings() {
                             disabled={saving}
                             onClick={() => toggleMutation.mutate(agent)}
                           >
-                            {saving ? "..." : agent.heartbeatEnabled ? t("disableTimer", "Disable Timer Heartbeat") : t("enableTimer", "Enable Timer Heartbeat")}
+                            {saving ? "..." : agent.heartbeatEnabled ? t("page.instanceSettings.heartbeats.disable") : t("page.instanceSettings.heartbeats.enable")}
                           </Button>
                         </span>
                       </div>

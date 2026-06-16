@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   Agent,
@@ -42,8 +41,9 @@ import {
   collectAllPaths,
   parseFrontmatter,
   FRONTMATTER_FIELD_LABELS,
-  PackageFileTree,
-} from "../components/PackageFileTree";
+  FileTree,
+} from "../components/FileTree";
+import { useTranslation } from "@/i18n";
 
 /**
  * Extract the set of agent/project/task slugs that are "checked" based on
@@ -493,16 +493,17 @@ function ExportPreviewPane({
   content,
   allFiles,
   onSkillClick,
+  t,
 }: {
   selectedFile: string | null;
   content: CompanyPortabilityFileEntry | null;
   allFiles: Record<string, CompanyPortabilityFileEntry>;
   onSkillClick?: (skill: string) => void;
+  t: ReturnType<typeof useTranslation>[0];
 }) {
-  const { t } = useTranslation("companyExportPage");
   if (!selectedFile || content === null) {
     return (
-      <EmptyState icon={Package} message={t("selectFilePreview", "Select a file to preview its contents.")} />
+      <EmptyState icon={Package} message={t("page.companyExport.selectAFile")} />
     );
   }
 
@@ -548,7 +549,7 @@ function ExportPreviewPane({
           </pre>
         ) : (
           <div className="rounded-lg border border-border bg-accent/10 px-4 py-3 text-sm text-muted-foreground">
-            {t("binaryPreviewUnavailable", "Binary asset preview is not available for this file type.")}
+            {t("page.companyExport.binaryPreviewUnavailable")}
           </div>
         )}
       </div>
@@ -580,7 +581,7 @@ function expandAncestors(filePath: string): string[] {
 }
 
 export function CompanyExport() {
-  const { t } = useTranslation("companyExportPage");
+  const { t } = useTranslation();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const { pushToast } = useToastActions();
@@ -675,8 +676,8 @@ export function CompanyExport() {
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: t("orgChartBreadcrumb", "Org Chart"), href: "/org" },
-      { label: t("exportBreadcrumb", "Export") },
+      { label: t("page.companyExport.orgChart"), href: "/org" },
+      { label: t("page.companyExport.title") },
     ]);
   }, [setBreadcrumbs, t]);
 
@@ -722,8 +723,8 @@ export function CompanyExport() {
     onError: (err) => {
       pushToast({
         tone: "error",
-        title: t("toastExportFailed", "Export failed"),
-        body: err instanceof Error ? err.message : t("loadExportFailed", "Failed to load export data."),
+        title: t("page.companyExport.error.exportFailed"),
+        body: err instanceof Error ? err.message : t("page.companyExport.error.loadFailed"),
       });
     },
   });
@@ -740,15 +741,15 @@ export function CompanyExport() {
       downloadZip(result, resultCheckedFiles, result.files);
       pushToast({
         tone: "success",
-        title: t("toastExportDownloaded", "Export downloaded"),
-        body: t("toastExportedAs", "{{count}} file exported as {{name}}.zip", { count: resultCheckedFiles.size, name: result.rootPath }),
+        title: t("page.companyExport.exportDownloaded"),
+        body: t("page.companyExport.filesExported", { count: resultCheckedFiles.size, name: result.rootPath }),
       });
     },
     onError: (err) => {
       pushToast({
         tone: "error",
-        title: t("toastExportFailed", "Export failed"),
-        body: err instanceof Error ? err.message : t("buildExportFailed", "Failed to build export package."),
+        title: t("page.companyExport.error.exportFailed"),
+        body: err instanceof Error ? err.message : t("page.companyExport.error.exportFailed"),
       });
     },
   });
@@ -914,7 +915,7 @@ export function CompanyExport() {
   }
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={Package} message={t("selectCompany", "Select a company to export.")} />;
+    return <EmptyState icon={Package} message={t("page.companyExport.selectCompany")} />;
   }
 
   if (exportPreviewMutation.isPending && !exportData) {
@@ -922,7 +923,7 @@ export function CompanyExport() {
   }
 
   if (!exportData) {
-    return <EmptyState icon={Package} message={t("loadingExportData", "Loading export data...")} />;
+    return <EmptyState icon={Package} message={t("page.companyExport.loadingPreview")} />;
   }
 
   const previewContent = selectedFile
@@ -936,16 +937,16 @@ export function CompanyExport() {
       {/* Sticky top action bar */}
       <div className="sticky top-0 z-10 border-b border-border bg-background px-5 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex flex-wrap items-center gap-4 text-sm">
             <span className="font-medium">
-              {t("companyExportLabel", "{{name}} export", { name: selectedCompany?.name ?? t("companyFallback", "Company") })}
+              {selectedCompany?.name ?? t("page.companyExport.selectCompany")} {t("page.companyExport.title")}
             </span>
             <span className="text-muted-foreground">
-              {t("filesSelected", "{{selected}} / {{total}} files selected", { selected: selectedCount, total: totalFiles })}
+              {t("page.companyExport.actionBar.filesSelected", { selected: selectedCount, total: totalFiles })}
             </span>
             {warnings.length > 0 && (
               <span className="text-amber-500">
-                {t("warningsCount", "{{count}} warning", { count: warnings.length })}
+                {t("page.companyExport.actionBar.warning", { count: warnings.length })}
               </span>
             )}
           </div>
@@ -956,8 +957,8 @@ export function CompanyExport() {
           >
             <Download className="mr-1.5 h-3.5 w-3.5" />
             {downloadMutation.isPending
-              ? t("buildingExport", "Building export...")
-              : t("exportFiles", "Export {{count}} file", { count: selectedCount })}
+              ? t("page.companyExport.actionBar.buildingExport")
+              : t("page.companyExport.actionBar.exportFiles", { count: selectedCount })}
           </Button>
         </div>
       </div>
@@ -972,10 +973,10 @@ export function CompanyExport() {
       )}
 
       {/* Two-column layout */}
-      <div className="grid h-[calc(100vh-12rem)] gap-0 xl:grid-cols-[19rem_minmax(0,1fr)]">
-        <aside className="flex flex-col border-r border-border overflow-hidden">
+      <div className="grid gap-4 xl:h-[calc(100vh-12rem)] xl:grid-cols-[19rem_minmax(0,1fr)] xl:gap-0">
+        <aside className="flex max-h-[24rem] flex-col overflow-hidden border-b border-border xl:max-h-none xl:border-b-0 xl:border-r">
           <div className="border-b border-border px-4 py-3 shrink-0">
-            <h2 className="text-base font-semibold">{t("packageFiles", "Package files")}</h2>
+            <h2 className="text-base font-semibold">{t("page.companyExport.packageFiles")}</h2>
           </div>
           <div className="border-b border-border px-3 py-2 shrink-0">
             <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1">
@@ -984,14 +985,14 @@ export function CompanyExport() {
                 type="text"
                 value={treeSearch}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder={t("searchFiles", "Search files...")}
+                placeholder={t("page.companyExport.searchFiles")}
                 className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                 data-page-search-target="true"
               />
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
-            <PackageFileTree
+            <FileTree
               nodes={displayTree}
               selectedFile={selectedFile}
               expandedDirs={expandedDirs}
@@ -999,6 +1000,7 @@ export function CompanyExport() {
               onToggleDir={handleToggleDir}
               onSelectFile={selectFile}
               onToggleCheck={handleToggleCheck}
+              wrapLabels={false}
             />
             {totalTaskChildren > visibleTaskChildren && !treeSearch && (
               <div className="px-4 py-2">
@@ -1007,14 +1009,14 @@ export function CompanyExport() {
                   onClick={() => setTaskLimit((prev) => prev + TASKS_PAGE_SIZE)}
                   className="w-full rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent/30 hover:text-foreground transition-colors"
                 >
-                  {t("showMoreIssues", "Show more issues ({{visible}} of {{total}})", { visible: visibleTaskChildren, total: totalTaskChildren })}
+                  Show more tasks ({visibleTaskChildren} of {totalTaskChildren})
                 </button>
               </div>
             )}
           </div>
         </aside>
-        <div className="min-w-0 overflow-y-auto pl-6">
-          <ExportPreviewPane selectedFile={selectedFile} content={previewContent} allFiles={effectiveFiles} onSkillClick={handleSkillClick} />
+        <div className="min-w-0 overflow-y-auto xl:pl-6">
+          <ExportPreviewPane selectedFile={selectedFile} content={previewContent} allFiles={effectiveFiles} onSkillClick={handleSkillClick} t={t} />
         </div>
       </div>
     </div>

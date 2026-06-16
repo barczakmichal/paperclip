@@ -1,15 +1,16 @@
 import { useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { GOAL_STATUSES, GOAL_LEVELS } from "@paperclipai/shared";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
+import { useTranslation } from "@/i18n";
 import { goalsApi } from "../api/goals";
 import { assetsApi } from "../api/assets";
 import { queryKeys } from "../lib/queryKeys";
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,14 +28,15 @@ import { cn } from "../lib/utils";
 import { MarkdownEditor, type MarkdownEditorRef } from "./MarkdownEditor";
 import { StatusBadge } from "./StatusBadge";
 
+const levelKeys: Record<string, string> = {
+  company: "goal.level.company",
+  team: "goal.level.team",
+  agent: "goal.level.agent",
+  task: "goal.level.task",
+};
+
 export function NewGoalDialog() {
-  const { t } = useTranslation("newGoalDialog");
-  const levelLabels: Record<string, string> = {
-    company: t("levelCompany", "Company"),
-    team: t("levelTeam", "Team"),
-    agent: t("levelAgent", "Agent"),
-    task: t("levelTask", "Task"),
-  };
+  const { t } = useTranslation();
   const { newGoalOpen, newGoalDefaults, closeNewGoal } = useDialog();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const queryClient = useQueryClient();
@@ -122,6 +124,7 @@ export function NewGoalDialog() {
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+          <DialogTitle className="sr-only">{newGoalDefaults.parentId ? t("goal.dialog.newSubGoal") : t("goal.dialog.newGoal")}</DialogTitle>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {selectedCompany && (
               <span className="bg-muted px-1.5 py-0.5 rounded text-xs font-medium">
@@ -129,7 +132,7 @@ export function NewGoalDialog() {
               </span>
             )}
             <span className="text-muted-foreground/60">&rsaquo;</span>
-            <span>{newGoalDefaults.parentId ? t("newSubGoal", "New sub-goal") : t("newGoal", "New goal")}</span>
+            <span>{newGoalDefaults.parentId ? t("goal.dialog.newSubGoal") : t("goal.dialog.newGoal")}</span>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -155,7 +158,7 @@ export function NewGoalDialog() {
         <div className="px-4 pt-4 pb-2 shrink-0">
           <input
             className="w-full text-lg font-semibold bg-transparent outline-none placeholder:text-muted-foreground/50"
-            placeholder={t("goalTitle", "Goal title")}
+            placeholder={t("goal.dialog.goalTitle")}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => {
@@ -174,7 +177,7 @@ export function NewGoalDialog() {
             ref={descriptionEditorRef}
             value={description}
             onChange={setDescription}
-            placeholder={t("addDescription", "Add description...")}
+            placeholder={t("goal.dialog.addDescription")}
             bordered={false}
             contentClassName={cn("text-sm text-muted-foreground", expanded ? "min-h-[220px]" : "min-h-[120px]")}
             imageUploadHandler={async (file) => {
@@ -214,7 +217,7 @@ export function NewGoalDialog() {
             <PopoverTrigger asChild>
               <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors">
                 <Layers className="h-3 w-3 text-muted-foreground" />
-                {levelLabels[level] ?? level}
+                {t(levelKeys[level] ?? level)}
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-40 p-1" align="start">
@@ -227,7 +230,7 @@ export function NewGoalDialog() {
                   )}
                   onClick={() => { setLevel(l); setLevelOpen(false); }}
                 >
-                  {levelLabels[l] ?? l}
+                  {t(levelKeys[l] ?? l)}
                 </button>
               ))}
             </PopoverContent>
@@ -238,7 +241,7 @@ export function NewGoalDialog() {
             <PopoverTrigger asChild>
               <button className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-accent/50 transition-colors">
                 <Target className="h-3 w-3 text-muted-foreground" />
-                {currentParent ? currentParent.title : t("parentGoal", "Parent goal")}
+                {currentParent ? currentParent.title : t("goal.dialog.parentGoal")}
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-48 p-1" align="start">
@@ -249,7 +252,7 @@ export function NewGoalDialog() {
                 )}
                 onClick={() => { setParentId(""); setParentOpen(false); }}
               >
-                {t("noParent", "No parent")}
+                {t("goal.dialog.noParent")}
               </button>
               {(goals ?? []).map((g) => (
                 <button
@@ -274,7 +277,7 @@ export function NewGoalDialog() {
             disabled={!title.trim() || createGoal.isPending}
             onClick={handleSubmit}
           >
-            {createGoal.isPending ? t("creating", "Creating…") : newGoalDefaults.parentId ? t("createSubGoal", "Create sub-goal") : t("createGoal", "Create goal")}
+            {createGoal.isPending ? t("common.actions.creating") : newGoalDefaults.parentId ? t("goal.dialog.newSubGoal") : t("goal.dialog.newGoal")}
           </Button>
         </div>
       </DialogContent>

@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { Link } from "@/lib/router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { heartbeatsApi, type LiveRunForIssue } from "../api/heartbeats";
@@ -10,7 +9,6 @@ import { Identity } from "./Identity";
 import { RunChatSurface } from "./RunChatSurface";
 import { StatusBadge } from "./StatusBadge";
 import { useLiveRunTranscripts } from "./transcript/useLiveRunTranscripts";
-import { GlowFrame, LiveDot } from "@/broadcast";
 
 interface LiveRunWidgetProps {
   issueId: string;
@@ -27,7 +25,6 @@ function isRunActive(status: string): boolean {
 }
 
 export function LiveRunWidget({ issueId, companyId }: LiveRunWidgetProps) {
-  const { t } = useTranslation("liveRunWidget");
   const queryClient = useQueryClient();
   const [cancellingRunIds, setCancellingRunIds] = useState(new Set<string>());
 
@@ -91,22 +88,14 @@ export function LiveRunWidget({ issueId, companyId }: LiveRunWidgetProps) {
 
   if (runs.length === 0) return null;
 
-  const hasActiveRun = runs.some((r) => isRunActive(r.status));
-
   return (
-    <GlowFrame
-      state={hasActiveRun ? "active" : "idle"}
-      className="overflow-hidden bg-background/80"
-    >
+    <div className="overflow-hidden rounded-xl border border-cyan-500/25 bg-background/80 shadow-[0_18px_50px_rgba(6,182,212,0.08)]">
       <div className="border-b border-border/60 bg-cyan-500/[0.04] px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300">
-            {t("liveRuns", "Live Runs")}
-          </div>
-          {hasActiveRun && <LiveDot status="active" pulse label={t("live", "live")} />}
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300">
+          Live Runs
         </div>
         <div className="mt-1 text-xs text-muted-foreground">
-          {t("sharedChatSurface", "Uses the shared chat-style run surface from issue activity.")}
+          Uses the shared chat-style run surface from task activity.
         </div>
       </div>
 
@@ -115,7 +104,7 @@ export function LiveRunWidget({ issueId, companyId }: LiveRunWidgetProps) {
           const isActive = isRunActive(run.status);
           const transcript = transcriptByRun.get(run.id) ?? [];
           return (
-            <section key={run.id} className="px-4 py-4 bg-card hover:bg-accent/30 transition-colors">
+            <section key={run.id} className="px-4 py-4">
               <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <Link to={`/agents/${run.agentId}`} className="inline-flex hover:underline">
@@ -141,14 +130,14 @@ export function LiveRunWidget({ issueId, companyId }: LiveRunWidgetProps) {
                       className="inline-flex items-center gap-1 rounded-full border border-red-500/20 bg-red-500/[0.06] px-2.5 py-1 text-[11px] font-medium text-red-700 transition-colors hover:bg-red-500/[0.12] dark:text-red-300 disabled:opacity-50"
                     >
                       <Square className="h-2.5 w-2.5" fill="currentColor" />
-                      {cancellingRunIds.has(run.id) ? t("stopping", "Stopping…") : t("stop", "Stop")}
+                      {cancellingRunIds.has(run.id) ? "Stopping…" : "Stop"}
                     </button>
                   )}
                   <Link
                     to={`/agents/${run.agentId}/runs/${run.id}`}
                     className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/70 px-2.5 py-1 text-[11px] font-medium text-cyan-700 transition-colors hover:border-cyan-500/30 hover:text-cyan-600 dark:text-cyan-300"
                   >
-                    {t("openRun", "Open run")}
+                    Open run
                     <ExternalLink className="h-3 w-3" />
                   </Link>
                 </div>
@@ -166,6 +155,6 @@ export function LiveRunWidget({ issueId, companyId }: LiveRunWidgetProps) {
           );
         })}
       </div>
-    </GlowFrame>
+    </div>
   );
 }

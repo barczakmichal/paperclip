@@ -1,5 +1,4 @@
 import type { ActivityEvent } from "@paperclipai/shared";
-import { useTranslation } from "react-i18next";
 import { Plus, Minus } from "lucide-react";
 import { IssueReferencePill } from "./IssueReferencePill";
 
@@ -52,7 +51,6 @@ function Section({
 }
 
 export function IssueReferenceActivitySummary({ event }: { event: Pick<ActivityEvent, "details"> }) {
-  const { t } = useTranslation("issueReferenceActivitySummary");
   const added = readIssueReferences(event.details, "addedReferencedIssues");
   const removed = readIssueReferences(event.details, "removedReferencedIssues");
   if (added.length === 0 && removed.length === 0) return null;
@@ -60,12 +58,12 @@ export function IssueReferenceActivitySummary({ event }: { event: Pick<ActivityE
   return (
     <div className="mt-2 space-y-1">
       <Section
-        label={t("addedReferences", "Added references")}
+        label="Added references"
         icon={<Plus className="h-3 w-3 text-green-600 dark:text-green-400" aria-hidden="true" />}
         items={added}
       />
       <Section
-        label={t("removedReferences", "Removed references")}
+        label="Removed references"
         icon={<Minus className="h-3 w-3 text-red-600 dark:text-red-400" aria-hidden="true" />}
         items={removed}
         strikethrough

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import type { IssueAttachment } from "@paperclipai/shared";
+import { t } from "@/i18n";
 
 interface ImageGalleryModalProps {
   images: IssueAttachment[];
@@ -17,7 +17,6 @@ export function ImageGalleryModal({
   open,
   onOpenChange,
 }: ImageGalleryModalProps) {
-  const { t } = useTranslation("imageGalleryModal");
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const imageRef = useRef<HTMLImageElement>(null);
 
@@ -76,7 +75,7 @@ export function ImageGalleryModal({
           {/* Top bar */}
           <div className="flex items-center justify-between px-5 py-3 text-white/80 text-sm shrink-0">
             <span className="truncate max-w-[50%] font-medium" title={current.originalFilename ?? undefined}>
-              {current.originalFilename ?? t("image", "Image")}
+              {current.originalFilename ?? "Image"}
             </span>
             <div className="flex items-center gap-4">
               <span className="text-white/40 tabular-nums text-xs">
@@ -86,7 +85,7 @@ export function ImageGalleryModal({
                 href={current.contentPath}
                 download={current.originalFilename ?? "image"}
                 className="text-white/50 hover:text-white transition-colors"
-                title={t("download", "Download")}
+                title={t("common.actions.download")}
                 onClick={(e) => e.stopPropagation()}
               >
                 <Download className="h-4.5 w-4.5" />
@@ -95,7 +94,7 @@ export function ImageGalleryModal({
                 type="button"
                 onClick={() => onOpenChange(false)}
                 className="text-white/50 hover:text-white transition-colors"
-                title={t("close", "Close")}
+                title={t("common.actions.close")}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -111,7 +110,7 @@ export function ImageGalleryModal({
                   type="button"
                   onClick={goPrev}
                   className="rounded-full bg-white/10 p-3 text-white/60 hover:text-white hover:bg-white/20 transition-colors"
-                  title={t("previous", "Previous")}
+                  title={t("common.actions.previous")}
                 >
                   <ChevronLeft className="h-7 w-7" />
                 </button>
@@ -123,7 +122,7 @@ export function ImageGalleryModal({
               <img
                 ref={imageRef}
                 src={current.contentPath}
-                alt={current.originalFilename ?? t("attachment", "attachment")}
+                alt={current.originalFilename ?? "attachment"}
                 className="max-w-full max-h-full object-contain select-none rounded-lg"
                 draggable={false}
               />
@@ -136,7 +135,7 @@ export function ImageGalleryModal({
                   type="button"
                   onClick={goNext}
                   className="rounded-full bg-white/10 p-3 text-white/60 hover:text-white hover:bg-white/20 transition-colors"
-                  title={t("next", "Next")}
+                  title={t("common.actions.next")}
                 >
                   <ChevronRight className="h-7 w-7" />
                 </button>

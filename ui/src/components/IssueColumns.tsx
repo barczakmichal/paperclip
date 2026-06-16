@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { useTranslation } from "react-i18next";
 import type { Issue } from "@paperclipai/shared";
 import { Columns3 } from "lucide-react";
+import { useTranslation } from "@/i18n";
 import { pickTextColorForPillBg } from "@/lib/color-contrast";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,31 +23,29 @@ import { StatusIcon } from "./StatusIcon";
 
 export const issueTrailingColumns: InboxIssueColumn[] = ["assignee", "project", "workspace", "parent", "labels", "updated"];
 
-function useIssueColumnLabels(): Record<InboxIssueColumn, string> {
-  const { t } = useTranslation("issueColumns");
+function getIssueColumnLabels(t: (key: string) => string): Record<InboxIssueColumn, string> {
   return {
-    status: t("labelStatus", "Status"),
-    id: t("labelId", "ID"),
-    assignee: t("labelAssignee", "Assignee"),
-    project: t("labelProject", "Project"),
-    workspace: t("labelWorkspace", "Workspace"),
-    parent: t("labelParent", "Parent issue"),
-    labels: t("labelLabels", "Tags"),
-    updated: t("labelUpdated", "Last updated"),
+    status: t("component.issueColumns.status"),
+    id: t("component.issueColumns.id"),
+    assignee: t("component.issueColumns.assignee"),
+    project: t("component.issueColumns.project"),
+    workspace: t("component.issueColumns.workspace"),
+    parent: "Parent task",
+    labels: t("component.issueColumns.labels"),
+    updated: t("component.issueColumns.updated"),
   };
 }
 
-function useIssueColumnDescriptions(): Record<InboxIssueColumn, string> {
-  const { t } = useTranslation("issueColumns");
+function getIssueColumnDescriptions(t: (key: string) => string): Record<InboxIssueColumn, string> {
   return {
-    status: t("descStatus", "Issue state chip on the left edge."),
-    id: t("descId", "Ticket identifier like PAP-1009."),
-    assignee: t("descAssignee", "Assigned agent or board user."),
-    project: t("descProject", "Linked project pill with its color."),
-    workspace: t("descWorkspace", "Execution or project workspace used for the issue."),
-    parent: t("descParent", "Parent issue identifier and title."),
-    labels: t("descLabels", "Issue labels and tags."),
-    updated: t("descUpdated", "Latest visible activity time."),
+    status: "Task state chip on the left edge.",
+    id: t("component.issueColumns.idDesc"),
+    assignee: t("component.issueColumns.assigneeDesc"),
+    project: t("component.issueColumns.projectDesc"),
+    workspace: "Execution or project workspace used for the task.",
+    parent: "Parent task identifier and title.",
+    labels: "Task labels and tags.",
+    updated: t("component.issueColumns.updatedDesc"),
   };
 }
 
@@ -83,9 +81,10 @@ export function IssueColumnPicker({
   title: string;
   iconOnly?: boolean;
 }) {
-  const { t } = useTranslation("issueColumns");
-  const issueColumnLabels = useIssueColumnLabels();
-  const issueColumnDescriptions = useIssueColumnDescriptions();
+  const { t } = useTranslation();
+  const columnLabels = getIssueColumnLabels(t);
+  const columnDescriptions = getIssueColumnDescriptions(t);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -94,17 +93,17 @@ export function IssueColumnPicker({
           variant={iconOnly ? "outline" : "ghost"}
           size={iconOnly ? "icon" : "sm"}
           className={iconOnly ? "h-8 w-8 shrink-0" : "hidden h-8 shrink-0 px-2 text-xs sm:inline-flex"}
-          title={t("columns", "Columns")}
+          title={t("component.issueColumns.columns")}
         >
           <Columns3 className={iconOnly ? "h-3.5 w-3.5" : "mr-1 h-3.5 w-3.5"} />
-          {!iconOnly && t("columns", "Columns")}
+          {!iconOnly && t("component.issueColumns.columns")}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[300px] rounded-xl border-border/70 p-1.5 shadow-xl shadow-black/10">
         <DropdownMenuLabel className="px-2 pb-1 pt-1.5">
           <div className="space-y-1">
             <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              {t("desktopIssueRows", "Desktop issue rows")}
+              Desktop task rows
             </div>
             <div className="text-sm font-medium text-foreground">
               {title}
@@ -122,10 +121,10 @@ export function IssueColumnPicker({
           >
             <span className="flex flex-col gap-0.5">
               <span className="text-sm font-medium text-foreground">
-                {issueColumnLabels[column]}
+                {columnLabels[column]}
               </span>
               <span className="text-xs leading-relaxed text-muted-foreground">
-                {issueColumnDescriptions[column]}
+                {columnDescriptions[column]}
               </span>
             </span>
           </DropdownMenuCheckboxItem>
@@ -135,8 +134,8 @@ export function IssueColumnPicker({
           onSelect={onResetColumns}
           className="rounded-lg px-3 py-2 text-sm"
         >
-          {t("resetDefaults", "Reset defaults")}
-          <span className="ml-auto text-xs text-muted-foreground">{t("resetDefaultsHint", "status, id, updated")}</span>
+          {t("component.issueColumns.resetDefaults")}
+          <span className="ml-auto text-xs text-muted-foreground">{t("component.issueColumns.defaultColumns")}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -158,7 +157,7 @@ export function InboxIssueMetaLeading({
   statusSlot?: ReactNode;
   checklistStepNumber?: number | string | null;
 }) {
-  const { t } = useTranslation("issueColumns");
+  const { t } = useTranslation();
   return (
     <>
       {showStatus ? (
@@ -198,7 +197,7 @@ export function InboxIssueMetaLeading({
               "text-blue-600 dark:text-blue-400",
             )}
           >
-            {t("live", "Live")}
+            {t("component.issueColumns.live")}
           </span>
         </span>
       )}
@@ -237,9 +236,9 @@ export function InboxIssueTrailingColumns({
   assigneeContent?: ReactNode;
   onFilterWorkspace?: (workspaceId: string) => void;
 }) {
-  const { t } = useTranslation("issueColumns");
   const activityText = timeAgo(issue.lastActivityAt ?? issue.lastExternalCommentAt ?? issue.updatedAt);
-  const userLabel = assigneeUserName ?? formatAssigneeUserLabel(issue.assigneeUserId, currentUserId) ?? t("user", "User");
+  const { t } = useTranslation();
+  const userLabel = assigneeUserName ?? formatAssigneeUserLabel(issue.assigneeUserId, currentUserId) ?? t("component.issueColumns.user");
 
   return (
     <span
@@ -279,7 +278,7 @@ export function InboxIssueTrailingColumns({
 
           return (
             <span key={column} className="min-w-0 truncate text-xs text-muted-foreground">
-              {t("unassigned", "Unassigned")}
+              {t("component.issueColumns.unassigned")}
             </span>
           );
         }
@@ -304,7 +303,7 @@ export function InboxIssueTrailingColumns({
 
           return (
             <span key={column} className="min-w-0 truncate text-xs text-muted-foreground">
-              {t("noProject", "No project")}
+              {t("component.issueColumns.noProject")}
             </span>
           );
         }
@@ -361,7 +360,7 @@ export function InboxIssueTrailingColumns({
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="top" sideOffset={6}>
-                    {t("filterByWorkspace", "Filter by workspace")}
+                    {t("component.issueColumns.filterByWorkspace")}
                   </TooltipContent>
                 </Tooltip>
               ) : (
@@ -381,7 +380,7 @@ export function InboxIssueTrailingColumns({
               {parentIdentifier ? (
                 <span className="font-mono">{parentIdentifier}</span>
               ) : (
-                <span className="italic">{t("subIssue", "Sub-issue")}</span>
+                <span className="italic">Sub-task</span>
               )}
             </span>
           );

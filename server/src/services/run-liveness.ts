@@ -218,7 +218,6 @@ function isNoisyTranscriptLine(line: string) {
   return (
     /^(?:command|status|exit_code|tool|tool_call|tool_result|stdout|stderr|event|payload|session|cwd|ref_id)\s*:/i.test(trimmed) ||
     /^(?:\{|\[).{0,80}(?:tool|event|stdout|stderr|cmd|command|payload)/i.test(trimmed) ||
-    /^[[{]\s*"(?:type|role|model|id|message|delta|content_block|event)"\s*:/i.test(trimmed) ||
     /^\$?\s*(?:rg|sed|cat|ls|git|pnpm|npm|yarn|curl|node|python)\b/i.test(trimmed)
   );
 }

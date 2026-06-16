@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { issuesApi } from "../api/issues";
 import { useCompany } from "../context/CompanyContext";
@@ -16,11 +15,10 @@ import { ListTodo } from "lucide-react";
 export function MyIssues() {
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
-  const { t } = useTranslation("myIssuesPage");
 
   useEffect(() => {
-    setBreadcrumbs([{ label: t("breadcrumb", "My Issues") }]);
-  }, [setBreadcrumbs, t]);
+    setBreadcrumbs([{ label: "My Tasks" }]);
+  }, [setBreadcrumbs]);
 
   const { data: issues, isLoading, error } = useQuery({
     queryKey: queryKeys.issues.list(selectedCompanyId!),
@@ -29,7 +27,7 @@ export function MyIssues() {
   });
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={ListTodo} message={t("selectCompany", "Select a company to view your issues.")} />;
+    return <EmptyState icon={ListTodo} message="Select a company to view your tasks." />;
   }
 
   if (isLoading) {
@@ -46,7 +44,7 @@ export function MyIssues() {
       {error && <p className="text-sm text-destructive">{error.message}</p>}
 
       {myIssues.length === 0 && (
-        <EmptyState icon={ListTodo} message={t("emptyState", "No issues assigned to you.")} />
+        <EmptyState icon={ListTodo} message="No tasks assigned to you." />
       )}
 
       {myIssues.length > 0 && (

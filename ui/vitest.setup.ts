@@ -1,10 +1,9 @@
-import i18n from "./src/lib/i18n";
-
-// Tests assert against English UI text. Force English so components render
-// their English defaultValue regardless of the app's Polish default language.
-void i18n.changeLanguage("en");
-
 const storageEntries = new Map<string, string>();
+
+// Pin the i18n locale to English in tests so that lib/*.ts modules that call
+// `t(...)` at runtime produce stable English assertions, regardless of the
+// developer's OS language detected by i18next-browser-languagedetector.
+storageEntries.set("paperclip_locale", "en");
 
 function installStorageMock(target: Record<string, unknown>) {
   Object.defineProperty(target, "localStorage", {
@@ -35,4 +34,20 @@ if (
 
 if (typeof window !== "undefined" && window.localStorage !== globalThis.localStorage) {
   installStorageMock(window as unknown as Record<string, unknown>);
+}
+
+// jsdom does not implement Element.prototype.scrollIntoView. Several surfaces
+// (e.g. IssueChatThread's auto-scroll-to-latest) call it during normal render,
+// so provide a no-op default. Tests that assert on scroll behaviour override
+// this on the prototype themselves and restore it afterwards.
+if (typeof Element !== "undefined" && typeof Element.prototype.scrollIntoView !== "function") {
+  Element.prototype.scrollIntoView = function scrollIntoView() {};
+}
+
+// Force English locale for tests after the i18n module has self-initialised.
+// This guarantees deterministic English copy from `t(...)` calls regardless
+// of how the browser language detector resolved the locale at import time.
+const { i18n } = await import("./src/i18n");
+if (i18n.language !== "en") {
+  await i18n.changeLanguage("en");
 }

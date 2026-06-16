@@ -11,31 +11,42 @@ import {
   Boxes,
   Repeat,
   GitBranch,
+  Package,
   Settings,
-  Radio,
-  Workflow,
-  MessageSquare,
+  FolderOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pin,
+  MessagesSquare,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
+import { NavLink } from "@/lib/router";
 import { SidebarSection } from "./SidebarSection";
 import { SidebarNavItem } from "./SidebarNavItem";
-import { SidebarProjects } from "./SidebarProjects";
 import { SidebarAgents } from "./SidebarAgents";
+import { SidebarProjects } from "./SidebarProjects";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import { useDialogActions } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
+import { useSidebar } from "../context/SidebarContext";
 import { heartbeatsApi } from "../api/heartbeats";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { queryKeys } from "../lib/queryKeys";
 import { useInboxBadge } from "../hooks/useInboxBadge";
+import { useTranslation } from "@/i18n";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn, SIDEBAR_RAIL_HIDDEN_LABEL } from "../lib/utils";
 import { PluginSlotOutlet } from "@/plugins/slots";
+import { PluginLauncherOutlet } from "@/plugins/launchers";
 import { SidebarCompanyMenu } from "./SidebarCompanyMenu";
 
 export function Sidebar() {
-  const { t } = useTranslation("nav");
+  const { t } = useTranslation();
   const { openNewIssue } = useDialogActions();
   const { selectedCompanyId, selectedCompany } = useCompany();
+  const { isMobile, collapsed, collapseLocked, peeking, toggleCollapsed, setCollapsed } = useSidebar();
+  const rail = collapsed && !peeking;
   const inboxBadge = useInboxBadge(selectedCompanyId);
   const { data: experimentalSettings } = useQuery({
     queryKey: queryKeys.instance.experimentalSettings,
@@ -49,10 +60,15 @@ export function Sidebar() {
   });
   const liveRunCount = liveRuns?.length ?? 0;
   const showWorkspacesLink = experimentalSettings?.enableIsolatedWorkspaces === true;
-
-  function openSearch() {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
-  }
+  // IA flag (PAP-89): branch the sidebar nav presentation. Default OFF = classic
+  // (per-project collapsible, no Projects nav link). ON = streamlined
+  // (top-level Projects link). Issue/Task wording is split to PR #7651.
+  // Gating is navigation-only; all routes stay registered in both modes.
+  const streamlined = experimentalSettings?.enableStreamlinedLeftNavigation === true;
+  // Conference Room Chat flag (PAP-136/PAP-137): the Conference Room nav item
+  // is a new surface, hidden entirely while the flag is off (same no-flash
+  // pattern as showWorkspacesLink above).
+  const conferenceRoomChatEnabled = experimentalSettings?.enableConferenceRoomChat === true;
 
   const pluginContext = {
     companyId: selectedCompanyId,
@@ -60,40 +76,117 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="w-60 h-full min-h-0 border-r border-border bg-background flex flex-col">
+    <aside className="w-full h-full min-h-0 border-r border-border bg-background flex flex-col">
       {/* Top bar: Company name (bold) + Search — aligned with top sections (no visible border) */}
       <div className="flex items-center gap-1 px-3 h-12 shrink-0">
         <SidebarCompanyMenu />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground shrink-0"
-          onClick={openSearch}
-        >
-          <Search className="h-4 w-4" />
-        </Button>
+        {/* In the collapsed rail the search/toggle controls don't fit beside the
+            logo — keeping them would overflow the 64px rail and squeeze the logo
+            out of alignment with the icon column below it (PAP-10676). They return
+            as soon as the panel is expanded (pinned) or peeking. Expansion in the
+            rail is still reachable via hover-peek + Pin and Cmd/Ctrl+B. */}
+        {!rail ? (
+          <>
+            <Button
+              asChild
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground shrink-0"
+              aria-label={t("nav.sidebar.openSearch")}
+              title={t("nav.sidebar.openSearch")}
+            >
+              <NavLink to="/search">
+                <Search className="h-4 w-4" />
+              </NavLink>
+            </Button>
+            {/* Desktop-only collapse/expand affordance. While peeking (hover flyout
+                over the collapsed rail) it becomes a Pin that promotes the peek to a
+                pinned-expanded sidebar; otherwise it toggles the pinned rail. Mobile
+                uses the off-canvas drawer, so this control is hidden there. It is
+                also hidden while a secondary sidebar forces the rail (collapseLocked):
+                the user cannot expand the primary while a secondary sidebar is shown. */}
+            {!isMobile && !collapseLocked ? (
+              peeking ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground shrink-0"
+                  aria-label="Keep sidebar expanded"
+                  title="Keep sidebar expanded"
+                  onClick={() => setCollapsed(false)}
+                >
+                  <Pin className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground shrink-0"
+                  aria-expanded={!collapsed}
+                  aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  onClick={() => toggleCollapsed()}
+                >
+                  {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                </Button>
+              )
+            ) : null}
+          </>
+        ) : null}
       </div>
 
-      <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-auto-hide flex flex-col gap-4 px-3 py-2">
+      <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-auto-hide flex flex-col gap-4 pointer-coarse:gap-3 px-3 py-2">
         <div className="flex flex-col gap-0.5">
-          {/* New Issue button aligned with nav items */}
-          <button
-            onClick={() => openNewIssue()}
-            className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-muted-foreground hover:bg-accent/40 hover:text-foreground transition-colors"
-          >
-            <SquarePen className="h-4 w-4 shrink-0" />
-            <span className="truncate">{t("newIssue", "New Issue")}</span>
-          </button>
-          <SidebarNavItem to="/dashboard" label={t("dashboard", "Dashboard")} icon={LayoutDashboard} liveCount={liveRunCount} />
-          <SidebarNavItem to="/live" label={t("liveOps", "Live Ops")} icon={Radio} />
+          {/* New Task button aligned with nav items */}
+          {(() => {
+            const newTaskButton = (
+              <button
+                onClick={() => openNewIssue()}
+                data-slot="icon-button"
+                aria-label={rail ? "New Task" : undefined}
+                className="flex items-center gap-2.5 px-3 py-2 pointer-coarse:py-1.5 text-[13px] font-medium text-foreground/80 hover:bg-accent/50 hover:text-foreground transition-colors"
+              >
+                <SquarePen className="h-4 w-4 shrink-0" />
+                <span className={rail ? SIDEBAR_RAIL_HIDDEN_LABEL : "truncate"}>New Task</span>
+              </button>
+            );
+            return rail ? (
+              <Tooltip>
+                <TooltipTrigger asChild>{newTaskButton}</TooltipTrigger>
+                <TooltipContent side="right">New Task</TooltipContent>
+              </Tooltip>
+            ) : (
+              newTaskButton
+            );
+          })()}
+          <SidebarNavItem to="/dashboard" label={t("nav.sidebar.dashboard")} icon={LayoutDashboard} liveCount={liveRunCount} />
           <SidebarNavItem
             to="/inbox"
-            label={t("inbox", "Inbox")}
+            label={t("nav.sidebar.inbox")}
             icon={Inbox}
             badge={inboxBadge.inbox}
+            badgeLabel="unread"
             badgeTone={inboxBadge.failedRuns > 0 ? "danger" : "default"}
             alert={inboxBadge.failedRuns > 0}
           />
+          <SidebarNavItem to="/agent-chat" label="Czat z agentami" icon={MessagesSquare} />
+          <SidebarNavItem to="/channels" label="Kanały" icon={MessagesSquare} />
+          {conferenceRoomChatEnabled ? (
+            <SidebarNavItem to="/board-chat" label="Conference Room" icon={MessagesSquare} />
+          ) : null}
+        </div>
+
+        <SidebarSection label={t("nav.sidebar.work")}>
+          <SidebarNavItem to="/issues" label="Tasks" icon={CircleDot} />
+          <SidebarNavItem to="/routines" label={t("nav.sidebar.routines")} icon={Repeat} />
+          <SidebarNavItem to="/goals" label={t("nav.sidebar.goals")} icon={Target} />
+          <SidebarNavItem to="/artifacts" label="Artifacts" icon={Package} />
+          {showWorkspacesLink ? (
+            <SidebarNavItem to="/workspaces" label={t("nav.sidebar.workspaces")} icon={GitBranch} />
+          ) : null}
+          {streamlined ? (
+            <SidebarNavItem to="/projects" label="Projects" icon={FolderOpen} />
+          ) : null}
           <PluginSlotOutlet
             slotTypes={["sidebar"]}
             context={pluginContext}
@@ -101,29 +194,25 @@ export function Sidebar() {
             itemClassName="text-[13px] font-medium"
             missingBehavior="placeholder"
           />
-        </div>
-
-        <SidebarSection label={t("work", "Work")}>
-          <SidebarNavItem to="/issues" label={t("issues", "Issues")} icon={CircleDot} />
-          <SidebarNavItem to="/process" label={t("process", "Proces")} icon={Workflow} />
-          <SidebarNavItem to="/channels" label={t("channels", "Channels")} icon={MessageSquare} />
-          <SidebarNavItem to="/routines" label={t("routines", "Routines")} icon={Repeat} />
-          <SidebarNavItem to="/goals" label={t("goals", "Goals")} icon={Target} />
-          {showWorkspacesLink ? (
-            <SidebarNavItem to="/workspaces" label={t("workspaces", "Workspaces")} icon={GitBranch} />
-          ) : null}
+          <PluginLauncherOutlet
+            placementZones={["sidebar"]}
+            context={pluginContext}
+            className="flex flex-col gap-0.5"
+            itemClassName="text-[13px] font-medium"
+          />
         </SidebarSection>
 
-        <SidebarProjects />
+        {/* Classic mode restores the per-project collapsible below Work. */}
+        {streamlined ? null : <SidebarProjects />}
 
-        <SidebarAgents />
+        <SidebarAgents streamlined={streamlined} />
 
-        <SidebarSection label={t("company", "Company")}>
-          <SidebarNavItem to="/org" label={t("org", "Org")} icon={Network} />
-          <SidebarNavItem to="/skills" label={t("skills", "Skills")} icon={Boxes} />
-          <SidebarNavItem to="/costs" label={t("costs", "Costs")} icon={DollarSign} />
-          <SidebarNavItem to="/activity" label={t("activity", "Activity")} icon={History} />
-          <SidebarNavItem to="/company/settings" label={t("settings", "Settings")} icon={Settings} />
+        <SidebarSection label={t("nav.sidebar.company")}>
+          <SidebarNavItem to="/org" label={t("nav.sidebar.org")} icon={Network} />
+          <SidebarNavItem to="/skills" label={t("nav.sidebar.skills")} icon={Boxes} />
+          <SidebarNavItem to="/costs" label={t("nav.sidebar.costs")} icon={DollarSign} />
+          <SidebarNavItem to="/activity" label={t("nav.sidebar.activity")} icon={History} />
+          <SidebarNavItem to="/company/settings" label={t("nav.sidebar.settings")} icon={Settings} />
         </SidebarSection>
 
         <PluginSlotOutlet
@@ -134,6 +223,10 @@ export function Sidebar() {
           missingBehavior="placeholder"
         />
       </nav>
+
+      <div className="shrink-0 border-t border-border px-3 py-2">
+        <LanguageSwitcher />
+      </div>
     </aside>
   );
 }

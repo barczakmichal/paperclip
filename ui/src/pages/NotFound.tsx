@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "@/lib/router";
 import { AlertTriangle, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useCompany } from "../context/CompanyContext";
 
@@ -14,13 +14,13 @@ interface NotFoundPageProps {
 }
 
 export function NotFoundPage({ scope = "global", requestedPrefix }: NotFoundPageProps) {
-  const { t } = useTranslation("notFoundPage");
+  const { t } = useTranslation();
   const location = useLocation();
   const { setBreadcrumbs } = useBreadcrumbs();
   const { companies, selectedCompany } = useCompany();
 
   useEffect(() => {
-    setBreadcrumbs([{ label: t("breadcrumb", "Not Found") }]);
+    setBreadcrumbs([{ label: t("pages.notFound.breadcrumb") }]);
   }, [setBreadcrumbs, t]);
 
   const fallbackCompany = selectedCompany ?? companies[0] ?? null;
@@ -28,11 +28,11 @@ export function NotFoundPage({ scope = "global", requestedPrefix }: NotFoundPage
   const currentPath = `${location.pathname}${location.search}${location.hash}`;
   const normalizedPrefix = requestedPrefix?.toUpperCase();
 
-  const title = scope === "invalid_company_prefix" ? t("companyNotFoundTitle", "Company not found") : t("pageNotFoundTitle", "Page not found");
+  const title = scope === "invalid_company_prefix" ? t("pages.notFound.companyNotFound") : t("pages.notFound.pageNotFound");
   const description =
     scope === "invalid_company_prefix"
-      ? t("companyNotFoundDescription", 'No company matches prefix "{{prefix}}".', { prefix: normalizedPrefix ?? "unknown" })
-      : t("pageNotFoundDescription", "This route does not exist.");
+      ? t("pages.notFound.noCompanyMatch", { prefix: normalizedPrefix ?? "unknown" })
+      : t("pages.notFound.routeDoesNotExist");
 
   return (
     <div className="mx-auto max-w-2xl py-10">
@@ -48,18 +48,18 @@ export function NotFoundPage({ scope = "global", requestedPrefix }: NotFoundPage
         </div>
 
         <div className="mt-4 rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-          {t("requestedPath", "Requested path:")} <code className="font-mono">{currentPath}</code>
+          {t("pages.notFound.requestedPath")}: <code className="font-mono">{currentPath}</code>
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
           <Button asChild>
             <Link to={dashboardHref}>
               <Compass className="mr-1.5 h-4 w-4" />
-              {t("openDashboard", "Open dashboard")}
+              {t("pages.notFound.backToDashboard")}
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link to="/">{t("goHome", "Go home")}</Link>
+            <Link to="/">{t("pages.notFound.goHome")}</Link>
           </Button>
         </div>
       </div>

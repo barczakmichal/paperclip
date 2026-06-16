@@ -11,6 +11,7 @@ import { validate } from "../middleware/validate.js";
 import { logger } from "../middleware/logger.js";
 import {
   approvalService,
+  accessService,
   heartbeatService,
   issueApprovalService,
   logActivity,
@@ -33,6 +34,7 @@ export function approvalRoutes(
 ) {
   const router = Router();
   const svc = approvalService(db);
+  const access = accessService(db);
   const heartbeat = heartbeatService(db, {
     pluginWorkerManager: options.pluginWorkerManager,
   });
@@ -49,9 +51,21 @@ export function approvalRoutes(
     return approval;
   }
 
+  async function assertApprovalAccessAllowed(req: Request, res: any, companyId: string) {
+    const decision = await access.decide({
+      actor: req.actor,
+      action: "company_scope:read",
+      resource: { type: "company", companyId },
+    });
+    if (decision.allowed) return true;
+    res.status(403).json({ error: "Approvals are outside this actor's authorization boundary" });
+    return false;
+  }
+
   router.get("/companies/:companyId/approvals", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
+    if (!(await assertApprovalAccessAllowed(req, res, companyId))) return;
     const status = req.query.status as string | undefined;
     const result = await svc.list(companyId, status);
     res.json(result.map((approval) => redactApprovalPayload(approval)));
@@ -65,12 +79,14 @@ export function approvalRoutes(
       return;
     }
     assertCompanyAccess(req, approval.companyId);
+    if (!(await assertApprovalAccessAllowed(req, res, approval.companyId))) return;
     res.json(redactApprovalPayload(approval));
   });
 
   router.post("/companies/:companyId/approvals", validate(createApprovalSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
+    if (!(await assertApprovalAccessAllowed(req, res, companyId))) return;
     const rawIssueIds = req.body.issueIds;
     const issueIds = Array.isArray(rawIssueIds)
       ? rawIssueIds.filter((value: unknown): value is string => typeof value === "string")
@@ -129,6 +145,7 @@ export function approvalRoutes(
       return;
     }
     assertCompanyAccess(req, approval.companyId);
+    if (!(await assertApprovalAccessAllowed(req, res, approval.companyId))) return;
     const issues = await issueApprovalsSvc.listIssuesForApproval(id);
     res.json(issues);
   });
@@ -157,10 +174,6 @@ export function approvalRoutes(
         entityId: approval.id,
         details: {
           type: approval.type,
-          approvalStatus: "approved",
-          approvalId: approval.id,
-          decidedByUserId,
-          decisionNote: req.body.decisionNote ?? null,
           requestedByAgentId: approval.requestedByAgentId,
           linkedIssueIds,
         },
@@ -251,13 +264,7 @@ export function approvalRoutes(
         action: "approval.rejected",
         entityType: "approval",
         entityId: approval.id,
-        details: {
-          type: approval.type,
-          approvalStatus: "rejected",
-          approvalId: approval.id,
-          decidedByUserId,
-          decisionNote: req.body.decisionNote ?? null,
-        },
+        details: { type: approval.type },
       });
     }
 
@@ -284,13 +291,7 @@ export function approvalRoutes(
         action: "approval.revision_requested",
         entityType: "approval",
         entityId: approval.id,
-        details: {
-          type: approval.type,
-          approvalStatus: "revision_requested",
-          approvalId: approval.id,
-          decidedByUserId,
-          decisionNote: req.body.decisionNote ?? null,
-        },
+        details: { type: approval.type },
       });
 
       res.json(redactApprovalPayload(approval));

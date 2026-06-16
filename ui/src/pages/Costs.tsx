@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   BudgetPolicySummary,
@@ -27,12 +26,13 @@ import { ProviderQuotaCard } from "../components/ProviderQuotaCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useCompany } from "../context/CompanyContext";
-import { useDateRange, PRESET_KEYS, PRESET_LABELS } from "../hooks/useDateRange";
+import { useDateRange, PRESET_KEYS } from "../hooks/useDateRange";
 import { queryKeys } from "../lib/queryKeys";
 import { billingTypeDisplayName, cn, formatCents, formatTokens, providerDisplayName } from "../lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTranslation } from "@/i18n";
 
 const NO_COMPANY = "__none__";
 
@@ -109,42 +109,38 @@ function FinanceSummaryCard({
   estimatedDebitCents: number;
   eventCount: number;
 }) {
-  const { t } = useTranslation("costsPage");
+  const { t } = useTranslation();
   return (
     <Card>
       <CardHeader className="px-5 pt-5 pb-2">
-        <CardTitle className="text-base">{t("financeLedgerTitle", "Finance ledger")}</CardTitle>
+        <CardTitle className="text-base">{t("component.finance.financeLedger")}</CardTitle>
         <CardDescription>
-          {t("financeLedgerDescription", "Account-level charges that do not map to a single inference request.")}
+          {t("component.finance.financeLedgerDesc")}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 px-5 pb-5 pt-2 sm:grid-cols-2 xl:grid-cols-4">
         <MetricTile
-          label={t("debits", "Debits")}
+          label={t("component.finance.debits")}
           value={formatCents(debitCents)}
-          subtitle={
-            eventCount === 1
-              ? t("totalEventsInRange_one", "{{count}} total event in range", { count: eventCount })
-              : t("totalEventsInRange_other", "{{count}} total events in range", { count: eventCount })
-          }
+          subtitle={t("component.finance.totalEventsInRange", { count: eventCount })}
           icon={ArrowUpRight}
         />
         <MetricTile
-          label={t("credits", "Credits")}
+          label={t("component.finance.credits")}
           value={formatCents(creditCents)}
-          subtitle={t("creditsSubtitle", "Refunds, offsets, and credit returns")}
+          subtitle={t("component.finance.refundsOffsetsCredits")}
           icon={ArrowDownLeft}
         />
         <MetricTile
-          label={t("net", "Net")}
+          label={t("component.finance.net")}
           value={formatCents(netCents)}
-          subtitle={t("netSubtitle", "Debit minus credit for the selected period")}
+          subtitle={t("component.finance.debitMinusCredit")}
           icon={ReceiptText}
         />
         <MetricTile
-          label={t("estimated", "Estimated")}
+          label={t("component.finance.estimatedDebits")}
           value={formatCents(estimatedDebitCents)}
-          subtitle={t("estimatedSubtitle", "Estimated debits that are not yet invoice-authoritative")}
+          subtitle={t("component.finance.estimatedDebitsDesc")}
           icon={Coins}
         />
       </CardContent>
@@ -153,7 +149,7 @@ function FinanceSummaryCard({
 }
 
 export function Costs() {
-  const { t } = useTranslation("costsPage");
+  const { t } = useTranslation();
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
@@ -175,7 +171,7 @@ export function Costs() {
   } = useDateRange();
 
   useEffect(() => {
-    setBreadcrumbs([{ label: t("breadcrumb", "Costs") }]);
+    setBreadcrumbs([{ label: t("page.costs.title") }]);
   }, [setBreadcrumbs, t]);
 
   const [today, setToday] = useState(() => new Date().toDateString());
@@ -471,7 +467,7 @@ export function Costs() {
         value: "all",
         label: (
           <span className="flex items-center gap-1.5">
-            <span>{t("allProviders", "All providers")}</span>
+            <span>{t("component.finance.allProviders")}</span>
             {providerKeys.length > 0 ? (
               <>
                 <span className="font-mono text-xs text-muted-foreground">{formatTokens(allTokens)}</span>
@@ -503,7 +499,7 @@ export function Costs() {
         value: "all",
         label: (
           <span className="flex items-center gap-1.5">
-            <span>{t("allBillers", "All billers")}</span>
+            <span>{t("component.finance.allBillers")}</span>
             {billerKeys.length > 0 ? (
               <>
                 <span className="font-mono text-xs text-muted-foreground">{formatTokens(allTokens)}</span>
@@ -536,7 +532,7 @@ export function Costs() {
   }), [budgetPolicies]);
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={DollarSign} message={t("selectCompany", "Select a company to view costs.")} />;
+    return <EmptyState icon={DollarSign} message={t("page.costs.empty.selectCompany")} />;
   }
 
   const showCustomPrompt = preset === "custom" && !customReady;
@@ -548,23 +544,36 @@ export function Costs() {
       <div className="space-y-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-                <h1 className="text-3xl font-semibold tracking-tight">{t("title", "Costs")}</h1>
+                <h1 className="text-3xl font-semibold tracking-tight">{t("page.costs.title")}</h1>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  {t("subtitle", "Inference spend, platform fees, credits, and live quota windows.")}
+                  {t("page.costs.description")}
                 </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {PRESET_KEYS.map((key) => (
-                <Button
-                  key={key}
-                  variant={preset === key ? "secondary" : "ghost"}
-                  size="sm"
-                  onClick={() => setPreset(key)}
-                >
-                  {PRESET_LABELS[key]}
-                </Button>
-              ))}
+              {PRESET_KEYS.map((key) => {
+                const labelKey = key === "mtd"
+                  ? "component.finance.datePresetMtd"
+                  : key === "7d"
+                    ? "component.finance.datePreset7d"
+                    : key === "30d"
+                      ? "component.finance.datePreset30d"
+                      : key === "ytd"
+                        ? "component.finance.datePresetYtd"
+                        : key === "all"
+                          ? "component.finance.datePresetAll"
+                          : "component.finance.datePresetCustom";
+                return (
+                  <Button
+                    key={key}
+                    variant={preset === key ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setPreset(key)}
+                  >
+                    {t(labelKey)}
+                  </Button>
+                );
+              })}
             </div>
           </div>
 
@@ -576,7 +585,7 @@ export function Costs() {
                 onChange={(event) => setCustomFrom(event.target.value)}
                 className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
               />
-              <span className="text-sm text-muted-foreground">{t("dateRangeTo", "to")}</span>
+              <span className="text-sm text-muted-foreground">{t("component.finance.dateRangeTo")}</span>
               <input
                 type="date"
                 value={customTo}
@@ -588,37 +597,37 @@ export function Costs() {
 
           <div className="grid gap-3 lg:grid-cols-4">
             <MetricTile
-              label={t("inferenceSpend", "Inference spend")}
+              label={t("component.finance.inferenceSpend")}
               value={formatCents(spendData?.summary.spendCents ?? 0)}
-              subtitle={t("inferenceSpendSubtitle", "{{tokens}} tokens across request-scoped events", { tokens: formatTokens(inferenceTokenTotal) })}
+              subtitle={t("component.finance.tokensAcrossEvents", { tokenCount: formatTokens(inferenceTokenTotal) })}
               icon={DollarSign}
             />
             <MetricTile
-              label={t("budget", "Budget")}
+              label={t("component.finance.budget")}
               value={activeBudgetIncidents.length > 0 ? String(activeBudgetIncidents.length) : (
                 spendData?.summary.budgetCents && spendData.summary.budgetCents > 0
                   ? `${spendData.summary.utilizationPercent}%`
-                  : t("budgetOpen", "Open")
+                  : t("component.finance.open")
               )}
               subtitle={
                 activeBudgetIncidents.length > 0
-                  ? t("budgetPausedSubtitle", "{{agents}} agents paused · {{projects}} projects paused", { agents: budgetData?.pausedAgentCount ?? 0, projects: budgetData?.pausedProjectCount ?? 0 })
+                  ? t("component.finance.agentsPausedProjectsPaused", { agentCount: budgetData?.pausedAgentCount ?? 0, projectCount: budgetData?.pausedProjectCount ?? 0 })
                   : spendData?.summary.budgetCents && spendData.summary.budgetCents > 0
-                    ? t("budgetSpendSubtitle", "{{spent}} of {{budget}}", { spent: formatCents(spendData.summary.spendCents), budget: formatCents(spendData.summary.budgetCents) })
-                    : t("budgetNoCap", "No monthly cap configured")
+                    ? `${formatCents(spendData.summary.spendCents)} of ${formatCents(spendData.summary.budgetCents)}`
+                    : t("component.finance.noMonthlyCap")
               }
               icon={Coins}
             />
             <MetricTile
-              label={t("financeNet", "Finance net")}
+              label={t("component.finance.financeNet")}
               value={formatCents(financeData?.summary.netCents ?? 0)}
-              subtitle={t("financeNetSubtitle", "{{debits}} debits · {{credits}} credits", { debits: formatCents(financeData?.summary.debitCents ?? 0), credits: formatCents(financeData?.summary.creditCents ?? 0) })}
+              subtitle={t("component.finance.debitsCreditsSummary", { debits: formatCents(financeData?.summary.debitCents ?? 0), credits: formatCents(financeData?.summary.creditCents ?? 0) })}
               icon={ReceiptText}
             />
             <MetricTile
-              label={t("financeEvents", "Finance events")}
+              label={t("component.finance.financeEvents")}
               value={String(financeData?.summary.eventCount ?? 0)}
-              subtitle={t("financeEventsSubtitle", "{{estimated}} estimated in range", { estimated: formatCents(financeData?.summary.estimatedDebitCents ?? 0) })}
+              subtitle={t("component.finance.estimatedInRange", { amount: formatCents(financeData?.summary.estimatedDebitCents ?? 0) })}
               icon={ArrowUpRight}
             />
           </div>
@@ -626,16 +635,16 @@ export function Costs() {
 
       <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as typeof mainTab)}>
         <TabsList variant="line" className="justify-start">
-          <TabsTrigger value="overview">{t("tabOverview", "Overview")}</TabsTrigger>
-          <TabsTrigger value="budgets">{t("tabBudgets", "Budgets")}</TabsTrigger>
-          <TabsTrigger value="providers">{t("tabProviders", "Providers")}</TabsTrigger>
-          <TabsTrigger value="billers">{t("tabBillers", "Billers")}</TabsTrigger>
-          <TabsTrigger value="finance">{t("tabFinance", "Finance")}</TabsTrigger>
+          <TabsTrigger value="overview">{t("page.costs.tab.overview")}</TabsTrigger>
+          <TabsTrigger value="budgets">{t("page.costs.tab.budgets")}</TabsTrigger>
+          <TabsTrigger value="providers">{t("page.costs.tab.providers")}</TabsTrigger>
+          <TabsTrigger value="billers">{t("page.costs.tab.billers")}</TabsTrigger>
+          <TabsTrigger value="finance">{t("page.costs.tab.finance")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-4">
           {showCustomPrompt ? (
-            <p className="text-sm text-muted-foreground">{t("selectDateRange", "Select a start and end date to load data.")}</p>
+            <p className="text-sm text-muted-foreground">{t("component.finance.selectDateRange")}</p>
           ) : showOverviewLoading ? (
             <PageSkeleton variant="costs" />
           ) : overviewError ? (
@@ -664,9 +673,9 @@ export function Costs() {
               <div className="grid gap-4 xl:grid-cols-[1.3fr,1fr]">
                 <Card>
                   <CardHeader className="px-5 pt-5 pb-2">
-                    <CardTitle className="text-base">{t("inferenceLedgerTitle", "Inference ledger")}</CardTitle>
+                    <CardTitle className="text-base">{t("component.finance.inferenceLedger")}</CardTitle>
                     <CardDescription>
-                      {t("inferenceLedgerDescription", "Request-scoped inference spend for the selected period.")}
+                      {t("component.finance.inferenceLedgerDesc")}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4 px-5 pb-5 pt-2">
@@ -677,12 +686,12 @@ export function Costs() {
                         </div>
                         <div className="mt-1 text-sm text-muted-foreground">
                           {spendData?.summary.budgetCents && spendData.summary.budgetCents > 0
-                            ? t("budgetAmount", "Budget {{amount}}", { amount: formatCents(spendData.summary.budgetCents) })
-                            : t("unlimitedBudget", "Unlimited budget")}
+                            ? `${t("component.finance.budget")} ${formatCents(spendData.summary.budgetCents)}`
+                            : t("component.finance.unlimitedBudget")}
                         </div>
                       </div>
                       <div className="border border-border px-4 py-3 text-right">
-                        <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{t("usage", "usage")}</div>
+                        <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{t("component.finance.usage")}</div>
                         <div className="mt-1 text-lg font-medium tabular-nums">
                           {formatTokens(inferenceTokenTotal)}
                         </div>
@@ -704,7 +713,7 @@ export function Costs() {
                           />
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {t("utilizationConsumed", "{{percent}}% of monthly budget consumed in this range.", { percent: spendData.summary.utilizationPercent })}
+                          {t("component.finance.monthlyBudgetConsumed", { percent: spendData.summary.utilizationPercent })}
                         </div>
                       </div>
                     ) : null}
@@ -723,12 +732,12 @@ export function Costs() {
               <div className="grid gap-4 xl:grid-cols-[1.25fr,0.95fr]">
                 <Card>
                   <CardHeader className="px-5 pt-5 pb-2">
-                    <CardTitle className="text-base">{t("byAgentTitle", "By agent")}</CardTitle>
-                    <CardDescription>{t("byAgentDescription", "What each agent consumed in the selected period.")}</CardDescription>
+                    <CardTitle className="text-base">{t("component.finance.byAgent")}</CardTitle>
+                    <CardDescription>{t("component.finance.byAgentDesc")}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2 px-5 pb-5 pt-2">
                     {(spendData?.byAgent.length ?? 0) === 0 ? (
-                      <p className="text-sm text-muted-foreground">{t("noCostEvents", "No cost events yet.")}</p>
+                      <p className="text-sm text-muted-foreground">{t("component.finance.noCostEventsYet")}</p>
                     ) : (
                       spendData?.byAgent.map((row) => {
                         const modelRows = agentModelRows.get(row.agentId) ?? [];
@@ -754,15 +763,15 @@ export function Costs() {
                               <div className="text-right text-sm tabular-nums">
                                 <div className="font-medium">{formatCents(row.costCents)}</div>
                                 <div className="text-xs text-muted-foreground">
-                                  {t("inOutTokens", "in {{in}} · out {{out}}", { in: formatTokens(row.inputTokens + row.cachedInputTokens), out: formatTokens(row.outputTokens) })}
+                                  in {formatTokens(row.inputTokens + row.cachedInputTokens)} · out {formatTokens(row.outputTokens)}
                                 </div>
                                 {(row.apiRunCount > 0 || row.subscriptionRunCount > 0) ? (
                                   <div className="text-xs text-muted-foreground">
-                                    {row.apiRunCount > 0 ? t("apiRunCount", "{{count}} api", { count: row.apiRunCount }) : t("apiRunCount", "{{count}} api", { count: 0 })}
+                                    {row.apiRunCount > 0 ? `${row.apiRunCount} ${t("component.finance.apiRuns")}` : `0 ${t("component.finance.apiRuns")}`}
                                     {" · "}
                                     {row.subscriptionRunCount > 0
-                                      ? t("subscriptionRunCount", "{{count}} subscription", { count: row.subscriptionRunCount })
-                                      : t("subscriptionRunCount", "{{count}} subscription", { count: 0 })}
+                                      ? `${row.subscriptionRunCount} ${t("component.finance.subscriptionRuns")}`
+                                      : `0 ${t("component.finance.subscriptionRuns")}`}
                                   </div>
                                 ) : null}
                               </div>
@@ -793,7 +802,7 @@ export function Costs() {
                                           <span className="ml-1 font-normal text-muted-foreground">({sharePct}%)</span>
                                         </div>
                                         <div className="text-muted-foreground">
-                                          {formatTokens(modelRow.inputTokens + modelRow.cachedInputTokens + modelRow.outputTokens)} tok
+                                          {formatTokens(modelRow.inputTokens + modelRow.cachedInputTokens + modelRow.outputTokens)} {t("component.finance.tokens")}
                                         </div>
                                       </div>
                                     </div>
@@ -811,19 +820,19 @@ export function Costs() {
                 <div className="space-y-4">
                   <Card>
                     <CardHeader className="px-5 pt-5 pb-2">
-                      <CardTitle className="text-base">{t("byProjectTitle", "By project")}</CardTitle>
-                      <CardDescription>{t("byProjectDescription", "Run costs attributed through project-linked issues.")}</CardDescription>
+                      <CardTitle className="text-base">{t("component.finance.byProject")}</CardTitle>
+                      <CardDescription>Run costs attributed through project-linked tasks.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-2 px-5 pb-5 pt-2">
                       {(spendData?.byProject.length ?? 0) === 0 ? (
-                        <p className="text-sm text-muted-foreground">{t("noProjectCosts", "No project-attributed run costs yet.")}</p>
+                        <p className="text-sm text-muted-foreground">{t("component.finance.noProjectCostsYet")}</p>
                       ) : (
                         spendData?.byProject.map((row, index) => (
                           <div
                             key={row.projectId ?? `unattributed-${index}`}
                             className="flex items-center justify-between gap-3 border border-border px-3 py-2 text-sm"
                           >
-                            <span className="truncate">{row.projectName ?? row.projectId ?? t("unattributed", "Unattributed")}</span>
+                            <span className="truncate">{row.projectName ?? row.projectId ?? t("component.finance.unattributed")}</span>
                             <span className="font-medium tabular-nums">{formatCents(row.costCents)}</span>
                           </div>
                         ))
@@ -831,7 +840,7 @@ export function Costs() {
                     </CardContent>
                   </Card>
 
-                  <FinanceTimelineCard rows={topFinanceEvents.slice(0, 6)} emptyMessage={t("financeTimelineEmpty", "No finance events yet. Add account-level charges once biller invoices or credits land.")} />
+                  <FinanceTimelineCard rows={topFinanceEvents.slice(0, 6)} emptyMessage={t("component.finance.noFinanceEventsYet")} />
                 </div>
               </div>
             </>
@@ -847,34 +856,34 @@ export function Costs() {
             <>
               <Card className="border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))]">
                 <CardHeader className="px-5 pt-5 pb-3">
-                  <CardTitle className="text-base">{t("budgetControlPlaneTitle", "Budget control plane")}</CardTitle>
+                  <CardTitle className="text-base">{t("component.finance.budgetControlPlane")}</CardTitle>
                   <CardDescription>
-                    {t("budgetControlPlaneDescription", "Hard-stop spend limits for agents and projects. Provider subscription quota stays separate and appears under Providers.")}
+                    {t("component.finance.budgetControlPlaneDesc")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-3 px-5 pb-5 pt-0 md:grid-cols-4">
                   <MetricTile
-                    label={t("activeIncidents", "Active incidents")}
+                    label={t("component.finance.activeIncidents")}
                     value={String(activeBudgetIncidents.length)}
-                    subtitle={t("activeIncidentsSubtitle", "Open soft or hard threshold crossings")}
+                    subtitle={t("component.finance.activeIncidentsDesc")}
                     icon={ReceiptText}
                   />
                   <MetricTile
-                    label={t("pendingApprovals", "Pending approvals")}
+                    label={t("component.finance.pendingApprovals")}
                     value={String(budgetData?.pendingApprovalCount ?? 0)}
-                    subtitle={t("pendingApprovalsSubtitle", "Budget override approvals awaiting board action")}
+                    subtitle={t("component.finance.pendingApprovalsDesc")}
                     icon={ArrowUpRight}
                   />
                   <MetricTile
-                    label={t("pausedAgents", "Paused agents")}
+                    label={t("component.finance.pausedAgents")}
                     value={String(budgetData?.pausedAgentCount ?? 0)}
-                    subtitle={t("pausedAgentsSubtitle", "Agent heartbeats blocked by budget")}
+                    subtitle={t("component.finance.pausedAgentsDesc")}
                     icon={Coins}
                   />
                   <MetricTile
-                    label={t("pausedProjects", "Paused projects")}
+                    label={t("component.finance.pausedProjects")}
                     value={String(budgetData?.pausedProjectCount ?? 0)}
-                    subtitle={t("pausedProjectsSubtitle", "Project execution blocked by budget")}
+                    subtitle={t("component.finance.pausedProjectsDesc")}
                     icon={DollarSign}
                   />
                 </CardContent>
@@ -883,9 +892,9 @@ export function Costs() {
               {activeBudgetIncidents.length > 0 ? (
                 <div className="space-y-3">
                   <div>
-                    <h2 className="text-lg font-semibold">{t("activeIncidents", "Active incidents")}</h2>
+                    <h2 className="text-lg font-semibold">{t("component.finance.activeIncidents")}</h2>
                     <p className="text-sm text-muted-foreground">
-                      {t("activeIncidentsSectionDescription", "Resolve hard stops here by raising the budget or explicitly keeping the scope paused.")}
+                      {t("component.finance.resolveIncidentsDesc")}
                     </p>
                   </div>
                   <div className="grid gap-4 xl:grid-cols-2">
@@ -911,22 +920,17 @@ export function Costs() {
                 {(["company", "agent", "project"] as const).map((scopeType) => {
                   const rows = budgetPoliciesByScope[scopeType];
                   if (rows.length === 0) return null;
+                  const scopeLabel = scopeType.charAt(0).toUpperCase() + scopeType.slice(1);
                   return (
                     <section key={scopeType} className="space-y-3">
                       <div>
-                        <h2 className="text-lg font-semibold capitalize">
-                          {scopeType === "company"
-                            ? t("companyBudgetsHeading", "company budgets")
-                            : scopeType === "agent"
-                              ? t("agentBudgetsHeading", "agent budgets")
-                              : t("projectBudgetsHeading", "project budgets")}
-                        </h2>
+                        <h2 className="text-lg font-semibold">{t("component.finance.scopeBudgets", { scope: scopeLabel })}</h2>
                         <p className="text-sm text-muted-foreground">
                           {scopeType === "company"
-                            ? t("companyBudgetsDescription", "Company-wide monthly policy.")
+                            ? t("component.finance.companyBudgetDesc")
                             : scopeType === "agent"
-                              ? t("agentBudgetsDescription", "Recurring monthly spend policies for individual agents.")
-                              : t("projectBudgetsDescription", "Lifetime spend policies for execution-bound projects.")}
+                              ? t("component.finance.agentBudgetDesc")
+                              : t("component.finance.projectBudgetDesc")}
                         </p>
                       </div>
                       <div className="grid gap-4 xl:grid-cols-2">
@@ -952,7 +956,7 @@ export function Costs() {
                 {budgetPolicies.length === 0 ? (
                   <Card>
                     <CardContent className="px-5 py-8 text-sm text-muted-foreground">
-                      {t("noBudgetPolicies", "No budget policies yet. Set agent and project budgets from their detail pages, or use the existing company monthly budget control.")}
+                      {t("component.finance.noBudgetPolicies")}
                     </CardContent>
                   </Card>
                 ) : null}
@@ -963,7 +967,7 @@ export function Costs() {
 
         <TabsContent value="providers" className="mt-4 space-y-4">
           {showCustomPrompt ? (
-            <p className="text-sm text-muted-foreground">{t("selectDateRange", "Select a start and end date to load data.")}</p>
+            <p className="text-sm text-muted-foreground">{t("component.finance.selectDateRange")}</p>
           ) : (
             <>
               <Tabs value={effectiveProvider} onValueChange={setActiveProvider}>
@@ -971,7 +975,7 @@ export function Costs() {
 
                 <TabsContent value="all" className="mt-4">
                   {providers.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">{t("noCostEventsPeriod", "No cost events in this period.")}</p>
+                    <p className="text-sm text-muted-foreground">{t("component.finance.noCostEventsInPeriod")}</p>
                   ) : (
                     <div className="grid gap-4 md:grid-cols-2">
                       {providers.map((provider) => (
@@ -1018,7 +1022,7 @@ export function Costs() {
 
         <TabsContent value="billers" className="mt-4 space-y-4">
           {showCustomPrompt ? (
-            <p className="text-sm text-muted-foreground">{t("selectDateRange", "Select a start and end date to load data.")}</p>
+            <p className="text-sm text-muted-foreground">{t("component.finance.selectDateRange")}</p>
           ) : (
             <>
               <Tabs value={effectiveBiller} onValueChange={setActiveBiller}>
@@ -1026,7 +1030,7 @@ export function Costs() {
 
                 <TabsContent value="all" className="mt-4">
                   {billers.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">{t("noBillableEventsPeriod", "No billable events in this period.")}</p>
+                    <p className="text-sm text-muted-foreground">{t("component.finance.noBillableEventsInPeriod")}</p>
                   ) : (
                     <div className="grid gap-4 md:grid-cols-2">
                       {billers.map((biller) => {
@@ -1071,7 +1075,7 @@ export function Costs() {
 
         <TabsContent value="finance" className="mt-4 space-y-4">
           {showCustomPrompt ? (
-            <p className="text-sm text-muted-foreground">{t("selectDateRange", "Select a start and end date to load data.")}</p>
+            <p className="text-sm text-muted-foreground">{t("component.finance.selectDateRange")}</p>
           ) : financeLoading ? (
             <PageSkeleton variant="costs" />
           ) : financeError ? (
@@ -1090,12 +1094,12 @@ export function Costs() {
                 <div className="space-y-4">
                   <Card>
                     <CardHeader className="px-5 pt-5 pb-2">
-                      <CardTitle className="text-base">{t("byBillerTitle", "By biller")}</CardTitle>
-                      <CardDescription>{t("byBillerDescription", "Account-level financial events grouped by who charged or credited them.")}</CardDescription>
+                      <CardTitle className="text-base">{t("component.finance.byBiller")}</CardTitle>
+                      <CardDescription>{t("component.finance.byBillerDesc")}</CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-4 px-5 pb-5 pt-2 md:grid-cols-2">
                       {(financeData?.byBiller.length ?? 0) === 0 ? (
-                        <p className="text-sm text-muted-foreground">{t("noFinanceEvents", "No finance events yet.")}</p>
+                        <p className="text-sm text-muted-foreground">{t("component.finance.noFinanceEventsYet")}</p>
                       ) : (
                         financeData?.byBiller.map((row) => <FinanceBillerCard key={row.biller} row={row} />)
                       )}

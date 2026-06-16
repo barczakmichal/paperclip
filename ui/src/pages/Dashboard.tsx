@@ -11,7 +11,6 @@ import { buildCompanyUserProfileMap } from "../lib/company-members";
 import { useCompany } from "../context/CompanyContext";
 import { useDialogActions } from "../context/DialogContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
-import { useTranslation } from "react-i18next";
 import { queryKeys } from "../lib/queryKeys";
 import { MetricCard } from "../components/MetricCard";
 import { EmptyState } from "../components/EmptyState";
@@ -21,12 +20,12 @@ import { ActivityRow } from "../components/ActivityRow";
 import { Identity } from "../components/Identity";
 import { timeAgo } from "../lib/timeAgo";
 import { cn, formatCents } from "../lib/utils";
-import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle, ArrowRight } from "lucide-react";
+import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle } from "lucide-react";
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
-import { MarketingDashboardTile } from "../components/MarketingDashboardTile";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
 import { PageSkeleton } from "../components/PageSkeleton";
 import type { Agent, Issue } from "@paperclipai/shared";
+import { useTranslation } from "@/i18n";
 import { PluginSlotOutlet } from "@/plugins/slots";
 
 const DASHBOARD_ACTIVITY_LIMIT = 10;
@@ -37,7 +36,7 @@ function getRecentIssues(issues: Issue[]): Issue[] {
 }
 
 export function Dashboard() {
-  const { t } = useTranslation("dashboard");
+  const { t } = useTranslation();
   const { selectedCompanyId, companies } = useCompany();
   const { openOnboarding } = useDialogActions();
   const { setBreadcrumbs } = useBreadcrumbs();
@@ -53,7 +52,7 @@ export function Dashboard() {
   });
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Dashboard" }]);
+    setBreadcrumbs([{ label: t("page.dashboard.title") }]);
   }, [setBreadcrumbs]);
 
   const { data, isLoading, error } = useQuery({
@@ -179,14 +178,14 @@ export function Dashboard() {
       return (
         <EmptyState
           icon={LayoutDashboard}
-          message={t("welcome", "Welcome to Paperclip. Set up your first company and agent to get started.")}
-          action={t("getStarted", "Get Started")}
+          message={t("page.dashboard.empty.welcome")}
+          action={t("page.dashboard.empty.getStarted")}
           onAction={openOnboarding}
         />
       );
     }
     return (
-      <EmptyState icon={LayoutDashboard} message={t("selectCompany", "Create or select a company to view the dashboard.")} />
+      <EmptyState icon={LayoutDashboard} message={t("page.dashboard.empty.selectCompany")} />
     );
   }
 
@@ -205,30 +204,19 @@ export function Dashboard() {
           <div className="flex items-center gap-2.5">
             <Bot className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <p className="text-sm text-amber-900 dark:text-amber-100">
-              {t("noAgents", "You have no agents.")}
+              {t("page.dashboard.noAgents")}
             </p>
           </div>
           <button
             onClick={() => openOnboarding({ initialStep: 2, companyId: selectedCompanyId! })}
             className="text-sm font-medium text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100 underline underline-offset-2 shrink-0"
           >
-            {t("createAgent", "Create one here")}
+            {t("page.dashboard.createAgent")}
           </button>
         </div>
       )}
 
-      <ActiveAgentsPanel
-        companyId={selectedCompanyId!}
-        headerAction={
-          <Link
-            to="/process"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
-          >
-            {t("viewWholeProcess", "View whole process")}
-            <ArrowRight className="h-3 w-3" />
-          </Link>
-        }
-      />
+      <ActiveAgentsPanel companyId={selectedCompanyId!} />
 
       {data && (
         <>
@@ -238,15 +226,15 @@ export function Dashboard() {
                 <PauseCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />
                 <div>
                   <p className="text-sm font-medium text-red-50">
-                    {data.budgets.activeIncidents} active budget incident{data.budgets.activeIncidents === 1 ? "" : "s"}
+                    {data.budgets.activeIncidents} {data.budgets.activeIncidents === 1 ? t("page.dashboard.activeBudgetIncident") : t("page.dashboard.activeBudgetIncidents")}
                   </p>
                   <p className="text-xs text-red-100/70">
-                    {data.budgets.pausedAgents} agents paused · {data.budgets.pausedProjects} projects paused · {data.budgets.pendingApprovals} pending budget approvals
+                    {data.budgets.pausedAgents} {t("page.dashboard.agentsPaused")} · {data.budgets.pausedProjects} {t("page.dashboard.projectsPaused")} · {data.budgets.pendingApprovals} {t("page.dashboard.pendingBudgetApprovals")}
                   </p>
                 </div>
               </div>
               <Link to="/costs" className="text-sm underline underline-offset-2 text-red-100">
-                Open budgets
+                {t("page.dashboard.openBudgets")}
               </Link>
             </div>
           ) : null}
@@ -255,81 +243,70 @@ export function Dashboard() {
             <MetricCard
               icon={Bot}
               value={data.agents.active + data.agents.running + data.agents.paused + data.agents.error}
-              label={t("agentsEnabled", "Agents Enabled")}
+              label={t("page.dashboard.agentsEnabled")}
               to="/agents"
               description={
                 <span>
-                  {t("agentsDesc", "{{running}} running, {{paused}} paused, {{errors}} errors", {
-                    running: data.agents.running,
-                    paused: data.agents.paused,
-                    errors: data.agents.error,
-                  })}
+                  {data.agents.running} {t("page.dashboard.running")}{", "}
+                  {data.agents.paused} {t("page.dashboard.paused")}{", "}
+                  {data.agents.error} {t("page.dashboard.errors")}
                 </span>
               }
             />
             <MetricCard
               icon={CircleDot}
               value={data.tasks.inProgress}
-              label={t("tasksInProgress", "Tasks In Progress")}
+              label={t("page.dashboard.tasksInProgress")}
               to="/issues"
               description={
                 <span>
-                  {t("tasksDesc", "{{open}} open, {{blocked}} blocked", {
-                    open: data.tasks.open,
-                    blocked: data.tasks.blocked,
-                  })}
+                  {data.tasks.open} {t("page.dashboard.open")}{", "}
+                  {data.tasks.blocked} {t("page.dashboard.blocked")}
                 </span>
               }
             />
             <MetricCard
               icon={DollarSign}
               value={formatCents(data.costs.monthSpendCents)}
-              label={t("monthSpend", "Month Spend")}
+              label={t("page.dashboard.monthSpend")}
               to="/costs"
               description={
                 <span>
                   {data.costs.monthBudgetCents > 0
-                    ? t("budgetUtil", "{{pct}}% of {{budget}} budget", {
-                        pct: data.costs.monthUtilizationPercent,
-                        budget: formatCents(data.costs.monthBudgetCents),
-                      })
-                    : t("unlimitedBudget", "Unlimited budget")}
+                    ? `${data.costs.monthUtilizationPercent}% of ${formatCents(data.costs.monthBudgetCents)} budget`
+                    : t("page.dashboard.unlimitedBudget")}
                 </span>
               }
             />
             <MetricCard
               icon={ShieldCheck}
               value={data.pendingApprovals + data.budgets.pendingApprovals}
-              label={t("pendingApprovals", "Pending Approvals")}
+              label={t("page.dashboard.pendingApprovals")}
               to="/approvals"
               description={
                 <span>
                   {data.budgets.pendingApprovals > 0
-                    ? t("budgetOverrides", "{{count}} budget overrides awaiting board review", {
-                        count: data.budgets.pendingApprovals,
-                      })
-                    : t("awaitingReview", "Awaiting board review")}
+                    ? `${data.budgets.pendingApprovals} ${data.budgets.pendingApprovals === 1 ? t("page.dashboard.budgetOverride") : t("page.dashboard.budgetOverrides")} ${t("page.dashboard.awaitingReview")}`
+                    : t("page.dashboard.awaitingReview")}
                 </span>
               }
             />
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <ChartCard title={t("runActivity", "Run Activity")} subtitle={t("last14days", "Last 14 days")}>
+            <ChartCard title={t("page.dashboard.runActivity")} subtitle={t("common.timeRange.last14Days")}>
               <RunActivityChart activity={data.runActivity} />
             </ChartCard>
-            <ChartCard title={t("issuesByPriority", "Issues by Priority")} subtitle={t("last14days", "Last 14 days")}>
+            <ChartCard title="Tasks by Priority" subtitle={t("common.timeRange.last14Days")}>
               <PriorityChart issues={issues ?? []} />
             </ChartCard>
-            <ChartCard title={t("issuesByStatus", "Issues by Status")} subtitle={t("last14days", "Last 14 days")}>
+            <ChartCard title="Tasks by Status" subtitle={t("common.timeRange.last14Days")}>
               <IssueStatusChart issues={issues ?? []} />
             </ChartCard>
-            <ChartCard title={t("successRate", "Success Rate")} subtitle={t("last14days", "Last 14 days")}>
+            <ChartCard title={t("page.dashboard.successRate")} subtitle={t("common.timeRange.last14Days")}>
               <SuccessRateChart activity={data.runActivity} />
             </ChartCard>
           </div>
-
-          {selectedCompanyId ? <MarketingDashboardTile companyId={selectedCompanyId} /> : null}
 
           <PluginSlotOutlet
             slotTypes={["dashboardWidget"]}
@@ -343,7 +320,7 @@ export function Dashboard() {
             {recentActivity.length > 0 && (
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                  {t("recentActivity", "Recent Activity")}
+                  {t("page.dashboard.recentActivity")}
                 </h3>
                 <div className="border border-border divide-y divide-border overflow-hidden">
                   {recentActivity.map((event) => (
@@ -364,11 +341,11 @@ export function Dashboard() {
             {/* Recent Tasks */}
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                {t("recentTasks", "Recent Tasks")}
+                {t("page.dashboard.recentTasks")}
               </h3>
               {recentIssues.length === 0 ? (
                 <div className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground">{t("noTasks", "No tasks yet.")}</p>
+                  <p className="text-sm text-muted-foreground">{t("page.dashboard.noTasks")}</p>
                 </div>
               ) : (
                 <div className="border border-border divide-y divide-border overflow-hidden">

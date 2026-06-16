@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useTranslation } from "react-i18next";
 import { NavLink, useLocation } from "@/lib/router";
 import {
   House,
@@ -36,7 +35,6 @@ interface MobileNavActionItem {
 type MobileNavItem = MobileNavLinkItem | MobileNavActionItem;
 
 export function MobileBottomNav({ visible }: MobileBottomNavProps) {
-  const { t } = useTranslation("mobileBottomNav");
   const location = useLocation();
   const { selectedCompanyId } = useCompany();
   const { openNewIssue } = useDialogActions();
@@ -44,28 +42,28 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
 
   const items = useMemo<MobileNavItem[]>(
     () => [
-      { type: "link", to: "/dashboard", label: t("home", "Home"), icon: House },
-      { type: "link", to: "/issues", label: t("issues", "Issues"), icon: CircleDot },
-      { type: "action", label: t("create", "Create"), icon: SquarePen, onClick: () => openNewIssue() },
-      { type: "link", to: "/agents/all", label: t("agents", "Agents"), icon: Users },
+      { type: "link", to: "/dashboard", label: "Home", icon: House },
+      { type: "link", to: "/issues", label: "Tasks", icon: CircleDot },
+      { type: "action", label: "Create", icon: SquarePen, onClick: () => openNewIssue() },
+      { type: "link", to: "/agents/all", label: "Agents", icon: Users },
       {
         type: "link",
         to: "/inbox",
-        label: t("inbox", "Inbox"),
+        label: "Inbox",
         icon: Inbox,
         badge: inboxBadge.inbox,
       },
     ],
-    [openNewIssue, inboxBadge.inbox, t],
+    [openNewIssue, inboxBadge.inbox],
   );
 
   return (
     <nav
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border transition-transform duration-200 ease-out md:hidden pb-[env(safe-area-inset-bottom)]",
+        "fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 transition-transform duration-200 ease-out md:hidden pb-[env(safe-area-inset-bottom)]",
         visible ? "translate-y-0" : "translate-y-full",
       )}
-      aria-label={t("mobileNavigation", "Mobile navigation")}
+      aria-label="Mobile navigation"
     >
       <div className="grid h-16 grid-cols-5 px-1">
         {items.map((item) => {
@@ -78,9 +76,9 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
                 type="button"
                 onClick={item.onClick}
                 className={cn(
-                  "relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-md text-xs font-medium transition-colors",
+                  "relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-md text-[10px] font-medium transition-colors",
                   active
-                    ? "text-primary"
+                    ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -98,9 +96,9 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
               state={SIDEBAR_SCROLL_RESET_STATE}
               className={({ isActive }) =>
                 cn(
-                  "relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-md text-xs font-medium transition-colors",
+                  "relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-md text-[10px] font-medium transition-colors",
                   isActive
-                    ? "text-primary"
+                    ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )
               }

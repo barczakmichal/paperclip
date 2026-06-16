@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "@/lib/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ExecutionWorkspace, Issue, Project, ProjectWorkspace } from "@paperclipai/shared";
-import { ArrowLeft, Copy, ExternalLink, Loader2 } from "lucide-react";
+import type { ExecutionWorkspace, Issue, Project, ProjectWorkspace, RoutineListItem } from "@paperclipai/shared";
+import { Copy, ExternalLink, Loader2, Play, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,24 +11,37 @@ import { Tabs } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { CopyText } from "../components/CopyText";
 import { ExecutionWorkspaceCloseDialog } from "../components/ExecutionWorkspaceCloseDialog";
+import { MissingPluginTabPlaceholder } from "../components/MissingPluginTabPlaceholder";
 import { agentsApi } from "../api/agents";
 import { executionWorkspacesApi } from "../api/execution-workspaces";
 import { heartbeatsApi } from "../api/heartbeats";
 import { issuesApi } from "../api/issues";
 import { projectsApi } from "../api/projects";
+import { routinesApi } from "../api/routines";
 import { IssuesList } from "../components/IssuesList";
 import { PageTabBar } from "../components/PageTabBar";
+import { PluginSlotMount, PluginSlotOutlet, usePluginSlots } from "@/plugins/slots";
+import {
+  RoutineRunVariablesDialog,
+  type RoutineRunDialogSubmitData,
+} from "../components/RoutineRunVariablesDialog";
 import {
   buildWorkspaceRuntimeControlSections,
+  WorkspaceRuntimeQuickControls,
   WorkspaceRuntimeControls,
   type WorkspaceRuntimeControlRequest,
 } from "../components/WorkspaceRuntimeControls";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useCompany } from "../context/CompanyContext";
+import { useToastActions } from "../context/ToastContext";
 import { collectLiveIssueIds } from "../lib/liveIssueIds";
 import { queryKeys } from "../lib/queryKeys";
 import { cn, formatDateTime, issueUrl, projectRouteRef, projectWorkspaceUrl } from "../lib/utils";
-import i18n from "../lib/i18n";
+import {
+  getWorkspaceSpecificRoutineVariableNames,
+  routineHasWorkspaceSpecificVariables,
+} from "../lib/workspace-routines";
+import { useTranslation } from "@/i18n";
 
 type WorkspaceFormState = {
   name: string;
@@ -45,22 +57,61 @@ type WorkspaceFormState = {
   workspaceRuntime: string;
 };
 
-type ExecutionWorkspaceTab = "configuration" | "runtime_logs" | "issues";
+type ExecutionWorkspaceBaseTab = "services" | "configuration" | "runtime_logs" | "issues" | "routines";
+type ExecutionWorkspacePluginTab = `plugin:${string}`;
+type ExecutionWorkspaceTab = ExecutionWorkspaceBaseTab | ExecutionWorkspacePluginTab;
+type OrderedExecutionWorkspaceTabItem = {
+  value: ExecutionWorkspaceTab;
+  label: string;
+  order: number;
+};
 
-function resolveExecutionWorkspaceTab(pathname: string, workspaceId: string): ExecutionWorkspaceTab | null {
+const DEFAULT_PLUGIN_DETAIL_TAB_ORDER = 100;
+const EXECUTION_WORKSPACE_BASE_TAB_ITEMS: OrderedExecutionWorkspaceTabItem[] = [
+  { value: "issues", label: "Tasks", order: 10 },
+  { value: "services", label: "Services", order: 20 },
+  { value: "configuration", label: "Configuration", order: 30 },
+  { value: "runtime_logs", label: "Runtime logs", order: 40 },
+  { value: "routines", label: "Routines", order: 60 },
+];
+
+function isExecutionWorkspacePluginTab(value: string | null): value is ExecutionWorkspacePluginTab {
+  return typeof value === "string" && value.startsWith("plugin:");
+}
+
+function orderExecutionWorkspaceTabItems(items: OrderedExecutionWorkspaceTabItem[]) {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => left.item.order - right.item.order || left.index - right.index)
+    .map(({ item }) => item);
+}
+
+function resolveExecutionWorkspaceTab(pathname: string, workspaceId: string): ExecutionWorkspaceBaseTab | null {
   const segments = pathname.split("/").filter(Boolean);
   const executionWorkspacesIndex = segments.indexOf("execution-workspaces");
   if (executionWorkspacesIndex === -1 || segments[executionWorkspacesIndex + 1] !== workspaceId) return null;
   const tab = segments[executionWorkspacesIndex + 2];
+  if (tab === "services") return "services";
   if (tab === "issues") return "issues";
+  if (tab === "routines") return "routines";
   if (tab === "runtime-logs") return "runtime_logs";
   if (tab === "configuration") return "configuration";
   return null;
 }
 
-function executionWorkspaceTabPath(workspaceId: string, tab: ExecutionWorkspaceTab) {
+function executionWorkspaceTabPath(workspaceId: string, tab: ExecutionWorkspaceBaseTab) {
   const segment = tab === "runtime_logs" ? "runtime-logs" : tab;
   return `/execution-workspaces/${workspaceId}/${segment}`;
+}
+
+function LegacyWorkspaceTabRedirect({ workspaceId }: { workspaceId: string }) {
+  useEffect(() => {
+    try {
+      localStorage.removeItem(`paperclip:execution-workspace-tab:${workspaceId}`);
+    } catch {}
+  }, [workspaceId]);
+
+  return <Navigate to={executionWorkspaceTabPath(workspaceId, "issues")} replace />;
 }
 
 function isSafeExternalUrl(value: string | null | undefined) {
@@ -82,12 +133,16 @@ function formatJson(value: Record<string, unknown> | null | undefined) {
   return JSON.stringify(value, null, 2);
 }
 
+function formatOptionalDateTime(value: Date | string | null | undefined, neverLabel: string) {
+  return value ? formatDateTime(value) : neverLabel;
+}
+
 function normalizeText(value: string) {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function parseWorkspaceRuntimeJson(value: string) {
+function parseWorkspaceRuntimeJson(value: string, t: (key: string) => string) {
   const trimmed = value.trim();
   if (!trimmed) return { ok: true as const, value: null as Record<string, unknown> | null };
 
@@ -96,14 +151,14 @@ function parseWorkspaceRuntimeJson(value: string) {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {
         ok: false as const,
-        error: i18n.t("executionWorkspaceDetailPage:errorJsonMustBeObject", "Workspace commands JSON must be a JSON object."),
+        error: t("page.executionWorkspaceDetail.validation.commandsJsonMustBeObject"),
       };
     }
     return { ok: true as const, value: parsed as Record<string, unknown> };
   } catch (error) {
     return {
       ok: false as const,
-      error: error instanceof Error ? error.message : i18n.t("executionWorkspaceDetailPage:errorInvalidJson", "Invalid JSON."),
+      error: error instanceof Error ? error.message : t("page.executionWorkspaceDetail.validation.invalidJson"),
     };
   }
 }
@@ -124,7 +179,7 @@ function formStateFromWorkspace(workspace: ExecutionWorkspace): WorkspaceFormSta
   };
 }
 
-function buildWorkspacePatch(initialState: WorkspaceFormState, nextState: WorkspaceFormState) {
+function buildWorkspacePatch(initialState: WorkspaceFormState, nextState: WorkspaceFormState, t: (key: string) => string) {
   const patch: Record<string, unknown> = {};
   const configPatch: Record<string, unknown> = {};
 
@@ -152,7 +207,7 @@ function buildWorkspacePatch(initialState: WorkspaceFormState, nextState: Worksp
   maybeAssignConfigText("cleanupCommand");
 
   if (initialState.inheritRuntime !== nextState.inheritRuntime || initialState.workspaceRuntime !== nextState.workspaceRuntime) {
-    const parsed = parseWorkspaceRuntimeJson(nextState.workspaceRuntime);
+    const parsed = parseWorkspaceRuntimeJson(nextState.workspaceRuntime, t);
     if (!parsed.ok) throw new Error(parsed.error);
     configPatch.workspaceRuntime = nextState.inheritRuntime ? null : parsed.value;
   }
@@ -164,18 +219,18 @@ function buildWorkspacePatch(initialState: WorkspaceFormState, nextState: Worksp
   return patch;
 }
 
-function validateForm(form: WorkspaceFormState) {
+function validateForm(form: WorkspaceFormState, t: (key: string) => string) {
   const repoUrl = normalizeText(form.repoUrl);
   if (repoUrl) {
     try {
       new URL(repoUrl);
     } catch {
-      return i18n.t("executionWorkspaceDetailPage:errorRepoUrlInvalid", "Repo URL must be a valid URL.");
+      return t("page.executionWorkspaceDetail.validation.repoUrlMustBeValid");
     }
   }
 
   if (!form.inheritRuntime) {
-    const runtimeJson = parseWorkspaceRuntimeJson(form.workspaceRuntime);
+    const runtimeJson = parseWorkspaceRuntimeJson(form.workspaceRuntime, t);
     if (!runtimeJson.ok) {
       return runtimeJson.error;
     }
@@ -222,12 +277,12 @@ function StatusPill({ children, className }: { children: React.ReactNode; classN
 }
 
 function MonoValue({ value, copy }: { value: string; copy?: boolean }) {
-  const { t } = useTranslation("executionWorkspaceDetailPage");
+  const { t } = useTranslation();
   return (
     <div className="inline-flex max-w-full items-start gap-2">
       <span className="break-all font-mono text-xs">{value}</span>
       {copy ? (
-        <CopyText text={value} className="shrink-0 text-muted-foreground hover:text-foreground" copiedLabel={t("copied", "Copied")}>
+        <CopyText text={value} className="shrink-0 text-muted-foreground hover:text-foreground" copiedLabel={t("page.executionWorkspaceDetail.copied")}>
           <Copy className="h-3.5 w-3.5" />
         </CopyText>
       ) : null}
@@ -247,14 +302,14 @@ function WorkspaceLink({
 
 function ExecutionWorkspaceIssuesList({
   companyId,
-  workspaceId,
+  workspace,
   issues,
   isLoading,
   error,
   project,
 }: {
   companyId: string;
-  workspaceId: string;
+  workspace: ExecutionWorkspace;
   issues: Issue[];
   isLoading: boolean;
   error: Error | null;
@@ -280,7 +335,7 @@ function ExecutionWorkspaceIssuesList({
   const updateIssue = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => issuesApi.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.issues.listByExecutionWorkspace(companyId, workspaceId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.issues.listByExecutionWorkspace(companyId, workspace.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.list(companyId) });
       if (project?.id) {
         queryClient.invalidateQueries({ queryKey: queryKeys.issues.listByProject(companyId, project.id) });
@@ -291,6 +346,15 @@ function ExecutionWorkspaceIssuesList({
   const projectOptions = useMemo(
     () => (project ? [{ id: project.id, name: project.name, workspaces: project.workspaces ?? [] }] : undefined),
     [project],
+  );
+  const createIssueDefaults = useMemo(
+    () => ({
+      projectId: workspace.projectId,
+      ...(workspace.projectWorkspaceId ? { projectWorkspaceId: workspace.projectWorkspaceId } : {}),
+      executionWorkspaceId: workspace.id,
+      executionWorkspaceMode: "reuse_existing",
+    }),
+    [workspace.id, workspace.projectId, workspace.projectWorkspaceId],
   );
 
   return (
@@ -303,13 +367,198 @@ function ExecutionWorkspaceIssuesList({
       liveIssueIds={liveIssueIds}
       projectId={project?.id}
       viewStateKey="paperclip:execution-workspace-issues-view"
+      baseCreateIssueDefaults={createIssueDefaults}
       onUpdateIssue={(id, data) => updateIssue.mutate({ id, data })}
     />
   );
 }
 
+function WorkspaceRoutineRow({
+  routine,
+  variableNames,
+  runningRoutineId,
+  onRunNow,
+}: {
+  routine: RoutineListItem;
+  variableNames: string[];
+  runningRoutineId: string | null;
+  onRunNow: (routine: RoutineListItem) => void;
+}) {
+  const { t } = useTranslation();
+  const isArchived = routine.status === "archived";
+  const isRunning = runningRoutineId === routine.id;
+
+  return (
+    <div className="flex flex-col gap-3 border-b border-border px-3 py-3 last:border-b-0 sm:flex-row sm:items-center">
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to={`/routines/${routine.id}`} className="truncate text-sm font-medium hover:underline">
+            {routine.title}
+          </Link>
+          {routine.status !== "active" ? (
+            <span className="text-xs text-muted-foreground">{routine.status}</span>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span>{routine.assigneeAgentId ? t("page.executionWorkspaceDetail.routine.defaultAgentSet") : t("page.executionWorkspaceDetail.routine.chooseAgentWhenRunning")}</span>
+          <span>{t("page.executionWorkspaceDetail.routine.lastRun")} {formatOptionalDateTime(routine.lastRun?.triggeredAt ?? routine.lastTriggeredAt, t("page.executionWorkspaceDetail.never"))}</span>
+          <span className="flex flex-wrap gap-1">
+            {variableNames.map((name) => (
+              <span key={name} className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                {name}
+              </span>
+            ))}
+          </span>
+        </div>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full sm:w-auto"
+        disabled={isArchived || isRunning}
+        onClick={() => onRunNow(routine)}
+      >
+        {isRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+        {isRunning ? t("page.executionWorkspaceDetail.routine.running") : t("page.executionWorkspaceDetail.routine.runNow")}
+      </Button>
+    </div>
+  );
+}
+
+function ExecutionWorkspaceRoutinesList({
+  workspace,
+  project,
+}: {
+  workspace: ExecutionWorkspace;
+  project: Project | null;
+}) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { pushToast } = useToastActions();
+  const [runDialogRoutine, setRunDialogRoutine] = useState<RoutineListItem | null>(null);
+  const [runningRoutineId, setRunningRoutineId] = useState<string | null>(null);
+
+  const { data: routines, isLoading, error } = useQuery({
+    queryKey: queryKeys.routines.list(workspace.companyId, { projectId: workspace.projectId }),
+    queryFn: () => routinesApi.list(workspace.companyId, { projectId: workspace.projectId }),
+  });
+
+  const { data: agents } = useQuery({
+    queryKey: queryKeys.agents.list(workspace.companyId),
+    queryFn: () => agentsApi.list(workspace.companyId),
+  });
+
+  const workspaceRoutines = useMemo(
+    () => (routines ?? []).filter(routineHasWorkspaceSpecificVariables),
+    [routines],
+  );
+
+  const runRoutine = useMutation({
+    mutationFn: ({ id, data }: { id: string; data?: RoutineRunDialogSubmitData }) => routinesApi.run(id, {
+      ...(data?.variables && Object.keys(data.variables).length > 0 ? { variables: data.variables } : {}),
+      ...(data?.assigneeAgentId !== undefined ? { assigneeAgentId: data.assigneeAgentId } : {}),
+      ...(data?.projectId !== undefined ? { projectId: data.projectId } : {}),
+      ...(data?.executionWorkspaceId !== undefined ? { executionWorkspaceId: data.executionWorkspaceId } : {}),
+      ...(data?.executionWorkspacePreference !== undefined
+        ? { executionWorkspacePreference: data.executionWorkspacePreference }
+        : {}),
+      ...(data?.executionWorkspaceSettings !== undefined
+        ? { executionWorkspaceSettings: data.executionWorkspaceSettings }
+        : {}),
+    }),
+    onMutate: ({ id }) => {
+      setRunningRoutineId(id);
+    },
+    onSuccess: async (_, { id }) => {
+      setRunDialogRoutine(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["routines", workspace.companyId] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.routines.detail(id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.issues.listByExecutionWorkspace(workspace.companyId, workspace.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.issues.list(workspace.companyId) }),
+      ]);
+      pushToast({
+        title: t("page.executionWorkspaceDetail.toast.routineStarted.title"),
+        body: t("page.executionWorkspaceDetail.toast.routineStarted.body"),
+        tone: "success",
+      });
+    },
+    onSettled: () => {
+      setRunningRoutineId(null);
+    },
+    onError: (mutationError) => {
+      pushToast({
+        title: t("page.executionWorkspaceDetail.toast.routineFailed.title"),
+        body: mutationError instanceof Error ? mutationError.message : t("page.executionWorkspaceDetail.toast.routineFailed.body"),
+        tone: "error",
+      });
+    },
+  });
+
+  return (
+    <>
+      <Card className="rounded-none">
+        <CardHeader>
+          <CardTitle>{t("page.executionWorkspaceDetail.routines.title")}</CardTitle>
+          <CardDescription>
+            {t("page.executionWorkspaceDetail.routines.description")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">{t("page.executionWorkspaceDetail.routines.loading")}</p>
+          ) : error ? (
+            <p className="text-sm text-destructive">
+              {error instanceof Error ? error.message : t("page.executionWorkspaceDetail.routines.loadFailed")}
+            </p>
+          ) : workspaceRoutines.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <Repeat className="h-5 w-5 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                {t("page.executionWorkspaceDetail.routines.empty")}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border">
+              {workspaceRoutines.map((routine) => (
+                <WorkspaceRoutineRow
+                  key={routine.id}
+                  routine={routine}
+                  variableNames={getWorkspaceSpecificRoutineVariableNames(routine)}
+                  runningRoutineId={runningRoutineId}
+                  onRunNow={setRunDialogRoutine}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <RoutineRunVariablesDialog
+        open={runDialogRoutine !== null}
+        onOpenChange={(next) => {
+          if (!next) setRunDialogRoutine(null);
+        }}
+        companyId={workspace.companyId}
+        routineName={runDialogRoutine?.title ?? null}
+        agents={agents ?? []}
+        projects={project ? [project] : []}
+        defaultProjectId={workspace.projectId}
+        defaultAssigneeAgentId={runDialogRoutine?.assigneeAgentId ?? null}
+        defaultExecutionWorkspace={workspace}
+        variables={runDialogRoutine?.variables ?? []}
+        isPending={runRoutine.isPending}
+        onSubmit={(data) => {
+          if (!runDialogRoutine) return;
+          runRoutine.mutate({ id: runDialogRoutine.id, data });
+        }}
+      />
+    </>
+  );
+}
+
 export function ExecutionWorkspaceDetail() {
-  const { t } = useTranslation("executionWorkspaceDetailPage");
+  const { t } = useTranslation();
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -321,7 +570,12 @@ export function ExecutionWorkspaceDetail() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [runtimeActionErrorMessage, setRuntimeActionErrorMessage] = useState<string | null>(null);
   const [runtimeActionMessage, setRuntimeActionMessage] = useState<string | null>(null);
-  const activeTab = workspaceId ? resolveExecutionWorkspaceTab(location.pathname, workspaceId) : null;
+  const activeRouteTab = workspaceId ? resolveExecutionWorkspaceTab(location.pathname, workspaceId) : null;
+  const pluginTabFromSearch = useMemo(() => {
+    const tab = new URLSearchParams(location.search).get("tab");
+    return isExecutionWorkspacePluginTab(tab) ? tab : null;
+  }, [location.search]);
+  const activeTab: ExecutionWorkspaceTab | null = activeRouteTab ?? pluginTabFromSearch;
 
   const workspaceQuery = useQuery({
     queryKey: queryKeys.executionWorkspaces.detail(workspaceId!),
@@ -365,6 +619,30 @@ export function ExecutionWorkspaceDetail() {
     () => project?.workspaces.find((item) => item.id === workspace?.projectWorkspaceId) ?? null,
     [project, workspace?.projectWorkspaceId],
   );
+
+  const {
+    slots: workspacePluginDetailSlots,
+    isLoading: workspacePluginDetailSlotsLoading,
+    errorMessage: workspacePluginDetailSlotsError,
+  } = usePluginSlots({
+    slotTypes: ["detailTab"],
+    entityType: "execution_workspace",
+    companyId: workspace?.companyId ?? null,
+    enabled: !!workspace?.companyId,
+  });
+  const workspacePluginTabItems = useMemo(
+    () => workspacePluginDetailSlots.map((slot) => ({
+      value: `plugin:${slot.pluginKey}:${slot.id}` as ExecutionWorkspacePluginTab,
+      label: slot.displayName,
+      order: slot.order ?? DEFAULT_PLUGIN_DETAIL_TAB_ORDER,
+      slot,
+    })),
+    [workspacePluginDetailSlots],
+  );
+  const workspaceTabItems = useMemo(
+    () => orderExecutionWorkspaceTabItems([...EXECUTION_WORKSPACE_BASE_TAB_ITEMS, ...workspacePluginTabItems]),
+    [workspacePluginTabItems],
+  );
   const inheritedRuntimeConfig = linkedProjectWorkspace?.runtimeConfig?.workspaceRuntime ?? null;
   const effectiveRuntimeConfig = workspace?.config?.workspaceRuntime ?? inheritedRuntimeConfig;
   const runtimeConfigSource =
@@ -393,9 +671,9 @@ export function ExecutionWorkspaceDetail() {
   useEffect(() => {
     if (!workspace) return;
     const crumbs = [
-      { label: t("projectsBreadcrumb", "Projects"), href: "/projects" },
+      { label: t("page.project.breadcrumb.projects"), href: "/projects" },
       ...(project ? [{ label: project.name, href: `/projects/${projectRef}` }] : []),
-      ...(project ? [{ label: t("workspacesBreadcrumb", "Workspaces"), href: `/projects/${projectRef}/workspaces` }] : []),
+      ...(project ? [{ label: t("page.project.breadcrumb.workspaces"), href: `/projects/${projectRef}/workspaces` }] : []),
       { label: workspace.name },
     ];
     setBreadcrumbs(crumbs);
@@ -417,7 +695,7 @@ export function ExecutionWorkspaceDetail() {
       setErrorMessage(null);
     },
     onError: (error) => {
-      setErrorMessage(error instanceof Error ? error.message : t("saveWorkspaceFailed", "Failed to save execution workspace."));
+      setErrorMessage(error instanceof Error ? error.message : t("page.executionWorkspaceDetail.error.saveFailed"));
     },
   });
   const workspaceOperationsQuery = useQuery({
@@ -435,25 +713,25 @@ export function ExecutionWorkspaceDetail() {
       setRuntimeActionErrorMessage(null);
       setRuntimeActionMessage(
         request.action === "run"
-          ? t("jobCompleted", "Workspace job completed.")
+          ? t("page.executionWorkspaceDetail.runtimeAction.jobCompleted")
           : request.action === "stop"
-            ? t("serviceStopped", "Workspace service stopped.")
+            ? t("page.executionWorkspaceDetail.runtimeAction.serviceStopped")
             : request.action === "restart"
-              ? t("serviceRestarted", "Workspace service restarted.")
-              : t("serviceStarted", "Workspace service started."),
+              ? t("page.executionWorkspaceDetail.runtimeAction.serviceRestarted")
+              : t("page.executionWorkspaceDetail.runtimeAction.serviceStarted"),
       );
     },
     onError: (error) => {
       setRuntimeActionMessage(null);
-      setRuntimeActionErrorMessage(error instanceof Error ? error.message : t("controlCommandsFailed", "Failed to control workspace commands."));
+      setRuntimeActionErrorMessage(error instanceof Error ? error.message : t("page.executionWorkspaceDetail.error.controlFailed"));
     },
   });
 
-  if (workspaceQuery.isLoading) return <p className="text-sm text-muted-foreground">{t("loadingWorkspace", "Loading workspace…")}</p>;
+  if (workspaceQuery.isLoading) return <p className="text-sm text-muted-foreground">{t("page.executionWorkspaceDetail.loading")}</p>;
   if (workspaceQuery.error) {
     return (
       <p className="text-sm text-destructive">
-        {workspaceQuery.error instanceof Error ? workspaceQuery.error.message : t("loadWorkspaceFailed", "Failed to load workspace")}
+        {workspaceQuery.error instanceof Error ? workspaceQuery.error.message : t("page.executionWorkspaceDetail.error.loadFailed")}
       </p>
     );
   }
@@ -466,29 +744,32 @@ export function ExecutionWorkspaceDetail() {
     runtimeServices: workspace.runtimeServices ?? [],
     canStartServices: canStartRuntimeServices,
     canRunJobs: canRunWorkspaceCommands,
+    t,
   });
   const pendingRuntimeAction = controlRuntimeServices.isPending ? controlRuntimeServices.variables ?? null : null;
 
+  const pluginSlotContext = {
+    companyId: workspace.companyId,
+    projectId: workspace.projectId,
+    entityId: workspace.id,
+    entityType: "execution_workspace" as const,
+  };
+  const activePluginTab = workspacePluginTabItems.find((item) => item.value === activeTab) ?? null;
+
   if (workspaceId && activeTab === null) {
-    let cachedTab: ExecutionWorkspaceTab = "configuration";
-    try {
-      const storedTab = localStorage.getItem(`paperclip:execution-workspace-tab:${workspaceId}`);
-      if (storedTab === "issues" || storedTab === "configuration" || storedTab === "runtime_logs") {
-        cachedTab = storedTab;
-      }
-    } catch {}
-    return <Navigate to={executionWorkspaceTabPath(workspaceId, cachedTab)} replace />;
+    return <LegacyWorkspaceTabRedirect workspaceId={workspaceId} />;
   }
 
   const handleTabChange = (tab: ExecutionWorkspaceTab) => {
-    try {
-      localStorage.setItem(`paperclip:execution-workspace-tab:${workspace.id}`, tab);
-    } catch {}
+    if (isExecutionWorkspacePluginTab(tab)) {
+      navigate(`/execution-workspaces/${workspace.id}?tab=${encodeURIComponent(tab)}`);
+      return;
+    }
     navigate(executionWorkspaceTabPath(workspace.id, tab));
   };
 
   const saveChanges = () => {
-    const validationError = validateForm(form);
+    const validationError = validateForm(form, t);
     if (validationError) {
       setErrorMessage(validationError);
       return;
@@ -496,9 +777,9 @@ export function ExecutionWorkspaceDetail() {
 
     let patch: Record<string, unknown>;
     try {
-      patch = buildWorkspacePatch(initialState, form);
+      patch = buildWorkspacePatch(initialState, form, t);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : t("buildUpdateFailed", "Failed to build workspace update."));
+      setErrorMessage(error instanceof Error ? error.message : t("page.executionWorkspaceDetail.error.buildPatchFailed"));
       return;
     }
 
@@ -509,95 +790,76 @@ export function ExecutionWorkspaceDetail() {
   return (
     <>
       <div className="space-y-4 overflow-hidden sm:space-y-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant="ghost" size="sm" asChild>
-            <Link to={project ? `/projects/${projectRef}/workspaces` : "/projects"}>
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              {t("backToWorkspaces", "Back to all workspaces")}
-            </Link>
-          </Button>
-          <StatusPill>{workspace.mode}</StatusPill>
-          <StatusPill>{workspace.providerType}</StatusPill>
-          <StatusPill className={workspace.status === "active" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : undefined}>
-            {workspace.status}
-          </StatusPill>
-        </div>
-
-        <div className="space-y-2">
-          <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            {t("executionWorkspaceLabel", "Execution workspace")}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              {t("page.executionWorkspaceDetail.eyebrow")}
+            </div>
+            <h1 className="truncate text-xl font-semibold sm:text-2xl">{workspace.name}</h1>
           </div>
-          <h1 className="truncate text-xl font-semibold sm:text-2xl">{workspace.name}</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            {t("pageDescription", "Configure the concrete runtime workspace that Paperclip reuses for this issue flow.")}
-            <span className="hidden sm:inline"> {t("pageDescriptionExtra", "These settings stay attached to the execution workspace so future runs can keep local paths, repo refs, provisioning, teardown, and runtime-service behavior in sync with the actual workspace being reused.")}</span>
-          </p>
+          <WorkspaceRuntimeQuickControls
+            sections={runtimeControlSections}
+            isPending={controlRuntimeServices.isPending}
+            pendingRequest={pendingRuntimeAction}
+            onAction={(request) => controlRuntimeServices.mutate(request)}
+          />
         </div>
+        {runtimeActionErrorMessage ? <p className="text-sm text-destructive">{runtimeActionErrorMessage}</p> : null}
+        {!runtimeActionErrorMessage && runtimeActionMessage ? <p className="text-sm text-muted-foreground">{runtimeActionMessage}</p> : null}
 
-        <Card className="rounded-none">
-          <CardHeader>
-            <CardTitle>{t("servicesAndJobs", "Services and jobs")}</CardTitle>
-            <CardDescription>
-              {t("sourcePrefix", "Source:")} {runtimeConfigSource === "execution_workspace"
-                ? t("sourceExecutionOverride", "execution workspace override")
-                : runtimeConfigSource === "project_workspace"
-                  ? t("sourceProjectDefault", "project workspace default")
-                  : t("sourceNone", "none")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <PluginSlotOutlet
+          slotTypes={["toolbarButton", "contextMenuItem"]}
+          entityType="execution_workspace"
+          context={pluginSlotContext}
+          className="flex flex-wrap gap-2"
+          itemClassName="inline-flex"
+          missingBehavior="placeholder"
+        />
+
+        <Tabs value={activeTab ?? "issues"} onValueChange={(value) => handleTabChange(value as ExecutionWorkspaceTab)}>
+          <PageTabBar
+            items={workspaceTabItems.map((item) => ({ value: item.value, label: item.label }))}
+            align="start"
+            value={activeTab ?? "issues"}
+            onValueChange={(value) => handleTabChange(value as ExecutionWorkspaceTab)}
+          />
+        </Tabs>
+
+        {activeTab === "services" ? (
           <WorkspaceRuntimeControls
             sections={runtimeControlSections}
             isPending={controlRuntimeServices.isPending}
             pendingRequest={pendingRuntimeAction}
             serviceEmptyMessage={
               effectiveRuntimeConfig
-                ? t("noServicesStarted", "No services have been started for this execution workspace yet.")
-                : t("noCommandConfig", "No workspace command config is defined for this execution workspace yet.")
+                ? t("page.executionWorkspaceDetail.empty.servicesNotStarted")
+                : t("page.executionWorkspaceDetail.empty.noCommandConfig")
             }
-            jobEmptyMessage={t("noJobsConfigured", "No one-shot jobs are configured for this execution workspace yet.")}
+            jobEmptyMessage={t("page.executionWorkspaceDetail.empty.noJobs")}
             disabledHint={
               canStartRuntimeServices
                 ? null
-                : t("disabledHint", "Execution workspaces need a working directory before local commands can run, and services also need runtime config.")
+                : t("page.executionWorkspaceDetail.disabledHint")
             }
             onAction={(request) => controlRuntimeServices.mutate(request)}
           />
-          {runtimeActionErrorMessage ? <p className="mt-4 text-sm text-destructive">{runtimeActionErrorMessage}</p> : null}
-          {!runtimeActionErrorMessage && runtimeActionMessage ? <p className="mt-4 text-sm text-muted-foreground">{runtimeActionMessage}</p> : null}
-          </CardContent>
-        </Card>
-
-        <Tabs value={activeTab ?? "configuration"} onValueChange={(value) => handleTabChange(value as ExecutionWorkspaceTab)}>
-          <PageTabBar
-            items={[
-              { value: "configuration", label: t("tabConfiguration", "Configuration") },
-              { value: "runtime_logs", label: t("tabRuntimeLogs", "Runtime logs") },
-              { value: "issues", label: t("tabIssues", "Issues") },
-            ]}
-            align="start"
-            value={activeTab ?? "configuration"}
-            onValueChange={(value) => handleTabChange(value as ExecutionWorkspaceTab)}
-          />
-        </Tabs>
-
-        {activeTab === "configuration" ? (
+        ) : activeTab === "configuration" ? (
           <div className="space-y-4 sm:space-y-6">
             <Card className="rounded-none">
               <CardHeader>
-                <CardTitle>{t("workspaceSettings", "Workspace settings")}</CardTitle>
+                <CardTitle>{t("page.executionWorkspaceDetail.settings.title")}</CardTitle>
                 <CardDescription>
-                  {t("workspaceSettingsDescription", "Edit the concrete path, repo, branch, provisioning, teardown, and runtime overrides attached to this execution workspace.")}
+                  {t("page.executionWorkspaceDetail.settings.description")}
                 </CardDescription>
                 <CardAction>
                   <Button
                     variant="destructive"
                     size="sm"
-                    className="w-full rounded-none sm:w-auto"
+                    className="w-full sm:w-auto"
                     onClick={() => setCloseDialogOpen(true)}
                     disabled={workspace.status === "archived"}
                   >
-                    {workspace.status === "cleanup_failed" ? t("retryClose", "Retry close") : t("closeWorkspace", "Close workspace")}
+                    {workspace.status === "cleanup_failed" ? t("page.executionWorkspaceDetail.settings.retryClose") : t("page.executionWorkspaceDetail.settings.closeWorkspace")}
                   </Button>
                 </CardAction>
               </CardHeader>
@@ -606,12 +868,12 @@ export function ExecutionWorkspaceDetail() {
 
               <div className="space-y-6">
                 <div className="space-y-4">
-                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("sectionGeneral", "General")}</div>
-                  <Field label={t("workspaceNameLabel", "Workspace name")}>
+                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("page.executionWorkspaceDetail.section.general")}</div>
+                  <Field label={t("page.executionWorkspaceDetail.field.workspaceName")}>
                     <Input
                       value={form.name}
                       onChange={(event) => setForm((current) => current ? { ...current, name: event.target.value } : current)}
-                      placeholder={t("workspaceNamePlaceholder", "Execution workspace name")}
+                      placeholder={t("page.executionWorkspaceDetail.field.workspaceNamePlaceholder")}
                     />
                   </Field>
                 </div>
@@ -619,9 +881,9 @@ export function ExecutionWorkspaceDetail() {
                 <Separator />
 
                 <div className="space-y-4">
-                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("sectionSourceControl", "Source control")}</div>
+                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("page.executionWorkspaceDetail.section.sourceControl")}</div>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label={t("branchNameLabel", "Branch name")} hint={t("branchNameHint", "Useful for isolated worktrees")}>
+                    <Field label={t("page.executionWorkspaceDetail.field.branchName")} hint={t("page.executionWorkspaceDetail.hint.branchName")}>
                       <Input
                         className="font-mono"
                         value={form.branchName}
@@ -630,7 +892,7 @@ export function ExecutionWorkspaceDetail() {
                       />
                     </Field>
 
-                    <Field label={t("baseRefLabel", "Base ref")}>
+                    <Field label={t("page.executionWorkspaceDetail.field.baseRef")}>
                       <Input
                         className="font-mono"
                         value={form.baseRef}
@@ -640,7 +902,7 @@ export function ExecutionWorkspaceDetail() {
                     </Field>
                   </div>
 
-                  <Field label={t("repoUrlLabel", "Repo URL")}>
+                  <Field label={t("page.executionWorkspaceDetail.field.repoUrl")}>
                     <Input
                       value={form.repoUrl}
                       onChange={(event) => setForm((current) => current ? { ...current, repoUrl: event.target.value } : current)}
@@ -652,8 +914,8 @@ export function ExecutionWorkspaceDetail() {
                 <Separator />
 
                 <div className="space-y-4">
-                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("sectionPaths", "Paths")}</div>
-                  <Field label={t("workingDirectoryLabel", "Working directory")}>
+                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("page.executionWorkspaceDetail.section.paths")}</div>
+                  <Field label={t("page.executionWorkspaceDetail.field.workingDirectory")}>
                     <Input
                       className="font-mono"
                       value={form.cwd}
@@ -662,12 +924,12 @@ export function ExecutionWorkspaceDetail() {
                     />
                   </Field>
 
-                  <Field label={t("providerPathRefLabel", "Provider path / ref")}>
+                  <Field label={t("page.executionWorkspaceDetail.field.providerRef")}>
                     <Input
                       className="font-mono"
                       value={form.providerRef}
                       onChange={(event) => setForm((current) => current ? { ...current, providerRef: event.target.value } : current)}
-                      placeholder="/path/to/worktree or provider ref"
+                      placeholder={t("page.executionWorkspaceDetail.field.providerRefPlaceholder")}
                     />
                   </Field>
                 </div>
@@ -675,8 +937,8 @@ export function ExecutionWorkspaceDetail() {
                 <Separator />
 
                 <div className="space-y-4">
-                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("sectionLifecycleCommands", "Lifecycle commands")}</div>
-                  <Field label={t("provisionCommandLabel", "Provision command")} hint={t("provisionCommandHint", "Runs when Paperclip prepares this execution workspace")}>
+                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("page.executionWorkspaceDetail.section.lifecycleCommands")}</div>
+                  <Field label={t("page.executionWorkspaceDetail.field.provisionCommand")} hint={t("page.executionWorkspaceDetail.hint.provisionCommand")}>
                     <Textarea
                       className="min-h-20 font-mono"
                       value={form.provisionCommand}
@@ -685,7 +947,7 @@ export function ExecutionWorkspaceDetail() {
                     />
                   </Field>
 
-                  <Field label={t("teardownCommandLabel", "Teardown command")} hint={t("teardownCommandHint", "Runs when the execution workspace is archived or cleaned up")}>
+                  <Field label={t("page.executionWorkspaceDetail.field.teardownCommand")} hint={t("page.executionWorkspaceDetail.hint.teardownCommand")}>
                     <Textarea
                       className="min-h-20 font-mono"
                       value={form.teardownCommand}
@@ -694,7 +956,7 @@ export function ExecutionWorkspaceDetail() {
                     />
                   </Field>
 
-                  <Field label={t("cleanupCommandLabel", "Cleanup command")} hint={t("cleanupCommandHint", "Workspace-specific cleanup before teardown")}>
+                  <Field label={t("page.executionWorkspaceDetail.field.cleanupCommand")} hint={t("page.executionWorkspaceDetail.hint.cleanupCommand")}>
                     <Textarea
                       className="min-h-16 font-mono"
                       value={form.cleanupCommand}
@@ -707,19 +969,19 @@ export function ExecutionWorkspaceDetail() {
                 <Separator />
 
                 <div className="space-y-4">
-                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("sectionRuntimeConfig", "Runtime config")}</div>
+                  <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("page.executionWorkspaceDetail.section.runtimeConfig")}</div>
                   <div className="rounded-md border border-dashed border-border/70 bg-background px-4 py-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                       <div className="space-y-1">
                         <div className="text-sm font-medium text-foreground">
-                          {t("runtimeConfigSource", "Runtime config source")}
+                          {t("page.executionWorkspaceDetail.runtimeConfig.sourceTitle")}
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {runtimeConfigSource === "execution_workspace"
-                            ? t("runtimeSourceOverride", "This execution workspace currently overrides the project workspace runtime config.")
+                            ? t("page.executionWorkspaceDetail.runtimeConfig.overrides")
                             : runtimeConfigSource === "project_workspace"
-                              ? t("runtimeSourceInheriting", "This execution workspace is inheriting the project workspace runtime config.")
-                              : t("runtimeSourceNone", "No runtime config is currently defined on this execution workspace or its project workspace.")}
+                              ? t("page.executionWorkspaceDetail.runtimeConfig.inheriting")
+                              : t("page.executionWorkspaceDetail.runtimeConfig.none")}
                         </p>
                       </div>
                       <Button
@@ -735,18 +997,18 @@ export function ExecutionWorkspaceDetail() {
                           } : current)
                         }
                       >
-                        {t("resetToInherit", "Reset to inherit")}
+                        {t("page.executionWorkspaceDetail.runtimeConfig.resetToInherit")}
                       </Button>
                     </div>
                   </div>
 
                   <details className="rounded-md border border-dashed border-border/70 bg-background px-4 py-3">
-                    <summary className="cursor-pointer text-sm font-medium">{t("advancedRuntimeJson", "Advanced runtime JSON")}</summary>
+                    <summary className="cursor-pointer text-sm font-medium">{t("page.executionWorkspaceDetail.advancedRuntimeJson")}</summary>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      {t("advancedRuntimeJsonDescription", "Override the inherited workspace command model only when this execution workspace truly needs different service or job behavior.")}
+                      {t("page.executionWorkspaceDetail.advancedRuntimeJsonDesc")}
                     </p>
                     <div className="mt-3">
-                      <Field label={t("workspaceCommandsJsonLabel", "Workspace commands JSON")} hint={t("workspaceCommandsJsonHint", "Legacy `services` arrays still work, but `commands` supports both services and jobs.")}>
+                      <Field label={t("page.executionWorkspaceDetail.field.workspaceCommandsJson")} hint={t("page.executionWorkspaceDetail.hint.workspaceCommandsJson")}>
                         <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
                           <input
                             id="inherit-runtime-config"
@@ -764,7 +1026,7 @@ export function ExecutionWorkspaceDetail() {
                               });
                             }}
                           />
-                          <label htmlFor="inherit-runtime-config">{t("inheritRuntimeConfig", "Inherit project workspace runtime config")}</label>
+                          <label htmlFor="inherit-runtime-config">{t("page.executionWorkspaceDetail.runtimeConfig.inheritCheckbox")}</label>
                         </div>
                         <Textarea
                           className="min-h-64 font-mono sm:min-h-96"
@@ -782,7 +1044,7 @@ export function ExecutionWorkspaceDetail() {
               <div className="mt-6 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                 <Button className="w-full sm:w-auto" disabled={!isDirty || updateWorkspace.isPending} onClick={saveChanges}>
                   {updateWorkspace.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {t("saveChanges", "Save changes")}
+                  {t("page.executionWorkspaceDetail.saveChanges")}
                 </Button>
                 <Button
                   variant="outline"
@@ -795,33 +1057,33 @@ export function ExecutionWorkspaceDetail() {
                     setRuntimeActionMessage(null);
                   }}
                 >
-                  {t("reset", "Reset")}
+                  {t("page.executionWorkspaceDetail.reset")}
                 </Button>
                 {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
-                {!errorMessage && !isDirty ? <p className="text-sm text-muted-foreground">{t("noUnsavedChanges", "No unsaved changes.")}</p> : null}
+                {!errorMessage && !isDirty ? <p className="text-sm text-muted-foreground">{t("page.executionWorkspaceDetail.noUnsavedChanges")}</p> : null}
               </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-none">
               <CardHeader>
-                <CardTitle>{t("workspaceContext", "Workspace context")}</CardTitle>
-                <CardDescription>{t("workspaceContextDescription", "Linked objects and relationships")}</CardDescription>
+                <CardTitle>{t("page.executionWorkspaceDetail.context.title")}</CardTitle>
+                <CardDescription>{t("page.executionWorkspaceDetail.context.description")}</CardDescription>
               </CardHeader>
               <CardContent>
-              <DetailRow label={t("detailProject", "Project")}>
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.project")}>
                 {project ? <Link to={`/projects/${projectRef}`} className="hover:underline">{project.name}</Link> : <MonoValue value={workspace.projectId} />}
               </DetailRow>
-              <DetailRow label={t("detailProjectWorkspace", "Project workspace")}>
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.projectWorkspace")}>
                 {project && linkedProjectWorkspace ? (
                   <WorkspaceLink project={project} workspace={linkedProjectWorkspace} />
                 ) : workspace.projectWorkspaceId ? (
                   <MonoValue value={workspace.projectWorkspaceId} />
                 ) : (
-                  t("none", "None")
+                  t("page.executionWorkspaceDetail.none")
                 )}
               </DetailRow>
-              <DetailRow label={t("detailSourceIssue", "Source issue")}>
+              <DetailRow label="Source task">
                 {sourceIssue ? (
                   <Link to={issueUrl(sourceIssue)} className="hover:underline">
                     {sourceIssue.identifier ?? sourceIssue.id} · {sourceIssue.title}
@@ -829,10 +1091,10 @@ export function ExecutionWorkspaceDetail() {
                 ) : workspace.sourceIssueId ? (
                   <MonoValue value={workspace.sourceIssueId} />
                 ) : (
-                  t("none", "None")
+                  t("page.executionWorkspaceDetail.none")
                 )}
               </DetailRow>
-              <DetailRow label={t("detailDerivedFrom", "Derived from")}>
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.derivedFrom")}>
                 {derivedWorkspace ? (
                   <Link to={executionWorkspaceTabPath(derivedWorkspace.id, "configuration")} className="hover:underline">
                     {derivedWorkspace.name}
@@ -840,10 +1102,10 @@ export function ExecutionWorkspaceDetail() {
                 ) : workspace.derivedFromExecutionWorkspaceId ? (
                   <MonoValue value={workspace.derivedFromExecutionWorkspaceId} />
                 ) : (
-                  t("none", "None")
+                  t("page.executionWorkspaceDetail.none")
                 )}
               </DetailRow>
-              <DetailRow label={t("detailWorkspaceId", "Workspace ID")}>
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.workspaceId")}>
                 <MonoValue value={workspace.id} />
               </DetailRow>
               </CardContent>
@@ -851,45 +1113,45 @@ export function ExecutionWorkspaceDetail() {
 
             <Card className="rounded-none">
               <CardHeader>
-                <CardTitle>{t("concreteLocation", "Concrete location")}</CardTitle>
-                <CardDescription>{t("pathsAndRefs", "Paths and refs")}</CardDescription>
+                <CardTitle>{t("page.executionWorkspaceDetail.location.title")}</CardTitle>
+                <CardDescription>{t("page.executionWorkspaceDetail.location.description")}</CardDescription>
               </CardHeader>
               <CardContent>
-              <DetailRow label={t("detailWorkingDir", "Working dir")}>
-                {workspace.cwd ? <MonoValue value={workspace.cwd} copy /> : t("none", "None")}
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.workingDir")}>
+                {workspace.cwd ? <MonoValue value={workspace.cwd} copy /> : t("page.executionWorkspaceDetail.none")}
               </DetailRow>
-              <DetailRow label={t("detailProviderRef", "Provider ref")}>
-                {workspace.providerRef ? <MonoValue value={workspace.providerRef} copy /> : t("none", "None")}
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.providerRef")}>
+                {workspace.providerRef ? <MonoValue value={workspace.providerRef} copy /> : t("page.executionWorkspaceDetail.none")}
               </DetailRow>
-              <DetailRow label={t("repoUrlLabel", "Repo URL")}>
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.repoUrl")}>
                 {workspace.repoUrl && isSafeExternalUrl(workspace.repoUrl) ? (
                   <div className="inline-flex max-w-full items-start gap-2">
                     <a href={workspace.repoUrl} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 break-all hover:underline">
                       {workspace.repoUrl}
                       <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                     </a>
-                    <CopyText text={workspace.repoUrl} className="shrink-0 text-muted-foreground hover:text-foreground" copiedLabel={t("copied", "Copied")}>
+                    <CopyText text={workspace.repoUrl} className="shrink-0 text-muted-foreground hover:text-foreground" copiedLabel={t("page.executionWorkspaceDetail.copied")}>
                       <Copy className="h-3.5 w-3.5" />
                     </CopyText>
                   </div>
                 ) : workspace.repoUrl ? (
                   <MonoValue value={workspace.repoUrl} copy />
                 ) : (
-                  t("none", "None")
+                  t("page.executionWorkspaceDetail.none")
                 )}
               </DetailRow>
-              <DetailRow label={t("baseRefLabel", "Base ref")}>
-                {workspace.baseRef ? <MonoValue value={workspace.baseRef} copy /> : t("none", "None")}
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.baseRef")}>
+                {workspace.baseRef ? <MonoValue value={workspace.baseRef} copy /> : t("page.executionWorkspaceDetail.none")}
               </DetailRow>
-              <DetailRow label={t("detailBranch", "Branch")}>
-                {workspace.branchName ? <MonoValue value={workspace.branchName} copy /> : t("none", "None")}
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.branch")}>
+                {workspace.branchName ? <MonoValue value={workspace.branchName} copy /> : t("page.executionWorkspaceDetail.none")}
               </DetailRow>
-              <DetailRow label={t("detailOpened", "Opened")}>{formatDateTime(workspace.openedAt)}</DetailRow>
-              <DetailRow label={t("detailLastUsed", "Last used")}>{formatDateTime(workspace.lastUsedAt)}</DetailRow>
-              <DetailRow label={t("detailCleanup", "Cleanup")}>
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.opened")}>{formatDateTime(workspace.openedAt)}</DetailRow>
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.lastUsed")}>{formatDateTime(workspace.lastUsedAt)}</DetailRow>
+              <DetailRow label={t("page.executionWorkspaceDetail.detail.cleanup")}>
                 {workspace.cleanupEligibleAt
                   ? `${formatDateTime(workspace.cleanupEligibleAt)}${workspace.cleanupReason ? ` · ${workspace.cleanupReason}` : ""}`
-                  : t("notScheduled", "Not scheduled")}
+                  : t("page.executionWorkspaceDetail.notScheduled")}
               </DetailRow>
               </CardContent>
             </Card>
@@ -897,17 +1159,17 @@ export function ExecutionWorkspaceDetail() {
         ) : activeTab === "runtime_logs" ? (
           <Card className="rounded-none">
             <CardHeader>
-              <CardTitle>{t("runtimeCleanupLogs", "Runtime and cleanup logs")}</CardTitle>
-              <CardDescription>{t("recentOperations", "Recent operations")}</CardDescription>
+              <CardTitle>{t("page.executionWorkspaceDetail.runtimeLogs.title")}</CardTitle>
+              <CardDescription>{t("page.executionWorkspaceDetail.runtimeLogs.description")}</CardDescription>
             </CardHeader>
             <CardContent>
             {workspaceOperationsQuery.isLoading ? (
-              <p className="text-sm text-muted-foreground">{t("loadingOperations", "Loading workspace operations…")}</p>
+              <p className="text-sm text-muted-foreground">{t("page.executionWorkspaceDetail.runtimeLogs.loading")}</p>
             ) : workspaceOperationsQuery.error ? (
               <p className="text-sm text-destructive">
                 {workspaceOperationsQuery.error instanceof Error
                   ? workspaceOperationsQuery.error.message
-                  : t("loadOperationsFailed", "Failed to load workspace operations.")}
+                  : t("page.executionWorkspaceDetail.error.loadFailed")}
               </p>
             ) : workspaceOperationsQuery.data && workspaceOperationsQuery.data.length > 0 ? (
               <div className="space-y-3">
@@ -932,19 +1194,45 @@ export function ExecutionWorkspaceDetail() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">{t("noOperations", "No workspace operations have been recorded yet.")}</p>
+              <p className="text-sm text-muted-foreground">{t("page.executionWorkspaceDetail.runtimeLogs.noOperations")}</p>
             )}
             </CardContent>
           </Card>
-        ) : (
+        ) : activeTab === "issues" ? (
           <ExecutionWorkspaceIssuesList
             companyId={workspace.companyId}
-            workspaceId={workspace.id}
+            workspace={workspace}
             issues={linkedIssues}
             isLoading={linkedIssuesQuery.isLoading}
             error={linkedIssuesQuery.error as Error | null}
             project={project}
           />
+        ) : activePluginTab ? (
+          <PluginSlotMount
+            slot={activePluginTab.slot}
+            context={pluginSlotContext}
+            missingBehavior="placeholder"
+          />
+        ) : isExecutionWorkspacePluginTab(activeTab) && workspacePluginDetailSlotsLoading ? (
+          <Card>
+            <CardContent className="py-6 text-sm text-muted-foreground">Loading workspace plugin...</CardContent>
+          </Card>
+        ) : isExecutionWorkspacePluginTab(activeTab) && workspacePluginDetailSlotsError ? (
+          <Card>
+            <CardContent className="py-6 text-sm text-destructive">{workspacePluginDetailSlotsError}</CardContent>
+          </Card>
+        ) : isExecutionWorkspacePluginTab(activeTab) ? (
+          <MissingPluginTabPlaceholder
+            defaultTabHref={executionWorkspaceTabPath(workspace.id, "issues")}
+            defaultTabLabel="Back to tasks"
+          />
+        ) : activeTab === "routines" ? (
+          <ExecutionWorkspaceRoutinesList
+            workspace={workspace}
+            project={project}
+          />
+        ) : (
+          <LegacyWorkspaceTabRedirect workspaceId={workspace.id} />
         )}
       </div>
       <ExecutionWorkspaceCloseDialog

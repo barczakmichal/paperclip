@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
 import { Archive } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -22,7 +21,6 @@ export function SwipeToArchive({
   selected = false,
   className,
 }: SwipeToArchiveProps) {
-  const { t } = useTranslation("swipeToArchive");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const startPointRef = useRef<{ x: number; y: number } | null>(null);
   const widthRef = useRef(0);
@@ -148,14 +146,14 @@ export function SwipeToArchive({
       >
         <span className="inline-flex items-center gap-2 text-sm font-medium">
           <Archive className="h-4 w-4" />
-          {t("archive", "Archive")}
+          Archive
         </span>
       </div>
       <div
         data-inbox-row-surface
         className={cn(
           "relative will-change-transform",
-          selected ? "bg-zinc-100 dark:bg-zinc-800" : "bg-card",
+          selected ? "bg-zinc-100 dark:bg-zinc-800" : "bg-background",
         )}
         style={{
           transform: `translate3d(${offsetX}px, 0, 0)`,

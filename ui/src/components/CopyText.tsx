@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "../i18n";
 
 interface CopyTextProps {
   text: string;
@@ -23,10 +23,10 @@ export function CopyText({
   title,
   copiedLabel,
 }: CopyTextProps) {
-  const { t } = useTranslation("copyText");
-  const resolvedCopiedLabel = copiedLabel ?? t("copied", "Copied!");
+  const { t } = useTranslation();
+  const defaultCopiedLabel = t("common.actions.copied");
   const [visible, setVisible] = useState(false);
-  const [label, setLabel] = useState(resolvedCopiedLabel);
+  const [label, setLabel] = useState(copiedLabel ?? defaultCopiedLabel);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -37,7 +37,6 @@ export function CopyText({
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
       } else {
-        // Fallback for non-secure contexts (e.g. HTTP on non-localhost)
         const textarea = document.createElement("textarea");
         textarea.value = text;
         textarea.style.position = "fixed";
@@ -51,14 +50,14 @@ export function CopyText({
           document.body.removeChild(textarea);
         }
       }
-      setLabel(resolvedCopiedLabel);
+      setLabel(copiedLabel ?? defaultCopiedLabel);
     } catch {
-      setLabel(t("copyFailed", "Copy failed"));
+      setLabel(t("common.actions.copyFailed"));
     }
     clearTimeout(timerRef.current);
     setVisible(true);
     timerRef.current = setTimeout(() => setVisible(false), 1500);
-  }, [resolvedCopiedLabel, t, text]);
+  }, [copiedLabel, defaultCopiedLabel, text, t]);
 
   return (
     <span className={cn("relative inline-flex", containerClassName)}>

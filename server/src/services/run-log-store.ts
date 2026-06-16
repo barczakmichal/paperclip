@@ -67,14 +67,9 @@ function createLocalFileRunLogStore(basePath: string): RunLogStore {
       return { content: "", nextOffset: start };
     }
 
-    // Read a few extra bytes before `start` so we can detect and skip a
-    // partial UTF-8 character at the boundary.  UTF-8 characters are at most
-    // 4 bytes, so reading 3 bytes before `start` is sufficient.
-    const preStart = Math.max(0, start - 3);
-
     const chunks: Buffer[] = [];
     await new Promise<void>((resolve, reject) => {
-      const stream = createReadStream(filePath, { start: preStart, end });
+      const stream = createReadStream(filePath, { start, end });
       stream.on("data", (chunk) => {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       });
@@ -82,18 +77,8 @@ function createLocalFileRunLogStore(basePath: string): RunLogStore {
       stream.on("end", () => resolve());
     });
 
-    const raw = Buffer.concat(chunks);
-    // Determine how many prefix bytes we read and skip into the original
-    // `start` position, adjusting forward if it lands inside a multi-byte
-    // UTF-8 sequence (continuation bytes start with 0b10xxxxxx).
-    let skipBytes = start - preStart;
-    while (skipBytes < raw.length && (raw[skipBytes]! & 0xc0) === 0x80) {
-      skipBytes++;
-    }
-
-    const content = raw.subarray(skipBytes).toString("utf8");
-    const actualEnd = end + 1;
-    const nextOffset = actualEnd < stat.size ? actualEnd : undefined;
+    const content = Buffer.concat(chunks).toString("utf8");
+    const nextOffset = end + 1 < stat.size ? end + 1 : undefined;
     return { content, nextOffset };
   }
 

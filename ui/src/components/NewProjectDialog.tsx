@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useTranslation } from "@/i18n";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
@@ -13,6 +13,7 @@ import { queryKeys } from "../lib/queryKeys";
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,21 +35,21 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { PROJECT_COLORS } from "@paperclipai/shared";
 import { cn } from "../lib/utils";
 import { MarkdownEditor, type MarkdownEditorRef, type MentionOption } from "./MarkdownEditor";
 import { StatusBadge } from "./StatusBadge";
 import { ChoosePathButton } from "./PathInstructionsModal";
 
+const projectStatuses = [
+  { value: "backlog", labelKey: "common.status.backlog" },
+  { value: "planned", labelKey: "common.status.planned" },
+  { value: "in_progress", labelKey: "common.status.inProgress" },
+  { value: "completed", labelKey: "common.status.completed" },
+  { value: "cancelled", labelKey: "common.status.cancelled" },
+];
+
 export function NewProjectDialog() {
-  const { t } = useTranslation("newProjectDialog");
-  const projectStatuses = [
-    { value: "backlog", label: t("statusBacklog", "Backlog") },
-    { value: "planned", label: t("statusPlanned", "Planned") },
-    { value: "in_progress", label: t("statusInProgress", "In Progress") },
-    { value: "completed", label: t("statusCompleted", "Completed") },
-    { value: "cancelled", label: t("statusCancelled", "Cancelled") },
-  ];
+  const { t } = useTranslation();
   const { newProjectOpen, closeNewProject } = useDialog();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const queryClient = useQueryClient();
@@ -151,11 +152,11 @@ export function NewProjectDialog() {
     const repoUrl = workspaceRepoUrl.trim();
 
     if (localPath && !isAbsolutePath(localPath)) {
-      setWorkspaceError(t("localFolderAbsolute", "Local folder must be a full absolute path."));
+      setWorkspaceError(t("component.newProjectDialog.localFolderMustBeAbsolutePath"));
       return;
     }
     if (repoUrl && !looksLikeRepoUrl(repoUrl)) {
-      setWorkspaceError(t("repoUrlInvalid", "Repo must use a valid GitHub or GitHub Enterprise repo URL."));
+      setWorkspaceError(t("component.newProjectDialog.repoMustBeValidGitHubUrl"));
       return;
     }
 
@@ -166,7 +167,7 @@ export function NewProjectDialog() {
         name: name.trim(),
         description: description.trim() || undefined,
         status,
-        color: PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)],
+        // No color is sent — new projects persist color = null (neutral gray). See PAP-68.
         ...(goalIds.length > 0 ? { goalIds } : {}),
         ...(targetDate ? { targetDate } : {}),
       });
@@ -216,6 +217,7 @@ export function NewProjectDialog() {
         className={cn("p-0 gap-0", expanded ? "sm:max-w-2xl" : "sm:max-w-lg")}
         onKeyDown={handleKeyDown}
       >
+        <DialogTitle className="sr-only">New project</DialogTitle>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -225,7 +227,7 @@ export function NewProjectDialog() {
               </span>
             )}
             <span className="text-muted-foreground/60">&rsaquo;</span>
-            <span>{t("newProject", "New project")}</span>
+            <span>{t("component.newProjectDialog.newProject")}</span>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -251,7 +253,7 @@ export function NewProjectDialog() {
         <div className="px-4 pt-4 pb-2 shrink-0">
           <input
             className="w-full text-lg font-semibold bg-transparent outline-none placeholder:text-muted-foreground/50"
-            placeholder={t("projectName", "Project name")}
+            placeholder={t("component.newProjectDialog.projectNamePlaceholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
@@ -270,7 +272,7 @@ export function NewProjectDialog() {
             ref={descriptionEditorRef}
             value={description}
             onChange={setDescription}
-            placeholder={t("addDescription", "Add description...")}
+            placeholder={t("component.newProjectDialog.addDescriptionPlaceholder")}
             bordered={false}
             mentions={mentionOptions}
             contentClassName={cn("text-sm text-muted-foreground", expanded ? "min-h-[220px]" : "min-h-[120px]")}
@@ -284,14 +286,14 @@ export function NewProjectDialog() {
         <div className="px-4 pt-3 pb-3 space-y-3 border-t border-border">
           <div>
             <div className="mb-1 flex items-center gap-1.5">
-              <label className="block text-xs text-muted-foreground">{t("repoUrl", "Repo URL")}</label>
-              <span className="text-xs text-muted-foreground/50">{t("optional", "optional")}</span>
+              <label className="block text-xs text-muted-foreground">{t("component.newProjectDialog.repoUrl")}</label>
+              <span className="text-xs text-muted-foreground/50">{t("common.form.optional")}</span>
               <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
                   <HelpCircle className="h-3 w-3 text-muted-foreground/50 cursor-help" />
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-[240px] text-xs">
-                  {t("repoUrlTooltip", "Link a GitHub repository so agents can clone, read, and push code for this project.")}
+                  {t("component.newProjectDialog.repoUrlHelp")}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -299,20 +301,20 @@ export function NewProjectDialog() {
               className="w-full rounded border border-border bg-transparent px-2 py-1 text-xs outline-none"
               value={workspaceRepoUrl}
               onChange={(e) => { setWorkspaceRepoUrl(e.target.value); setWorkspaceError(null); }}
-              placeholder="https://github.com/org/repo"
+              placeholder={t("component.newProjectDialog.repoUrlPlaceholder")}
             />
           </div>
 
           <div>
             <div className="mb-1 flex items-center gap-1.5">
-              <label className="block text-xs text-muted-foreground">{t("localFolder", "Local folder")}</label>
-              <span className="text-xs text-muted-foreground/50">{t("optional", "optional")}</span>
+              <label className="block text-xs text-muted-foreground">{t("component.newProjectDialog.localFolder")}</label>
+              <span className="text-xs text-muted-foreground/50">{t("common.form.optional")}</span>
               <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
                   <HelpCircle className="h-3 w-3 text-muted-foreground/50 cursor-help" />
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-[240px] text-xs">
-                  {t("localFolderTooltip", "Set an absolute path on this machine where local agents will read and write files for this project.")}
+                  {t("component.newProjectDialog.localFolderHelp")}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -321,7 +323,7 @@ export function NewProjectDialog() {
                 className="w-full rounded border border-border bg-transparent px-2 py-1 text-xs font-mono outline-none"
                 value={workspaceLocalPath}
                 onChange={(e) => { setWorkspaceLocalPath(e.target.value); setWorkspaceError(null); }}
-                placeholder="/absolute/path/to/workspace"
+                placeholder={t("component.newProjectDialog.localFolderPlaceholder")}
               />
               <ChoosePathButton />
             </div>
@@ -351,7 +353,7 @@ export function NewProjectDialog() {
                   )}
                   onClick={() => { setStatus(s.value); setStatusOpen(false); }}
                 >
-                  {s.label}
+                  {t(s.labelKey)}
                 </button>
               ))}
             </PopoverContent>
@@ -367,7 +369,7 @@ export function NewProjectDialog() {
               <button
                 className="text-muted-foreground hover:text-foreground"
                 onClick={() => setGoalIds((prev) => prev.filter((id) => id !== goal.id))}
-                aria-label={t("removeGoal", "Remove goal {{title}}", { title: goal.title })}
+                aria-label={`Remove goal ${goal.title}`}
                 type="button"
               >
                 <X className="h-3 w-3" />
@@ -382,7 +384,7 @@ export function NewProjectDialog() {
                 disabled={selectedGoals.length > 0 && availableGoals.length === 0}
               >
                 {selectedGoals.length > 0 ? <Plus className="h-3 w-3 text-muted-foreground" /> : <Target className="h-3 w-3 text-muted-foreground" />}
-                {selectedGoals.length > 0 ? t("addGoalChip", "+ Goal") : t("goal", "Goal")}
+                {selectedGoals.length > 0 ? t("component.newProjectDialog.addGoal") : t("component.newProjectDialog.goal")}
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-56 p-1" align="start">
@@ -391,7 +393,7 @@ export function NewProjectDialog() {
                   className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-muted-foreground"
                   onClick={() => setGoalOpen(false)}
                 >
-                  {t("noGoal", "No goal")}
+                  {t("component.newProjectDialog.noGoal")}
                 </button>
               )}
               {availableGoals.map((g) => (
@@ -408,7 +410,7 @@ export function NewProjectDialog() {
               ))}
               {selectedGoals.length > 0 && availableGoals.length === 0 && (
                 <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                  {t("allGoalsSelected", "All goals already selected.")}
+                  {t("component.newProjectDialog.allGoalsSelected")}
                 </div>
               )}
             </PopoverContent>
@@ -422,7 +424,7 @@ export function NewProjectDialog() {
               className="bg-transparent outline-none text-xs w-24"
               value={targetDate}
               onChange={(e) => setTargetDate(e.target.value)}
-              placeholder={t("targetDate", "Target date")}
+              placeholder={t("component.newProjectDialog.targetDatePlaceholder")}
             />
           </div>
         </div>
@@ -430,7 +432,7 @@ export function NewProjectDialog() {
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border">
           {createProject.isError ? (
-            <p className="text-xs text-destructive">{t("failedToCreate", "Failed to create project.")}</p>
+            <p className="text-xs text-destructive">{t("component.newProjectDialog.failedToCreateProject")}</p>
           ) : (
             <span />
           )}
@@ -439,7 +441,7 @@ export function NewProjectDialog() {
             disabled={!name.trim() || createProject.isPending}
             onClick={handleSubmit}
           >
-            {createProject.isPending ? t("creating", "Creating…") : t("createProject", "Create project")}
+            {createProject.isPending ? t("common.actions.creating") : t("component.newProjectDialog.createProject")}
           </Button>
         </div>
       </DialogContent>

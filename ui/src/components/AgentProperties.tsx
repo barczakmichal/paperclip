@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 import { Link } from "@/lib/router";
 import { AGENT_ROLE_LABELS, type Agent, type AgentRuntimeState } from "@paperclipai/shared";
 import { agentsApi } from "../api/agents";
 import { useCompany } from "../context/CompanyContext";
 import { getAdapterLabel } from "../adapters/adapter-display-registry";
 import { queryKeys } from "../lib/queryKeys";
-import { StatusBadge } from "./StatusBadge";
+import { AgentStatusBadge } from "./StatusBadge";
 import { Identity } from "./Identity";
 import { formatDate, agentUrl } from "../lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -28,8 +27,8 @@ function PropertyRow({ label, children }: { label: string; children: React.React
 }
 
 export function AgentProperties({ agent, runtimeState }: AgentPropertiesProps) {
-  const { t } = useTranslation("agentProperties");
   const { selectedCompanyId } = useCompany();
+  const lastErrorIsActive = agent.status === "error";
 
   const { data: agents } = useQuery({
     queryKey: queryKeys.agents.list(selectedCompanyId!),
@@ -42,18 +41,18 @@ export function AgentProperties({ agent, runtimeState }: AgentPropertiesProps) {
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <PropertyRow label={t("status", "Status")}>
-          <StatusBadge status={agent.status} />
+        <PropertyRow label="Status">
+          <AgentStatusBadge status={agent.status} />
         </PropertyRow>
-        <PropertyRow label={t("role", "Role")}>
+        <PropertyRow label="Role">
           <span className="text-sm">{roleLabels[agent.role] ?? agent.role}</span>
         </PropertyRow>
         {agent.title && (
-          <PropertyRow label={t("title", "Title")}>
+          <PropertyRow label="Title">
             <span className="text-sm">{agent.title}</span>
           </PropertyRow>
         )}
-        <PropertyRow label={t("adapter", "Adapter")}>
+        <PropertyRow label="Adapter">
           <span className="text-sm font-mono">{getAdapterLabel(agent.adapterType)}</span>
         </PropertyRow>
       </div>
@@ -62,24 +61,32 @@ export function AgentProperties({ agent, runtimeState }: AgentPropertiesProps) {
 
       <div className="space-y-1">
         {(runtimeState?.sessionDisplayId ?? runtimeState?.sessionId) && (
-          <PropertyRow label={t("session", "Session")}>
+          <PropertyRow label="Session">
             <span className="text-xs font-mono">
               {String(runtimeState.sessionDisplayId ?? runtimeState.sessionId).slice(0, 12)}...
             </span>
           </PropertyRow>
         )}
         {runtimeState?.lastError && (
-          <PropertyRow label={t("lastError", "Last error")}>
-            <span className="text-xs text-red-600 dark:text-red-400 break-words min-w-0">{runtimeState.lastError}</span>
+          <PropertyRow label={lastErrorIsActive ? "Last error" : "Last run error"}>
+            <span
+              className={
+                lastErrorIsActive
+                  ? "text-xs text-red-600 dark:text-red-400 break-words min-w-0"
+                  : "text-xs text-muted-foreground break-words min-w-0"
+              }
+            >
+              {runtimeState.lastError}
+            </span>
           </PropertyRow>
         )}
         {agent.lastHeartbeatAt && (
-          <PropertyRow label={t("lastHeartbeat", "Last Heartbeat")}>
+          <PropertyRow label="Last Heartbeat">
             <span className="text-sm">{formatDate(agent.lastHeartbeatAt)}</span>
           </PropertyRow>
         )}
         {agent.reportsTo && (
-          <PropertyRow label={t("reportsTo", "Reports To")}>
+          <PropertyRow label="Reports To">
             {reportsToAgent ? (
               <Link to={agentUrl(reportsToAgent)} className="hover:underline">
                 <Identity name={reportsToAgent.name} size="sm" />
@@ -89,7 +96,7 @@ export function AgentProperties({ agent, runtimeState }: AgentPropertiesProps) {
             )}
           </PropertyRow>
         )}
-        <PropertyRow label={t("created", "Created")}>
+        <PropertyRow label="Created">
           <span className="text-sm">{formatDate(agent.createdAt)}</span>
         </PropertyRow>
       </div>

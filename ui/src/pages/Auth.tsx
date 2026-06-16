@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "@/i18n";
 import { useNavigate, useSearchParams } from "@/lib/router";
 import { authApi } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
 import { getRememberedInvitePath } from "../lib/invite-memory";
 import { Button } from "@/components/ui/button";
 import { AsciiArtAnimation } from "@/components/AsciiArtAnimation";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Sparkles } from "lucide-react";
 
 type AuthMode = "sign_in" | "sign_up";
 
 export function AuthPage() {
-  const { t } = useTranslation("authPage");
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -21,6 +22,7 @@ export function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const errorId = "auth-error";
 
   const nextPath = useMemo(
     () => searchParams.get("next") || getRememberedInvitePath() || "/",
@@ -57,7 +59,7 @@ export function AuthPage() {
       navigate(nextPath, { replace: true });
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : t("authenticationFailed", "Authentication failed"));
+      setError(err instanceof Error ? err.message : "Authentication failed");
     },
   });
 
@@ -69,13 +71,16 @@ export function AuthPage() {
   if (isSessionLoading) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">{t("loading", "Loading…")}</p>
+        <p className="text-sm text-muted-foreground">{t("pages.auth.loading")}</p>
       </div>
     );
   }
 
   return (
     <div className="fixed inset-0 flex bg-background">
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeToggle />
+      </div>
       {/* Left half — form */}
       <div className="w-full md:w-1/2 flex flex-col overflow-y-auto">
         <div className="w-full max-w-md mx-auto my-auto px-8 py-12">
@@ -85,12 +90,12 @@ export function AuthPage() {
           </div>
 
           <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? t("signInTitle", "Sign in to Paperclip") : t("signUpTitle", "Create your Paperclip account")}
+            {mode === "sign_in" ? t("pages.auth.signIn") : t("pages.auth.signUp")}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === "sign_in"
-              ? t("signInSubtitle", "Use your email and password to access this instance.")
-              : t("signUpSubtitle", "Create an account for this instance. Email confirmation is not required in v1.")}
+              ? t("pages.auth.signInDescription")
+              : t("pages.auth.signUpDescription")}
           </p>
 
           <form
@@ -101,7 +106,7 @@ export function AuthPage() {
               event.preventDefault();
               if (mutation.isPending) return;
               if (!canSubmit) {
-                setError(t("fillRequiredFields", "Please fill in all required fields."));
+                setError(t("pages.auth.fillRequiredFields"));
                 return;
               }
               mutation.mutate();
@@ -109,7 +114,7 @@ export function AuthPage() {
           >
             {mode === "sign_up" && (
               <div>
-                <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">{t("nameLabel", "Name")}</label>
+                <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">{t("pages.auth.name")}</label>
                 <input
                   id="name"
                   name="name"
@@ -117,12 +122,16 @@ export function AuthPage() {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   autoComplete="name"
+                  required
+                  aria-required="true"
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? errorId : undefined}
                   autoFocus
                 />
               </div>
             )}
             <div>
-              <label htmlFor="email" className="text-xs text-muted-foreground mb-1 block">{t("emailLabel", "Email")}</label>
+              <label htmlFor="email" className="text-xs text-muted-foreground mb-1 block">{t("pages.auth.email")}</label>
               <input
                 id="email"
                 name="email"
@@ -130,12 +139,16 @@ export function AuthPage() {
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                autoComplete="email"
+                autoComplete="username"
+                required
+                aria-required="true"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
                 autoFocus={mode === "sign_in"}
               />
             </div>
             <div>
-              <label htmlFor="password" className="text-xs text-muted-foreground mb-1 block">{t("passwordLabel", "Password")}</label>
+              <label htmlFor="password" className="text-xs text-muted-foreground mb-1 block">{t("pages.auth.password")}</label>
               <input
                 id="password"
                 name="password"
@@ -144,9 +157,17 @@ export function AuthPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete={mode === "sign_in" ? "current-password" : "new-password"}
+                required
+                aria-required="true"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
               />
             </div>
-            {error && <p className="text-xs text-destructive">{error}</p>}
+            {error && (
+              <p id={errorId} role="alert" className="text-xs text-destructive">
+                {error}
+              </p>
+            )}
             <Button
               type="submit"
               disabled={mutation.isPending}
@@ -154,15 +175,15 @@ export function AuthPage() {
               className={`w-full ${!canSubmit && !mutation.isPending ? "opacity-50" : ""}`}
             >
               {mutation.isPending
-                ? t("working", "Working…")
+                ? t("pages.auth.working")
                 : mode === "sign_in"
-                  ? t("signInButton", "Sign In")
-                  : t("createAccountButton", "Create Account")}
+                  ? t("pages.auth.signInButton")
+                  : t("pages.auth.createAccount")}
             </Button>
           </form>
 
           <div className="mt-5 text-sm text-muted-foreground">
-            {mode === "sign_in" ? t("needAccount", "Need an account?") : t("haveAccount", "Already have an account?")}{" "}
+            {mode === "sign_in" ? t("pages.auth.needAccount") : t("pages.auth.haveAccount")}{" "}
             <button
               type="button"
               className="font-medium text-foreground underline underline-offset-2"
@@ -171,7 +192,7 @@ export function AuthPage() {
                 setMode(mode === "sign_in" ? "sign_up" : "sign_in");
               }}
             >
-              {mode === "sign_in" ? t("createOne", "Create one") : t("signInLink", "Sign in")}
+              {mode === "sign_in" ? t("pages.auth.createOne") : t("pages.auth.signInLink")}
             </button>
           </div>
         </div>

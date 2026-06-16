@@ -1,5 +1,4 @@
 import { X } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -16,7 +15,6 @@ interface FilterBarProps {
 }
 
 export function FilterBar({ filters, onRemove, onClear }: FilterBarProps) {
-  const { t } = useTranslation("filterBar");
   if (filters.length === 0) return null;
 
   return (
@@ -26,7 +24,7 @@ export function FilterBar({ filters, onRemove, onClear }: FilterBarProps) {
           <span className="text-muted-foreground">{f.label}:</span>
           <span>{f.value}</span>
           <button
-            className="ml-1 rounded-full hover:bg-accent/40 p-0.5"
+            className="ml-1 rounded-full hover:bg-accent p-0.5"
             onClick={() => onRemove(f.key)}
           >
             <X className="h-3 w-3" />
@@ -34,7 +32,7 @@ export function FilterBar({ filters, onRemove, onClear }: FilterBarProps) {
         </Badge>
       ))}
       <Button variant="ghost" size="sm" className="text-xs h-6" onClick={onClear}>
-        {t("clearAll", "Clear all")}
+        Clear all
       </Button>
     </div>
   );
