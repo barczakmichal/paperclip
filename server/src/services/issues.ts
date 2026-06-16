@@ -59,6 +59,7 @@ import {
 } from "@paperclipai/shared";
 import { conflict, HttpError, notFound, unprocessable } from "../errors.js";
 import { logger } from "../middleware/logger.js";
+import { mirrorAgentCommentToChannel } from "./channel-mirror.js";
 import { parseObject } from "../adapters/utils.js";
 import {
   defaultIssueExecutionWorkspaceSettingsForProject,
@@ -6195,10 +6196,10 @@ export function issueService(db: Db) {
       dbOrTx: any = db,
     ) => {
       const issue = await dbOrTx
-        .select({ companyId: issues.companyId })
+        .select({ companyId: issues.companyId, originKind: issues.originKind })
         .from(issues)
         .where(eq(issues.id, issueId))
-        .then((rows: Array<{ companyId: string }>) => rows[0] ?? null);
+        .then((rows: Array<{ companyId: string; originKind: string | null }>) => rows[0] ?? null);
 
       if (!issue) throw notFound("Issue not found");
 
@@ -6235,6 +6236,15 @@ export function issueService(db: Db) {
         .update(issues)
         .set({ updatedAt: new Date() })
         .where(eq(issues.id, issueId));
+
+      // Mirror an agent's comment back into its channel (backing-issue → channel)
+      if (issue.originKind === "channel" && actor.agentId) {
+        try {
+          await mirrorAgentCommentToChannel(db, { commentId: comment.id });
+        } catch (err) {
+          logger.warn({ err, commentId: comment.id }, "channel-mirror: failed to mirror agent comment");
+        }
+      }
 
       return redactIssueComment(comment, currentUserRedactionOptions.enabled);
     },

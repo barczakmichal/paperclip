@@ -1342,32 +1342,22 @@ export {
 } from "./validators/index.js";
 
 export {
-  CHANNEL_PLATFORMS,
-  CHANNEL_STATUSES,
-  CHANNEL_DIRECTIONS,
-  CHANNEL_MESSAGE_STATUSES,
-  CHANNEL_MESSAGE_DIRECTIONS,
-  createChannelSchema,
-  updateChannelSchema,
-  createChannelRouteSchema,
-  updateChannelRouteSchema,
-  listChannelMessagesQuerySchema,
-  listChannelRoutesQuerySchema,
-  type ChannelPlatform,
-  type ChannelStatus,
-  type ChannelDirection,
-  type ChannelMessageStatus,
-  type ChannelMessageDirection,
-  type CreateChannel,
-  type UpdateChannel,
-  type CreateChannelRoute,
-  type UpdateChannelRoute,
-  type ListChannelMessagesQuery,
-  type ListChannelRoutesQuery,
-  type Channel,
-  type ChannelRoute,
-  type ChannelMessage,
-} from "./validators/index.js";
+  CHANNEL_STATUS_MAX_CHARS,
+  CHANNEL_ROLE_KEY_MAP,
+  channelKeyForRole,
+} from "./constants.js";
+export type {
+  AgentOnlineStatus,
+  Channel,
+  ChannelKind,
+  ChannelMessage,
+  ChannelMessageKind,
+  ChannelMemberStatus,
+} from "./types/channel.js";
+export {
+  postChannelMessageSchema,
+  type PostChannelMessage,
+} from "./validators/channel.js";
 
 export { API_PREFIX, API } from "./api.js";
 export { normalizeAgentUrlKey, deriveAgentUrlKey, isUuidLike } from "./agent-url-key.js";

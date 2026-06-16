@@ -1,6 +1,7 @@
 import type { Resource } from "i18next";
 
 import { assertValidLocaleMessages } from "./locale-validation";
+import channelsPl from "./channels-locale-pl.json";
 
 export const DEFAULT_LOCALE = "en" as const;
 
@@ -35,7 +36,13 @@ for (const [locale, messages] of Object.entries(localeMessages)) {
 export const supportedLocales = Object.keys(localeMessages);
 
 export const i18nextResources: Resource = Object.fromEntries(
-  Object.entries(localeMessages).map(([locale, messages]) => [locale, { translation: messages }]),
+  Object.entries(localeMessages).map(([locale, messages]) => [
+    locale,
+    // The channels page (transplanted from the fork) reads from a dedicated
+    // "channels" namespace; supply Polish here, other locales fall back to the
+    // inline English defaults baked into each t(key, fallback) call.
+    locale === "pl" ? { translation: messages, channels: channelsPl } : { translation: messages },
+  ]),
 ) as Resource;
 
 export type SupportedLocale = keyof typeof localeMessages;

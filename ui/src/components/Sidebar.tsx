@@ -170,6 +170,7 @@ export function Sidebar() {
             alert={inboxBadge.failedRuns > 0}
           />
           <SidebarNavItem to="/agent-chat" label="Czat z agentami" icon={MessagesSquare} />
+          <SidebarNavItem to="/channels" label="Kanały" icon={MessagesSquare} />
           {conferenceRoomChatEnabled ? (
             <SidebarNavItem to="/board-chat" label="Conference Room" icon={MessagesSquare} />
           ) : null}

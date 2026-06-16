@@ -32,6 +32,7 @@ import { Activity } from "./pages/Activity";
 import { Inbox } from "./pages/Inbox";
 import { BoardChat } from "./pages/BoardChat";
 import { AgentChat } from "./pages/AgentChat";
+import { Channels } from "./pages/Channels";
 import { CompanySettings } from "./pages/CompanySettings";
 import { CompanyEnvironments } from "./pages/CompanyEnvironments";
 import { CloudUpstream } from "./pages/CloudUpstream";
@@ -153,6 +154,7 @@ function boardRoutes() {
       <Route path="costs" element={<Costs />} />
       <Route path="activity" element={<Activity />} />
       <Route path="agent-chat" element={<AgentChat />} />
+      <Route path="channels" element={<Channels />} />
       {/* Conference Room Chat surfaces (PAP-136/PAP-137): routes stay
           registered but redirect to the company home while the experimental
           flag is off. The board-level `artifacts` mount below is the new
@@ -374,6 +376,7 @@ export function App() {
           <Route path="routines" element={<UnprefixedBoardRedirect />} />
           <Route path="routines/:routineId" element={<UnprefixedBoardRedirect />} />
           <Route path="artifacts" element={<UnprefixedBoardRedirect />} />
+          <Route path="channels" element={<UnprefixedBoardRedirect />} />
           <Route path="u/:userSlug" element={<UnprefixedBoardRedirect />} />
           <Route path="skills/*" element={<UnprefixedBoardRedirect />} />
           <Route path="settings" element={<LegacySettingsRedirect />} />

@@ -1,261 +1,141 @@
 import { Router } from "express";
 import type { Db } from "@paperclipai/db";
-import {
-  createChannelSchema,
-  createChannelRouteSchema,
-  listChannelMessagesQuerySchema,
-  listChannelRoutesQuerySchema,
-  updateChannelSchema,
-  updateChannelRouteSchema,
-} from "@paperclipai/shared";
-import { z } from "zod";
+import { postChannelMessageSchema } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { channelService, isSensitiveConfigKey } from "../services/channels.js";
-import { channelSenderService } from "../services/channel-sender.js";
-import { logActivity } from "../services/activity-log.js";
+import { channelService } from "../services/channels.js";
+import { heartbeatService } from "../services/heartbeat.js";
+import { logActivity } from "../services/index.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
+import { notFound } from "../errors.js";
+import type { PluginWorkerManager } from "../services/plugin-worker-manager.js";
 
-const testChannelSchema = z
-  .object({
-    content: z.string().trim().min(1).max(2000).optional(),
-  })
-  .partial();
+// Górny limit liczby wiadomości zwracanych jednym GET — zabezpieczenie przed DoS
+// (klient nie może wymusić nieograniczonego skanu tabeli przez ?limit=...).
+export const CHANNEL_MESSAGES_MAX_LIMIT = 200;
 
-function summarizeConfigKeys(config: unknown): { keys: string[]; sensitiveKeys: string[] } {
-  if (!config || typeof config !== "object" || Array.isArray(config)) {
-    return { keys: [], sensitiveKeys: [] };
+// TTL throttlingu syncForCompany (ms). W obrębie tego okna powtórne GET listy kanałów
+// pomijają sync — eliminuje N+1 zapisów per żądanie przy częstym odświeżaniu listy.
+export const CHANNEL_SYNC_THROTTLE_MS = 5000;
+
+// In-memory mapa: companyId → timestamp ostatniego wykonanego synca (ms, Date.now()).
+// Throttle jest per companyId (różne firmy synchronizują się niezależnie).
+// UWAGA: stan w pamięci procesu — przy wielu instancjach serwera każda throttluje osobno;
+// to akceptowalne (sync jest idempotentny, a celem jest tylko redukcja częstotliwości).
+const channelSyncLastAt = new Map<string, number>();
+
+// Zwraca true i odnotowuje timestamp, gdy sync POWINIEN się wykonać (pierwszy raz lub po TTL).
+// Zwraca false, gdy od ostatniego synca dla tej firmy minęło mniej niż TTL.
+export function shouldSyncCompanyChannels(companyId: string, now: number = Date.now()): boolean {
+  const last = channelSyncLastAt.get(companyId);
+  if (last !== undefined && now - last < CHANNEL_SYNC_THROTTLE_MS) {
+    return false;
   }
-  const keys = Object.keys(config as Record<string, unknown>).sort();
-  return {
-    keys,
-    sensitiveKeys: keys.filter(isSensitiveConfigKey),
-  };
+  channelSyncLastAt.set(companyId, now);
+  return true;
 }
 
-export function channelRoutes(db: Db) {
+// Reset mapy throttlingu — wyłącznie dla testów (czysty stan między przypadkami).
+export function resetChannelSyncThrottle(): void {
+  channelSyncLastAt.clear();
+}
+
+export function channelRoutes(db: Db, opts: { pluginWorkerManager?: PluginWorkerManager } = {}) {
   const router = Router();
-  const svc = channelService(db);
-  const sender = channelSenderService(db);
+  const svc = channelService(db, {
+    heartbeat: heartbeatService(db, { pluginWorkerManager: opts.pluginWorkerManager }),
+  });
 
-  // Channels CRUD
   router.get("/companies/:companyId/channels", async (req, res) => {
-    const { companyId } = req.params as { companyId: string };
+    const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
-    const result = await svc.listChannels(companyId);
-    res.json(result);
+    // Throttling per companyId: sync wykonuje się przy pierwszym GET i po wygaśnięciu TTL
+    // (CHANNEL_SYNC_THROTTLE_MS), w pozostałych przypadkach jest pomijany. Eliminuje N+1
+    // zapisów (insert/update kanałów) przy częstym odświeżaniu listy. list() zawsze zwraca
+    // świeży stan z DB, więc pominięcie synca nie pokazuje nieaktualnych danych —
+    // co najwyżej opóźnia (do TTL) wykrycie zmiany struktury agentów.
+    if (shouldSyncCompanyChannels(companyId)) {
+      await svc.syncForCompany(companyId);
+    }
+    const channels = await svc.list(companyId);
+    res.json(channels);
   });
 
-  router.post("/companies/:companyId/channels", validate(createChannelSchema), async (req, res) => {
-    const { companyId } = req.params as { companyId: string };
-    assertCompanyAccess(req, companyId);
-    const created = await svc.createChannel(companyId, req.body);
+  router.get("/channels/:channelId/members", async (req, res) => {
+    const channelId = req.params.channelId as string;
+    const channel = await svc.getChannel(channelId);
+    if (!channel) {
+      throw notFound("Channel not found");
+    }
+    assertCompanyAccess(req, channel.companyId);
+    const members = await svc.memberStatuses(channelId);
+    res.json(members);
+  });
+
+  router.get("/channels/:channelId/messages", async (req, res) => {
+    const channelId = req.params.channelId as string;
+    const channel = await svc.getChannel(channelId);
+    if (!channel) {
+      throw notFound("Channel not found");
+    }
+    assertCompanyAccess(req, channel.companyId);
+
+    const beforeRaw = req.query.before;
+    let before: Date | undefined;
+    if (typeof beforeRaw === "string" && beforeRaw.trim().length > 0) {
+      const parsed = new Date(beforeRaw.trim());
+      if (Number.isNaN(parsed.getTime())) {
+        res.status(400).json({ error: "before must be a valid date" });
+        return;
+      }
+      before = parsed;
+    }
+
+    const limitRaw = req.query.limit;
+    let limit: number | undefined;
+    if (limitRaw !== undefined) {
+      const parsed = typeof limitRaw === "string" && /^\d+$/.test(limitRaw)
+        ? Number.parseInt(limitRaw, 10)
+        : Number.NaN;
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        res.status(400).json({
+          error: `limit must be a positive integer up to ${CHANNEL_MESSAGES_MAX_LIMIT}`,
+        });
+        return;
+      }
+      // Klampujemy w górę zamiast odrzucać — duży limit jest sprowadzany do bezpiecznego maksimum.
+      limit = Math.min(parsed, CHANNEL_MESSAGES_MAX_LIMIT);
+    }
+
+    const messages = await svc.listMessages(channelId, { before, limit });
+    res.json(messages);
+  });
+
+  router.post("/channels/:channelId/messages", validate(postChannelMessageSchema), async (req, res) => {
+    const channelId = req.params.channelId as string;
+    const channel = await svc.getChannel(channelId);
+    if (!channel) {
+      throw notFound("Channel not found");
+    }
+    assertCompanyAccess(req, channel.companyId);
     const actor = getActorInfo(req);
-    const { keys, sensitiveKeys } = summarizeConfigKeys(req.body?.config);
-    await logActivity(db, {
-      companyId,
-      actorType: actor.actorType,
-      actorId: actor.actorId,
-      agentId: actor.agentId,
-      action: "channel.created",
-      entityType: "channel",
-      entityId: created.id,
-      details: {
-        platform: created.platform,
-        name: created.name,
-        direction: created.direction,
-        configKeys: keys,
-        sensitiveConfigKeys: sensitiveKeys,
-      },
+    const message = await svc.postMessage(channelId, {
+      body: req.body.body,
+      ...(actor.actorType === "agent" && actor.agentId
+        ? { agentId: actor.agentId }
+        : { userId: actor.actorId }),
     });
-    res.status(201).json(created);
-  });
-
-  router.get("/channels/:id", async (req, res) => {
-    const channel = await svc.getChannel(req.params.id as string);
-    if (!channel) {
-      res.status(404).json({ error: "Channel not found" });
-      return;
-    }
-    assertCompanyAccess(req, channel.companyId);
-    res.json(channel);
-  });
-
-  router.patch("/channels/:id", validate(updateChannelSchema), async (req, res) => {
-    const channel = await svc.getChannel(req.params.id as string);
-    if (!channel) {
-      res.status(404).json({ error: "Channel not found" });
-      return;
-    }
-    assertCompanyAccess(req, channel.companyId);
-    const updated = await svc.updateChannel(channel.companyId, channel.id, req.body);
-    const actor = getActorInfo(req);
-    const { keys: changedKeys, sensitiveKeys: changedSensitiveKeys } = summarizeConfigKeys(
-      req.body?.config,
-    );
-    await logActivity(db, {
-      companyId: updated.companyId,
-      actorType: actor.actorType,
-      actorId: actor.actorId,
-      agentId: actor.agentId,
-      action: "channel.updated",
-      entityType: "channel",
-      entityId: updated.id,
-      details: {
-        fields: Object.keys(req.body ?? {}).sort(),
-        configKeys: changedKeys,
-        sensitiveConfigKeys: changedSensitiveKeys,
-      },
-    });
-    res.json(updated);
-  });
-
-  router.delete("/channels/:id", async (req, res) => {
-    const channel = await svc.getChannel(req.params.id as string);
-    if (!channel) {
-      res.status(404).json({ error: "Channel not found" });
-      return;
-    }
-    assertCompanyAccess(req, channel.companyId);
-    await svc.deleteChannel(channel.companyId, channel.id);
-    const actor = getActorInfo(req);
     await logActivity(db, {
       companyId: channel.companyId,
       actorType: actor.actorType,
       actorId: actor.actorId,
-      agentId: actor.agentId,
-      action: "channel.deleted",
+      agentId: actor.agentId ?? null,
+      runId: actor.runId ?? null,
+      action: "channel.message.created",
       entityType: "channel",
-      entityId: channel.id,
-      details: { platform: channel.platform, name: channel.name },
+      entityId: channelId,
+      details: { messageId: message.id, kind: message.kind },
     });
-    res.status(204).send();
-  });
-
-  // Test send — used to verify the channel is configured correctly
-  router.post(
-    "/companies/:companyId/channels/:id/test",
-    validate(testChannelSchema),
-    async (req, res) => {
-      const { companyId, id } = req.params as { companyId: string; id: string };
-      assertCompanyAccess(req, companyId);
-      const actor = getActorInfo(req);
-      const result = await sender.sendTestMessage(companyId, id, {
-        content: req.body?.content,
-        agentId: actor.agentId,
-      });
-      await logActivity(db, {
-        companyId,
-        actorType: actor.actorType,
-        actorId: actor.actorId,
-        agentId: actor.agentId,
-        action: "channel.tested",
-        entityType: "channel",
-        entityId: id,
-        details: {
-          status: result.message.status,
-          attempts: result.attempts,
-          error: result.lastError,
-        },
-      });
-      const status = result.message.status === "delivered" ? 200 : 502;
-      res.status(status).json({
-        message: result.message,
-        attempts: result.attempts,
-        error: result.lastError,
-      });
-    },
-  );
-
-  // Routes CRUD
-  router.get("/companies/:companyId/routes", async (req, res) => {
-    const { companyId } = req.params as { companyId: string };
-    assertCompanyAccess(req, companyId);
-    const parseResult = listChannelRoutesQuerySchema.safeParse(req.query);
-    if (!parseResult.success) {
-      res.status(400).json({ error: "Invalid query parameters", details: parseResult.error.flatten() });
-      return;
-    }
-    const result = await svc.listRoutes(companyId, parseResult.data.channelId);
-    res.json(result);
-  });
-
-  router.post("/companies/:companyId/routes", validate(createChannelRouteSchema), async (req, res) => {
-    const { companyId } = req.params as { companyId: string };
-    assertCompanyAccess(req, companyId);
-    const created = await svc.createRoute(companyId, req.body);
-    const actor = getActorInfo(req);
-    await logActivity(db, {
-      companyId,
-      actorType: actor.actorType,
-      actorId: actor.actorId,
-      agentId: actor.agentId,
-      action: "channel_route.created",
-      entityType: "channel_route",
-      entityId: created.id,
-      details: {
-        channelId: created.channelId,
-        trigger: created.trigger,
-        enabled: created.enabled,
-      },
-    });
-    res.status(201).json(created);
-  });
-
-  router.patch("/routes/:id", validate(updateChannelRouteSchema), async (req, res) => {
-    const route = await svc.getRoute(req.params.id as string);
-    if (!route) {
-      res.status(404).json({ error: "Channel route not found" });
-      return;
-    }
-    assertCompanyAccess(req, route.companyId);
-    const updated = await svc.updateRoute(route.companyId, route.id, req.body);
-    const actor = getActorInfo(req);
-    await logActivity(db, {
-      companyId: updated.companyId,
-      actorType: actor.actorType,
-      actorId: actor.actorId,
-      agentId: actor.agentId,
-      action: "channel_route.updated",
-      entityType: "channel_route",
-      entityId: updated.id,
-      details: { fields: Object.keys(req.body ?? {}).sort() },
-    });
-    res.json(updated);
-  });
-
-  router.delete("/routes/:id", async (req, res) => {
-    const route = await svc.getRoute(req.params.id as string);
-    if (!route) {
-      res.status(404).json({ error: "Channel route not found" });
-      return;
-    }
-    assertCompanyAccess(req, route.companyId);
-    await svc.deleteRoute(route.companyId, route.id);
-    const actor = getActorInfo(req);
-    await logActivity(db, {
-      companyId: route.companyId,
-      actorType: actor.actorType,
-      actorId: actor.actorId,
-      agentId: actor.agentId,
-      action: "channel_route.deleted",
-      entityType: "channel_route",
-      entityId: route.id,
-      details: { channelId: route.channelId, trigger: route.trigger },
-    });
-    res.status(204).send();
-  });
-
-  // Messages list
-  router.get("/companies/:companyId/messages", async (req, res) => {
-    const { companyId } = req.params as { companyId: string };
-    assertCompanyAccess(req, companyId);
-    const parseResult = listChannelMessagesQuerySchema.safeParse(req.query);
-    if (!parseResult.success) {
-      res.status(400).json({ error: "Invalid query parameters", details: parseResult.error.flatten() });
-      return;
-    }
-    const result = await svc.listMessages(companyId, parseResult.data);
-    res.json(result);
+    res.status(201).json(message);
   });
 
   return router;

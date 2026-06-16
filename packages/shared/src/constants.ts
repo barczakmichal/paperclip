@@ -673,6 +673,8 @@ export const LIVE_EVENT_TYPES = [
   "plugin.ui.updated",
   "plugin.worker.crashed",
   "plugin.worker.restarted",
+  "channel.message.created",
+  "channel.status.updated",
 ] as const;
 export type LiveEventType = (typeof LIVE_EVENT_TYPES)[number];
 
@@ -1173,3 +1175,17 @@ export const PLUGIN_BRIDGE_ERROR_CODES = [
   "UNKNOWN",
 ] as const;
 export type PluginBridgeErrorCode = (typeof PLUGIN_BRIDGE_ERROR_CODES)[number];
+
+export const CHANNEL_STATUS_MAX_CHARS = 500;
+
+export const CHANNEL_ROLE_KEY_MAP: Partial<Record<AgentRole, { key: string; name: string }>> = {
+  ceo: { key: "ceo", name: "CEO" },
+  cmo: { key: "marketing", name: "Marketing" },
+  cfo: { key: "finance", name: "Finanse" },
+  cto: { key: "tech", name: "Tech" },
+  security: { key: "security", name: "Security" },
+};
+
+export function channelKeyForRole(role: AgentRole): string {
+  return CHANNEL_ROLE_KEY_MAP[role]?.key ?? role;
+}

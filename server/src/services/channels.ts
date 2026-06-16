@@ -1,258 +1,416 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { channels, channelMessages, channelRoutes } from "@paperclipai/db";
-import type {
-  Channel,
-  ChannelMessage,
-  ChannelRoute,
-  CreateChannel,
-  CreateChannelRoute,
-  ListChannelMessagesQuery,
-  UpdateChannel,
-  UpdateChannelRoute,
+import { agents, channelMessages, channels, heartbeatRuns } from "@paperclipai/db";
+import {
+  channelKeyForRole,
+  CHANNEL_ROLE_KEY_MAP,
+  type AgentOnlineStatus,
+  type AgentRole,
+  type ChannelMemberStatus,
 } from "@paperclipai/shared";
-import { notFound, unprocessable } from "../errors.js";
+import { notFound } from "../errors.js";
+import { composeAgentStatusReport } from "./agent-status.js";
+import { issueService } from "./issues.js";
+import { normalizeAgentMentionToken } from "./agent-mention-token.js";
+import { heartbeatService } from "./heartbeat.js";
+import { HEARTBEAT_RUN_RESULT_SUMMARY_MAX_CHARS } from "./heartbeat-run-summary.js";
+import { publishLiveEvent } from "./live-events.js";
 
-const SENSITIVE_KEY_RE =
-  /(api[-_]?key|access[-_]?token|auth(?:_?token)?|authorization|bearer|secret|passwd|password|credential|jwt|private[-_]?key|cookie|connectionstring|signing[-_]?secret|webhook[-_]?url|bot[-_]?token)/i;
+type ChannelRow = typeof channels.$inferSelect;
 
-const REDACTED = "***REDACTED***";
+type IssuesDep = Pick<ReturnType<typeof issueService>, "create" | "addComment">;
+type HeartbeatDep = { wakeup: ReturnType<typeof heartbeatService>["wakeup"] };
 
-export function isSensitiveConfigKey(key: string): boolean {
-  return SENSITIVE_KEY_RE.test(key);
+interface ChannelServiceDeps {
+  issues?: IssuesDep;
+  heartbeat?: HeartbeatDep;
 }
 
-/**
- * Recursively redact values for sensitive keys in a channel config object.
- * Used before returning config in GET responses so secrets stay in the DB row
- * but never reach API consumers in plaintext.
- */
-export function redactChannelConfig(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redactChannelConfig);
-  if (value === null || typeof value !== "object") return value;
-  const out: Record<string, unknown> = {};
-  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-    if (isSensitiveConfigKey(key) && val !== null && val !== undefined && val !== "") {
-      out[key] = REDACTED;
-    } else if (val && typeof val === "object") {
-      out[key] = redactChannelConfig(val);
-    } else {
-      out[key] = val;
-    }
+const EXCLUDED_AGENT_STATUSES = ["terminated", "pending_approval"];
+
+// Wyciąga id uruchomionego runu ze zwrotki heartbeat.wakeup, niezależnie od jej kształtu.
+// Kontrakt wakeup (enqueueWakeup) jest niejednorodny w runtime:
+//   - rekord heartbeatRuns (queued/coalesced) → runId pod `id`
+//   - AgentWakeupSkipped (status="skipped")    → runId, jeśli istnieje, pod `executionRunId`
+//   - warianty zagnieżdżone                    → `run.id` lub `triggeredRunId`
+//   - null/undefined (deferred/skipped bez runu) → null (run nie powstał — oczekiwane)
+// Zwraca pierwsze niepuste, sensowne id; w przeciwnym razie null.
+export function extractTriggeredRunId(wakeResult: unknown): string | null {
+  if (!wakeResult || typeof wakeResult !== "object") return null;
+  const r = wakeResult as Record<string, unknown>;
+  const candidates: unknown[] = [
+    r.id,
+    r.executionRunId,
+    r.triggeredRunId,
+    r.runId,
+    (r.run as Record<string, unknown> | undefined)?.id,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.length > 0) return c;
   }
-  return out;
+  return null;
 }
 
-function rowToChannel(row: typeof channels.$inferSelect, opts?: { redact?: boolean }): Channel {
-  const config = row.config as Record<string, unknown>;
-  return {
-    id: row.id,
-    companyId: row.companyId,
-    platform: row.platform as Channel["platform"],
-    name: row.name,
-    config: opts?.redact === false ? config : (redactChannelConfig(config) as Record<string, unknown>),
-    status: row.status as Channel["status"],
-    direction: row.direction as Channel["direction"],
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
+function slug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
-function rowToRoute(row: typeof channelRoutes.$inferSelect): ChannelRoute {
-  return {
-    id: row.id,
-    companyId: row.companyId,
-    channelId: row.channelId,
-    trigger: row.trigger,
-    filter: row.filter as Record<string, unknown> | null,
-    template: row.template,
-    enabled: row.enabled,
-    createdAt: row.createdAt.toISOString(),
-  };
-}
-
-function rowToMessage(row: typeof channelMessages.$inferSelect): ChannelMessage {
-  return {
-    id: row.id,
-    companyId: row.companyId,
-    channelId: row.channelId,
-    direction: row.direction as ChannelMessage["direction"],
-    content: row.content,
-    metadata: row.metadata as Record<string, unknown>,
-    issueId: row.issueId,
-    agentId: row.agentId,
-    status: row.status as ChannelMessage["status"],
-    createdAt: row.createdAt.toISOString(),
-  };
-}
-
-export function channelService(db: Db) {
-  async function listChannels(companyId: string): Promise<Channel[]> {
-    const rows = await db
+export function channelService(db: Db, deps?: ChannelServiceDeps) {
+  const issues: IssuesDep = deps?.issues ?? issueService(db);
+  // UWAGA: domyślny heartbeatService(db) BEZ pluginWorkerManager NIE dispatchuje runów do workerów.
+  // Produkcyjny caller (route w Task 8) MUSI wstrzyknąć heartbeat: heartbeatService(db, { pluginWorkerManager }),
+  // inaczej wakeup zapisze żądanie, ale run nie zostanie podjęty przez workera.
+  const heartbeat: HeartbeatDep = deps?.heartbeat ?? heartbeatService(db);
+  async function loadAgents(companyId: string) {
+    return db
       .select()
-      .from(channels)
-      .where(eq(channels.companyId, companyId))
-      .orderBy(desc(channels.createdAt));
-    return rows.map((row) => rowToChannel(row));
+      .from(agents)
+      .where(
+        and(
+          eq(agents.companyId, companyId),
+          notInArray(agents.status, EXCLUDED_AGENT_STATUSES),
+        ),
+      );
   }
 
-  async function getChannel(id: string): Promise<Channel | null> {
-    const rows = await db.select().from(channels).where(eq(channels.id, id));
-    return rows[0] ? rowToChannel(rows[0]) : null;
-  }
-
-  /**
-   * Internal-only: returns the channel with full plaintext config. Use this
-   * for adapter dispatch where the bot token / webhook URL is required.
-   * Never return the result of this function from an HTTP route.
-   */
-  async function getChannelWithSecrets(id: string): Promise<Channel | null> {
-    const rows = await db.select().from(channels).where(eq(channels.id, id));
-    return rows[0] ? rowToChannel(rows[0], { redact: false }) : null;
-  }
-
-  async function createChannel(companyId: string, input: CreateChannel): Promise<Channel> {
-    const rows = await db
-      .insert(channels)
-      .values({
-        companyId,
-        platform: input.platform,
-        name: input.name,
-        config: input.config ?? {},
-        status: input.status ?? "active",
-        direction: input.direction ?? "outbound",
-      })
-      .returning();
-    return rowToChannel(rows[0]);
-  }
-
-  async function updateChannel(
-    companyId: string,
-    id: string,
-    input: UpdateChannel,
-  ): Promise<Channel> {
-    if (Object.keys(input).length === 0) {
-      throw unprocessable("Update body must contain at least one field");
+  function buildByParent(all: { id: string; reportsTo: string | null }[]) {
+    const byParent = new Map<string | null, { id: string }[]>();
+    for (const a of all) {
+      const arr = byParent.get(a.reportsTo) ?? [];
+      arr.push({ id: a.id });
+      byParent.set(a.reportsTo, arr);
     }
-    const rows = await db
+    return byParent;
+  }
+
+  function subtreeIds(rootId: string, byParent: Map<string | null, { id: string }[]>): string[] {
+    const out: string[] = [];
+    const visited = new Set<string>();
+    const stack = [rootId];
+    while (stack.length) {
+      const id = stack.pop()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      out.push(id);
+      for (const child of byParent.get(id) ?? []) stack.push(child.id);
+    }
+    return out;
+  }
+
+  async function syncForCompany(companyId: string) {
+    const all = await loadAgents(companyId);
+    const byParent = buildByParent(all);
+    const roots = all.filter((a) => !a.reportsTo || !all.some((x) => x.id === a.reportsTo));
+
+    const desired = new Map<string, { name: string; kind: "company" | "department"; managerAgentId: string | null }>();
+    const ceo = roots.find((a) => a.role === "ceo") ?? roots[0];
+    if (ceo) {
+      const rootKey = channelKeyForRole(ceo.role as AgentRole);
+      const rootName = CHANNEL_ROLE_KEY_MAP[ceo.role as AgentRole]?.name ?? "CEO";
+      desired.set(rootKey, { name: rootName, kind: "company", managerAgentId: ceo.id });
+    }
+
+    // Sort po id dla deterministycznego przydzialu sufiksow przy kolizji kluczy rol.
+    const sortedAgents = [...all].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    for (const a of sortedAgents) {
+      const hasReports = (byParent.get(a.id) ?? []).length > 0;
+      if (!hasReports || a.id === ceo?.id) continue;
+      const baseKey = channelKeyForRole(a.role as AgentRole);
+      let key = baseKey;
+      if (desired.has(key)) {
+        key = `${baseKey}-${slug(a.name) || a.id.slice(0, 8)}`;
+      }
+      const name = CHANNEL_ROLE_KEY_MAP[a.role as AgentRole]?.name ?? a.name;
+      desired.set(key, { name, kind: "department", managerAgentId: a.id });
+    }
+
+    const existing = await db.select().from(channels).where(eq(channels.companyId, companyId));
+    const existingByKey = new Map(existing.map((c) => [c.key, c]));
+
+    for (const [key, d] of desired) {
+      const found = existingByKey.get(key);
+      if (!found) {
+        await db.insert(channels).values({ companyId, key, name: d.name, kind: d.kind, managerAgentId: d.managerAgentId });
+      } else if (found.archivedAt || found.managerAgentId !== d.managerAgentId || found.name !== d.name) {
+        await db.update(channels).set({ archivedAt: null, managerAgentId: d.managerAgentId, name: d.name, updatedAt: new Date() }).where(eq(channels.id, found.id));
+      }
+    }
+    for (const c of existing) {
+      if (!desired.has(c.key) && !c.archivedAt) {
+        await db.update(channels).set({ archivedAt: new Date(), updatedAt: new Date() }).where(eq(channels.id, c.id));
+      }
+    }
+  }
+
+  async function list(companyId: string) {
+    return db.select().from(channels).where(and(eq(channels.companyId, companyId), isNull(channels.archivedAt)));
+  }
+
+  async function loadChannel(channelId: string): Promise<ChannelRow | null> {
+    return db.select().from(channels).where(eq(channels.id, channelId)).then((r) => r[0] ?? null);
+  }
+
+  // Wyznacza członków na podstawie już załadowanego rekordu kanału (bez ponownego zapytania).
+  async function membersOfChannel(ch: ChannelRow) {
+    const all = await loadAgents(ch.companyId);
+    if (ch.kind === "company") return all;
+    const byParent = buildByParent(all);
+    const ids = new Set(ch.managerAgentId ? subtreeIds(ch.managerAgentId, byParent) : []);
+    return all.filter((a) => ids.has(a.id));
+  }
+
+  async function membersOf(channelId: string) {
+    const ch = await loadChannel(channelId);
+    if (!ch) return [];
+    return membersOfChannel(ch);
+  }
+
+  // Parsuje tokeny @wzmianka z body i resolwuje je do agentId po name (case-insensitive).
+  // Dopasowanie: pojedyncze słowo po @, np. @CMO — ograniczenie udokumentowane.
+  function parseMentions(body: string, members: { id: string; name: string }[]): string[] {
+    const re = /\B@([^\s@,!?.]+)/g;
+    const tokens = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(body)) !== null) {
+      const normalized = normalizeAgentMentionToken(m[1]);
+      if (normalized) tokens.add(normalized.toLowerCase());
+    }
+    if (tokens.size === 0) return [];
+    const resolved = new Set<string>();
+    for (const agent of members) {
+      if (tokens.has(agent.name.toLowerCase())) {
+        resolved.add(agent.id);
+      }
+    }
+    return [...resolved];
+  }
+
+  // Lazily tworzy backing issue dla kanału jeśli jeszcze nie istnieje.
+  // Reużycie realizowane wyłącznie przez odczyt/persystencję channels.backingIssueId (bez cache in-memory).
+  async function ensureBackingIssue(ch: ChannelRow, firstMentionAgentId: string): Promise<string> {
+    // Odczytaj świeży rekord z DB — może być już ustawiony przez wcześniejsze wywołanie
+    const fresh = await loadChannel(ch.id);
+    if (fresh?.backingIssueId) return fresh.backingIssueId;
+
+    const created = await issues.create(ch.companyId, {
+      title: `#${ch.key}`,
+      originKind: "channel",
+      originId: ch.id,
+      assigneeAgentId: firstMentionAgentId,
+      hiddenAt: new Date(),
+    });
+
+    // Warunkowy persyst: ustaw backingIssueId tylko jeśli wciąż null (tani guard na wyścig).
+    const persisted = await db
       .update(channels)
-      .set({
-        ...(input.platform !== undefined && { platform: input.platform }),
-        ...(input.name !== undefined && { name: input.name }),
-        ...(input.config !== undefined && { config: input.config }),
-        ...(input.status !== undefined && { status: input.status }),
-        ...(input.direction !== undefined && { direction: input.direction }),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(channels.id, id), eq(channels.companyId, companyId)))
-      .returning();
-    if (rows.length === 0) throw notFound("Channel not found");
-    return rowToChannel(rows[0]);
-  }
-
-  async function deleteChannel(companyId: string, id: string): Promise<void> {
-    const result = await db
-      .delete(channels)
-      .where(and(eq(channels.id, id), eq(channels.companyId, companyId)))
+      .set({ backingIssueId: created.id, updatedAt: new Date() })
+      .where(and(eq(channels.id, ch.id), isNull(channels.backingIssueId)))
       .returning({ id: channels.id });
-    if (result.length === 0) throw notFound("Channel not found");
-  }
 
-  async function listRoutes(companyId: string, channelId?: string): Promise<ChannelRoute[]> {
-    const conditions = [eq(channelRoutes.companyId, companyId)];
-    if (channelId) conditions.push(eq(channelRoutes.channelId, channelId));
-    const rows = await db
-      .select()
-      .from(channelRoutes)
-      .where(and(...conditions))
-      .orderBy(desc(channelRoutes.createdAt));
-    return rows.map(rowToRoute);
-  }
-
-  async function getRoute(id: string): Promise<ChannelRoute | null> {
-    const rows = await db.select().from(channelRoutes).where(eq(channelRoutes.id, id));
-    return rows[0] ? rowToRoute(rows[0]) : null;
-  }
-
-  async function createRoute(companyId: string, input: CreateChannelRoute): Promise<ChannelRoute> {
-    const channelRows = await db
-      .select({ companyId: channels.companyId })
-      .from(channels)
-      .where(eq(channels.id, input.channelId));
-    if (channelRows.length === 0 || channelRows[0].companyId !== companyId) {
-      throw notFound("Channel not found");
+    if (persisted.length === 0) {
+      // Inny zapis wygrał wyścig — odczytaj zwycięski backingIssueId i porzuć właśnie utworzone issue.
+      const reread = await loadChannel(ch.id);
+      if (reread?.backingIssueId) return reread.backingIssueId;
+      // Kanał zniknął między warunkowym UPDATE a re-readem — nie zwracaj cicho sieroty.
+      throw notFound(`Channel zniknal podczas ensureBackingIssue: ${ch.id}`);
     }
-    const rows = await db
-      .insert(channelRoutes)
+
+    return created.id;
+  }
+
+  async function postMessage(
+    channelId: string,
+    input: { body: string; userId?: string; agentId?: string; kind?: string },
+  ) {
+    const ch = await loadChannel(channelId);
+    if (!ch) throw notFound(`Channel not found: ${channelId}`);
+
+    const members = await membersOfChannel(ch);
+    const mentionedAgentIds = parseMentions(input.body, members);
+
+    const [inserted] = await db
+      .insert(channelMessages)
       .values({
-        companyId,
-        channelId: input.channelId,
-        trigger: input.trigger,
-        filter: input.filter ?? null,
-        template: input.template ?? null,
-        enabled: input.enabled ?? true,
+        companyId: ch.companyId,
+        channelId,
+        authorUserId: input.userId ?? null,
+        authorAgentId: input.agentId ?? null,
+        kind: input.kind ?? "message",
+        body: input.body,
+        mentionedAgentIds,
       })
       .returning();
-    return rowToRoute(rows[0]);
-  }
 
-  async function updateRoute(
-    companyId: string,
-    id: string,
-    input: UpdateChannelRoute,
-  ): Promise<ChannelRoute> {
-    if (Object.keys(input).length === 0) {
-      throw unprocessable("Update body must contain at least one field");
+    // Powiadom wszystkie sesje/zakładki o nowej wiadomości (user + agent — obie ścieżki).
+    publishLiveEvent({
+      companyId: ch.companyId,
+      type: "channel.message.created",
+      payload: { channelId, messageId: inserted.id },
+    });
+
+    // Most @mention → run: tylko gdy są wzmianki
+    if (mentionedAgentIds.length > 0) {
+      const issueId = await ensureBackingIssue(ch, mentionedAgentIds[0]);
+
+      const comment = await issues.addComment(issueId, input.body, { userId: input.userId });
+      const backingIssueCommentId = comment.id;
+
+      let triggeredRunId: string | null = null;
+
+      // Budzimy tylko pierwszego wspomnianego agenta (najprostsze podejście — YAGNI).
+      // wakeup jest opakowane: błąd budzenia nie blokuje zapisu wiadomości ani komentarza.
+      try {
+        const wakeResult = await heartbeat.wakeup(mentionedAgentIds[0], {
+          source: "on_demand",
+          triggerDetail: "manual",
+          reason: "channel_mention",
+          payload: { channelId, messageId: inserted.id, issueId },
+          requestedByActorType: "user",
+          requestedByActorId: input.userId ?? null,
+          // Kontekst interaction-wake (wzorzec @mention w komentarzu issue): pozwala obudzić
+          // DOWOLNEGO wspomnianego agenta, nawet gdy nie jest assignee współdzielonego backing-issue.
+          // Bez tego guard `issue_assignee_changed` w heartbeat anuluje run każdego agenta != assignee
+          // (assignee to pierwszy kiedykolwiek wspomniany agent), więc odpowiadałby tylko on.
+          contextSnapshot: {
+            channelId,
+            issueId,
+            wakeReason: "issue_comment_mentioned",
+            source: "comment.mention",
+            commentId: backingIssueCommentId,
+          },
+        });
+        // Wyciągnięcie runId odporne na rzeczywiste kształty zwrotki heartbeat.wakeup:
+        //   - rekord runu (queued/coalesced)         → pole `id`
+        //   - AgentWakeupSkipped (dedup/agent zajęty) → brak `id`, ale runId bywa w `executionRunId`
+        //   - zwrotka zagnieżdżona                    → `run.id` / `triggeredRunId`
+        //   - null/undefined (deferred/skipped)       → run nie powstał, zostaje null (poprawnie)
+        // UWAGA: gdy wakeup faktycznie NIE utworzył runu (deferred/skipped bez executionRunId),
+        // triggeredRunId zostaje null — to oczekiwane, nie błąd. Bug dotyczył tylko kształtów,
+        // w których id runu siedziało poza `.id` i było gubione.
+        triggeredRunId = extractTriggeredRunId(wakeResult);
+      } catch {
+        // Nie blokujemy zapisu wiadomości błędem wakeup.
+      }
+
+      // Aktualizuj wiersz wiadomości o powiązane id (id-ki to prawdziwe UUID z serwisów).
+      if (triggeredRunId !== null || backingIssueCommentId !== null) {
+        await db
+          .update(channelMessages)
+          .set({
+            ...(triggeredRunId !== null ? { triggeredRunId } : {}),
+            ...(backingIssueCommentId !== null ? { backingIssueCommentId } : {}),
+          })
+          .where(eq(channelMessages.id, inserted.id));
+      }
+
+      return {
+        ...inserted,
+        triggeredRunId: triggeredRunId ?? inserted.triggeredRunId,
+        backingIssueCommentId: backingIssueCommentId ?? inserted.backingIssueCommentId,
+      };
     }
-    const rows = await db
-      .update(channelRoutes)
-      .set({
-        ...(input.trigger !== undefined && { trigger: input.trigger }),
-        ...(input.filter !== undefined && { filter: input.filter }),
-        ...(input.template !== undefined && { template: input.template }),
-        ...(input.enabled !== undefined && { enabled: input.enabled }),
-      })
-      .where(and(eq(channelRoutes.id, id), eq(channelRoutes.companyId, companyId)))
-      .returning();
-    if (rows.length === 0) throw notFound("Channel route not found");
-    return rowToRoute(rows[0]);
+
+    return inserted;
   }
 
-  async function deleteRoute(companyId: string, id: string): Promise<void> {
-    const result = await db
-      .delete(channelRoutes)
-      .where(and(eq(channelRoutes.id, id), eq(channelRoutes.companyId, companyId)))
-      .returning({ id: channelRoutes.id });
-    if (result.length === 0) throw notFound("Channel route not found");
-  }
-
-  async function listMessages(companyId: string, query: ListChannelMessagesQuery): Promise<ChannelMessage[]> {
-    const conditions = [eq(channelMessages.companyId, companyId)];
-    if (query.channelId) conditions.push(eq(channelMessages.channelId, query.channelId));
-    if (query.direction) conditions.push(eq(channelMessages.direction, query.direction));
-    if (query.status) conditions.push(eq(channelMessages.status, query.status));
-    const rows = await db
+  async function listMessages(channelId: string, opts: { before?: Date | string; limit?: number }) {
+    const limit = opts.limit ?? 50;
+    const conditions = [eq(channelMessages.channelId, channelId)];
+    if (opts.before) {
+      const beforeDate = opts.before instanceof Date ? opts.before : new Date(opts.before);
+      conditions.push(lt(channelMessages.createdAt, beforeDate));
+    }
+    return db
       .select()
       .from(channelMessages)
       .where(and(...conditions))
       .orderBy(desc(channelMessages.createdAt))
-      .limit(query.limit ?? 50)
-      .offset(query.offset ?? 0);
-    return rows.map(rowToMessage);
+      .limit(limit);
   }
 
-  return {
-    listChannels,
-    getChannel,
-    getChannelWithSecrets,
-    createChannel,
-    updateChannel,
-    deleteChannel,
-    listRoutes,
-    getRoute,
-    createRoute,
-    updateRoute,
-    deleteRoute,
-    listMessages,
-  };
+  // Mapowanie statusu agenta na AgentOnlineStatus:
+  //   - "paused"  → "paused"  (agent jawnie wstrzymany)
+  //   - "error"   → "error"   (agent w stanie błędu)
+  //   - ma aktywny run (status="running") → "active"
+  //   - pozostałe → "idle"
+  async function memberStatuses(channelId: string): Promise<ChannelMemberStatus[]> {
+    const members = await membersOf(channelId);
+    const agentIds = members.map((a) => a.id);
+    if (agentIds.length === 0) return [];
+
+    // Batch: aktywne runy (status="running") dla wszystkich członków jednym zapytaniem.
+    // orderBy desc(startedAt) → przy grupowaniu pierwszy wpis per agent = najnowszy.
+    const activeRows = await db
+      .select({
+        agentId: heartbeatRuns.agentId,
+        nextAction: heartbeatRuns.nextAction,
+      })
+      .from(heartbeatRuns)
+      .where(and(inArray(heartbeatRuns.agentId, agentIds), eq(heartbeatRuns.status, "running")))
+      .orderBy(desc(heartbeatRuns.startedAt));
+
+    const activeByAgent = new Map<string, (typeof activeRows)[number]>();
+    for (const row of activeRows) {
+      if (!activeByAgent.has(row.agentId)) activeByAgent.set(row.agentId, row);
+    }
+
+    // Batch: ostatni zakończony run (succeeded) per agent jednym zapytaniem.
+    // orderBy desc(finishedAt) → pierwszy per agent = najświeższy. Truncacja jak w heartbeat.ts.
+    const lastRows = await db
+      .select({
+        agentId: heartbeatRuns.agentId,
+        resultSummary: sql<
+          string | null
+        >`left(${heartbeatRuns.resultJson} ->> 'summary', ${HEARTBEAT_RUN_RESULT_SUMMARY_MAX_CHARS})`.as("resultSummary"),
+      })
+      .from(heartbeatRuns)
+      .where(and(inArray(heartbeatRuns.agentId, agentIds), eq(heartbeatRuns.status, "succeeded")))
+      .orderBy(desc(heartbeatRuns.finishedAt));
+
+    const lastByAgent = new Map<string, (typeof lastRows)[number]>();
+    for (const row of lastRows) {
+      if (!lastByAgent.has(row.agentId)) lastByAgent.set(row.agentId, row);
+    }
+
+    return members.map((agent) => {
+      const activeRun = activeByAgent.get(agent.id);
+      const lastRun = lastByAgent.get(agent.id);
+
+      let online: AgentOnlineStatus;
+      if (agent.status === "paused") online = "paused";
+      else if (agent.status === "error") online = "error";
+      else if (agent.status === "running" || activeRun) online = "active";
+      else online = "idle";
+
+      const nowText = activeRun?.nextAction ?? null;
+      const lastText = lastRun?.resultSummary ?? null;
+
+      const report = composeAgentStatusReport({ now: nowText, last: lastText, online });
+
+      return {
+        agentId: agent.id,
+        name: agent.name,
+        role: agent.role,
+        icon: null,
+        online,
+        now: nowText,
+        last: lastText,
+        report,
+      } satisfies ChannelMemberStatus;
+    });
+  }
+
+  // Publiczny wrapper nad prywatnym loadChannel: route'y /channels/:id/* potrzebują
+  // companyId kanału, by wykonać assertCompanyAccess (companyId nie ma w URL).
+  // loadChannel pozostaje prywatne (szczegół implementacyjny serwisu używany wewnętrznie
+  // przez postMessage/membersOf); getChannel to wąski, czytelny kontrakt dla warstwy REST.
+  async function getChannel(channelId: string) {
+    return loadChannel(channelId);
+  }
+
+  return { syncForCompany, list, membersOf, postMessage, listMessages, memberStatuses, getChannel };
 }
