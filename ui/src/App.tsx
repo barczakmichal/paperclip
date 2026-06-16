@@ -31,6 +31,7 @@ import { Costs } from "./pages/Costs";
 import { Activity } from "./pages/Activity";
 import { Inbox } from "./pages/Inbox";
 import { BoardChat } from "./pages/BoardChat";
+import { AgentChat } from "./pages/AgentChat";
 import { CompanySettings } from "./pages/CompanySettings";
 import { CompanyEnvironments } from "./pages/CompanyEnvironments";
 import { CloudUpstream } from "./pages/CloudUpstream";
@@ -151,6 +152,7 @@ function boardRoutes() {
       <Route path="approvals/:approvalId" element={<ApprovalDetail />} />
       <Route path="costs" element={<Costs />} />
       <Route path="activity" element={<Activity />} />
+      <Route path="agent-chat" element={<AgentChat />} />
       {/* Conference Room Chat surfaces (PAP-136/PAP-137): routes stay
           registered but redirect to the company home while the experimental
           flag is off. The board-level `artifacts` mount below is the new

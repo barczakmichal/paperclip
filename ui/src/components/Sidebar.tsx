@@ -169,6 +169,7 @@ export function Sidebar() {
             badgeTone={inboxBadge.failedRuns > 0 ? "danger" : "default"}
             alert={inboxBadge.failedRuns > 0}
           />
+          <SidebarNavItem to="/agent-chat" label="Czat z agentami" icon={MessagesSquare} />
           {conferenceRoomChatEnabled ? (
             <SidebarNavItem to="/board-chat" label="Conference Room" icon={MessagesSquare} />
           ) : null}
