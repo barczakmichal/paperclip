@@ -18,6 +18,10 @@ export const channelMessages = pgTable(
     triggeredRunId: uuid("triggered_run_id"),
     backingIssueCommentId: uuid("backing_issue_comment_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Soft delete: usunięcie pojedynczej wiadomości oraz "wyczyść kanał" / "nowa rozmowa"
+    // ustawiają deletedAt zamiast kasować wiersz (audyt + możliwość przywrócenia).
+    // listMessages filtruje deletedAt IS NULL.
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => ({
     streamIdx: index("channel_messages_channel_created_idx").on(table.channelId, table.createdAt),

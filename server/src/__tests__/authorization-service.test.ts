@@ -470,6 +470,44 @@ describeEmbeddedPostgres("authorization service", () => {
     });
   });
 
+  it("lets any same-company agent mutate a channel-backed issue but not another agent's normal issue", async () => {
+    const company = await createCompany(db, "ChannelThreadMutate");
+    const ctoAgent = await createAgent(db, company.id, { role: "cto" });
+    const cmoAgent = await createAgent(db, company.id, { role: "cmo" });
+    const actor = { type: "agent" as const, agentId: cmoAgent.id, companyId: company.id, source: "agent_key" as const };
+
+    // Kontrola: zwykłe issue przypisane do innego agenta — odmowa.
+    const deniedNormal = await authorizationService(db).decide({
+      actor,
+      action: "issue:mutate",
+      resource: {
+        type: "issue",
+        companyId: company.id,
+        issueId: randomUUID(),
+        assigneeAgentId: ctoAgent.id,
+        originKind: "manual",
+      },
+    });
+    expect(deniedNormal.allowed).toBe(false);
+
+    // Backing-issue kanału (originKind="channel") przypisane do CTO — CMO i tak może komentować.
+    const allowedChannel = await authorizationService(db).decide({
+      actor,
+      action: "issue:mutate",
+      resource: {
+        type: "issue",
+        companyId: company.id,
+        issueId: randomUUID(),
+        assigneeAgentId: ctoAgent.id,
+        originKind: "channel",
+      },
+    });
+    expect(allowedChannel).toMatchObject({
+      allowed: true,
+      reason: "allow_company_agent",
+    });
+  });
+
   it("allows simple-mode task assignment for active same-company board operators without explicit grants", async () => {
     const company = await createCompany(db, "BoardAssignmentDefault");
     const userId = `user-${randomUUID()}`;

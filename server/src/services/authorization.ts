@@ -64,6 +64,10 @@ export type AuthorizationResource =
       assigneeAgentId?: string | null;
       assigneeUserId?: string | null;
       status?: string | null;
+      // originKind === "channel" oznacza ukryte backing-issue kanału (wspólny wątek
+      // rozmowy zespołu). Dowolny agent tej samej firmy może w nim komentować —
+      // patrz gałąź issue:mutate niżej. Dla zwykłych issue (manual/routine/…) bez zmian.
+      originKind?: string | null;
     };
 
 export type AuthorizationDecision = {
@@ -1168,6 +1172,17 @@ export function authorizationService(db: Db) {
           action: input.action,
           reason: "allow_company_agent",
           explanation: "Allowed because the issue has no agent assignee.",
+        });
+      }
+      // Backing-issue kanału to współdzielony wątek rozmowy zespołu (originKind="channel"),
+      // a nie zadanie z jednym właścicielem. Każdy agent tej samej firmy (membership już
+      // zweryfikowane wyżej) może w nim komentować — bez tego odpowiada tylko pierwszy
+      // kiedykolwiek wspomniany agent (stały assignee), a kolejni dostają deny boundary.
+      if (resource?.originKind === "channel") {
+        return allow({
+          action: input.action,
+          reason: "allow_company_agent",
+          explanation: "Allowed because channel-backed issues are shared team conversation threads.",
         });
       }
     }

@@ -1774,6 +1774,7 @@ export function issueRoutes(
       assigneeAgentId: string | null;
       assigneeUserId: string | null;
       status: string;
+      originKind?: string | null;
     },
     action: "issue:read" | "issue:mutate",
   ) {
@@ -1789,6 +1790,7 @@ export function issueRoutes(
         assigneeAgentId: issue.assigneeAgentId,
         assigneeUserId: issue.assigneeUserId,
         status: issue.status,
+        originKind: issue.originKind ?? null,
       },
       scope: {
         issueId: issue.id,
@@ -1853,6 +1855,7 @@ export function issueRoutes(
       status: string;
       assigneeAgentId: string | null;
       assigneeUserId: string | null;
+      originKind?: string | null;
     },
   ) {
     if (req.actor.type !== "agent") return true;
@@ -1867,6 +1870,13 @@ export function issueRoutes(
       return false;
     }
     if (issue.assigneeAgentId === null) {
+      return true;
+    }
+    // Backing-issue kanału to współdzielony wątek rozmowy zespołu — pomijamy check
+    // własności/checkoutu (stały assignee = pierwszy wspomniany agent), żeby każdy
+    // wspomniany agent mógł odpowiedzieć komentarzem. Boundary (issue:mutate) już
+    // przeszedł powyżej i potwierdził przynależność do firmy. Patrz authorization.ts.
+    if (issue.originKind === "channel") {
       return true;
     }
     if (issue.assigneeAgentId !== actorAgentId) {

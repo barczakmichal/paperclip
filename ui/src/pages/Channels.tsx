@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LiveEvent } from "@paperclipai/shared";
 import { useTranslation } from "react-i18next";
-import { MessageSquare, Send } from "lucide-react";
+import { MessageSquare, MoreVertical, Send, Sparkles, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { channelsApi } from "@/api/channels";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
@@ -170,12 +176,32 @@ function ChannelRail({
 
 // ── message bubble ────────────────────────────────────────────────────────────
 
+// Markdown w bąblu użytkownika (bg-primary) musi dziedziczyć kolor tekstu bąbla
+// (text-primary-foreground), a nie zmienne prose. MarkdownBody sam dodaje
+// `prose-invert` w trybie ciemnym → jasny tekst; ale bg-primary w trybie ciemnym
+// jest prawie biały, więc jasny tekst = biały na białym. Wymuszenie currentColor
+// daje poprawny kontrast w obu motywach (ciemny: ciemny tekst na jasnym bąblu;
+// jasny: jasny tekst na ciemnym bąblu).
+const USER_BUBBLE_PROSE_STYLE = {
+  color: "var(--primary-foreground)",
+  "--tw-prose-body": "var(--primary-foreground)",
+  "--tw-prose-headings": "var(--primary-foreground)",
+  "--tw-prose-bold": "var(--primary-foreground)",
+  "--tw-prose-links": "var(--primary-foreground)",
+  "--tw-prose-code": "var(--primary-foreground)",
+  "--tw-prose-quotes": "var(--primary-foreground)",
+  "--tw-prose-bullets": "var(--primary-foreground)",
+  "--tw-prose-counters": "var(--primary-foreground)",
+} as React.CSSProperties;
+
 function MessageRow({
   msg,
   nameFor,
+  onDelete,
 }: {
   msg: ChannelMessage;
   nameFor: (agentId: string) => string | null;
+  onDelete: (messageId: string) => void;
 }) {
   const { t } = useTranslation("channels");
   const isSystem = msg.kind === "system";
@@ -229,6 +255,15 @@ function MessageRow({
           <span className="text-xs text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
             {time}
           </span>
+          <button
+            type="button"
+            onClick={() => onDelete(msg.id)}
+            aria-label={t("deleteMessage", "Delete message")}
+            title={t("deleteMessage", "Delete message")}
+            className="text-muted-foreground/50 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
         </div>
         <div
           className={cn(
@@ -238,10 +273,8 @@ function MessageRow({
           )}
         >
           <MarkdownBody
-            className={cn(
-              "prose-sm",
-              isUser && "prose-invert [&_a]:text-primary-foreground/80",
-            )}
+            className="prose-sm"
+            style={isUser ? USER_BUBBLE_PROSE_STYLE : undefined}
             softBreaks
             linkIssueReferences={false}
           >
@@ -472,10 +505,41 @@ function WorkingIndicator({ name }: { name: string }) {
 
 // ── center panel (messages) ────────────────────────────────────────────────────
 
-function MessageStream({ channelId }: { channelId: string }) {
+function MessageStream({ channel }: { channel: Channel }) {
   const { t } = useTranslation("channels");
   const queryClient = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const channelId = channel.id;
+
+  async function handleDelete(messageId: string) {
+    try {
+      await channelsApi.deleteMessage(channelId, messageId);
+    } catch {
+      // Soft delete — przy błędzie wiadomość po prostu zostaje. Invalidacja niżej
+      // przywróci spójny stan z serwerem niezależnie od wyniku.
+    }
+    void queryClient.invalidateQueries({ queryKey: queryKeys.channels.messages(channelId) });
+  }
+
+  async function handleClear() {
+    if (!window.confirm(t("clearChannelConfirm", "Clear all messages in this channel?"))) return;
+    try {
+      await channelsApi.clear(channelId);
+    } catch {
+      // jw. — invalidacja zsynchronizuje widok
+    }
+    void queryClient.invalidateQueries({ queryKey: queryKeys.channels.messages(channelId) });
+  }
+
+  async function handleNewConversation() {
+    if (!window.confirm(t("newConversationConfirm", "Start a new conversation?"))) return;
+    try {
+      await channelsApi.newConversation(channelId);
+    } catch {
+      // jw.
+    }
+    void queryClient.invalidateQueries({ queryKey: queryKeys.channels.messages(channelId) });
+  }
 
   const { data: messages, isLoading, isError } = useQuery({
     queryKey: queryKeys.channels.messages(channelId),
@@ -524,6 +588,32 @@ function MessageStream({ channelId }: { channelId: string }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0">
+      {/* channel header + actions menu */}
+      <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-2 border-b border-border">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-muted-foreground/60 shrink-0">#</span>
+          <span className="text-sm font-medium truncate">{channel.name}</span>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={t("channelMenu", "Channel options")}
+            className="text-muted-foreground hover:text-foreground rounded-md p-1 -mr-1 transition-colors"
+          >
+            <MoreVertical className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => void handleNewConversation()}>
+              <Sparkles className="h-4 w-4" />
+              {t("newConversation", "New conversation")}
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={() => void handleClear()}>
+              <Trash2 className="h-4 w-4" />
+              {t("clearChannel", "Clear channel")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       {/* message list */}
       <div className="flex-1 min-h-0 overflow-y-auto py-2">
         {isLoading ? (
@@ -547,7 +637,7 @@ function MessageStream({ channelId }: { channelId: string }) {
         ) : (
           <>
             {[...messages].reverse().map((msg) => (
-              <MessageRow key={msg.id} msg={msg} nameFor={nameFor} />
+              <MessageRow key={msg.id} msg={msg} nameFor={nameFor} onDelete={handleDelete} />
             ))}
             {workingAgents.map((a) => (
               <WorkingIndicator key={a.agentId} name={a.name} />
@@ -861,7 +951,7 @@ export function Channels() {
 
         {/* center: message stream */}
         {activeChannel ? (
-          <MessageStream channelId={activeChannel.id} />
+          <MessageStream channel={activeChannel} />
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground/60 italic">
             {t("selectChannel", "Select a channel to start chatting.")}

@@ -138,5 +138,81 @@ export function channelRoutes(db: Db, opts: { pluginWorkerManager?: PluginWorker
     res.status(201).json(message);
   });
 
+  // Usuń pojedynczą wiadomość (soft delete).
+  router.delete("/channels/:channelId/messages/:messageId", async (req, res) => {
+    const channelId = req.params.channelId as string;
+    const messageId = req.params.messageId as string;
+    const channel = await svc.getChannel(channelId);
+    if (!channel) {
+      throw notFound("Channel not found");
+    }
+    assertCompanyAccess(req, channel.companyId);
+    const ok = await svc.deleteMessage(channelId, messageId);
+    if (!ok) {
+      throw notFound("Message not found");
+    }
+    const actor = getActorInfo(req);
+    await logActivity(db, {
+      companyId: channel.companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId ?? null,
+      runId: actor.runId ?? null,
+      action: "channel.message.deleted",
+      entityType: "channel",
+      entityId: channelId,
+      details: { messageId },
+    });
+    res.status(204).end();
+  });
+
+  // Wyczyść kanał — soft delete wszystkich wiadomości (historia zostaje w DB).
+  router.post("/channels/:channelId/clear", async (req, res) => {
+    const channelId = req.params.channelId as string;
+    const channel = await svc.getChannel(channelId);
+    if (!channel) {
+      throw notFound("Channel not found");
+    }
+    assertCompanyAccess(req, channel.companyId);
+    await svc.clearChannel(channelId);
+    const actor = getActorInfo(req);
+    await logActivity(db, {
+      companyId: channel.companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId ?? null,
+      runId: actor.runId ?? null,
+      action: "channel.cleared",
+      entityType: "channel",
+      entityId: channelId,
+      details: {},
+    });
+    res.status(204).end();
+  });
+
+  // Nowa rozmowa — czyści historię i odpina backing-issue (świeży wątek przy kolejnej @wzmiance).
+  router.post("/channels/:channelId/new-conversation", async (req, res) => {
+    const channelId = req.params.channelId as string;
+    const channel = await svc.getChannel(channelId);
+    if (!channel) {
+      throw notFound("Channel not found");
+    }
+    assertCompanyAccess(req, channel.companyId);
+    await svc.startNewConversation(channelId);
+    const actor = getActorInfo(req);
+    await logActivity(db, {
+      companyId: channel.companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId ?? null,
+      runId: actor.runId ?? null,
+      action: "channel.conversation.reset",
+      entityType: "channel",
+      entityId: channelId,
+      details: {},
+    });
+    res.status(204).end();
+  });
+
   return router;
 }

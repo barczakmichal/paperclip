@@ -160,4 +160,53 @@ describeEmbeddedPostgres("channel messages", () => {
     expect(cmoStatus).toBeDefined();
     expect(cmoStatus!.online).toBe("paused");
   });
+
+  it("deleteMessage: soft-delete chowa wiadomość ze strumienia", async () => {
+    await seedCompanyAndChannel();
+    const keep = await svc.postMessage(channelId, { body: "zostaje", userId: "u1" });
+    const drop = await svc.postMessage(channelId, { body: "do usunięcia", userId: "u1" });
+
+    const ok = await svc.deleteMessage(channelId, drop.id);
+    expect(ok).toBe(true);
+
+    const stream = await svc.listMessages(channelId, {});
+    const ids = stream.map((m) => m.id);
+    expect(ids).toContain(keep.id);
+    expect(ids).not.toContain(drop.id);
+  });
+
+  it("deleteMessage: false gdy wiadomość nie należy do kanału", async () => {
+    await seedCompanyAndChannel();
+    const ok = await svc.deleteMessage(channelId, randomUUID());
+    expect(ok).toBe(false);
+  });
+
+  it("clearChannel: chowa wszystkie wiadomości kanału", async () => {
+    await seedCompanyAndChannel();
+    await svc.postMessage(channelId, { body: "jeden", userId: "u1" });
+    await svc.postMessage(channelId, { body: "dwa", userId: "u1" });
+
+    const ok = await svc.clearChannel(channelId);
+    expect(ok).toBe(true);
+
+    const stream = await svc.listMessages(channelId, {});
+    expect(stream).toHaveLength(0);
+  });
+
+  it("startNewConversation: czyści historię i odpina backing-issue", async () => {
+    await seedCompanyAndChannel();
+    const { eq } = await import("drizzle-orm");
+    // @mention tworzy backing-issue i ustawia channels.backingIssueId.
+    await svc.postMessage(channelId, { body: "@CMO start", userId: "u1" });
+    const before = (await db.select().from(channels).where(eq(channels.id, channelId)))[0]!;
+    expect(before.backingIssueId).not.toBeNull();
+
+    const ok = await svc.startNewConversation(channelId);
+    expect(ok).toBe(true);
+
+    const stream = await svc.listMessages(channelId, {});
+    expect(stream).toHaveLength(0);
+    const after = (await db.select().from(channels).where(eq(channels.id, channelId)))[0]!;
+    expect(after.backingIssueId).toBeNull();
+  });
 });

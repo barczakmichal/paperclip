@@ -22,5 +22,14 @@
   "showLess": "Pokaż mniej",
   "agentWorkingGeneric": "odpowiada…",
   "mentionPickerEmpty": "Brak agentów",
-  "mentionPickerHint": "↑↓ wybór · Enter/Tab wstaw · Esc zamknij"
+  "mentionPickerHint": "↑↓ wybór · Enter/Tab wstaw · Esc zamknij",
+  "channelMenu": "Opcje kanału",
+  "deleteMessage": "Usuń wiadomość",
+  "deleteMessageError": "Nie udało się usunąć wiadomości.",
+  "clearChannel": "Wyczyść kanał",
+  "clearChannelConfirm": "Wyczyścić wszystkie wiadomości w tym kanale? Historię można odtworzyć z bazy, ale zniknie z widoku.",
+  "clearChannelError": "Nie udało się wyczyścić kanału.",
+  "newConversation": "Nowa rozmowa",
+  "newConversationConfirm": "Rozpocząć nową rozmowę? Obecne wiadomości znikną z widoku, a agenci zaczną wątek od nowa.",
+  "newConversationError": "Nie udało się rozpocząć nowej rozmowy."
 }
