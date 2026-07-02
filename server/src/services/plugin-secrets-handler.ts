@@ -33,12 +33,15 @@
  * @see services/secrets.ts — secretService used by agent env bindings
  */
 
+import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
+import { companySecrets, companySecretVersions } from "@paperclipai/db";
 import {
   collectSecretRefPaths,
   isUuidSecretRef,
   readConfigValueAtPath,
 } from "./json-schema-secret-refs.js";
+import { getSecretProvider } from "../secrets/provider-registry.js";
 
 export const PLUGIN_SECRET_REFS_DISABLED_MESSAGE =
   "Plugin secret references are disabled until company-scoped plugin config lands";
@@ -230,9 +233,61 @@ export function createPluginSecretsHandler(
         throw invalidSecretRef(trimmedRef);
       }
 
-      // Fail closed until plugin config and worker runtime both carry an
-      // explicit company scope for secret bindings and resolution.
-      throw new Error(PLUGIN_SECRET_REFS_DISABLED_MESSAGE);
+      // ---------------------------------------------------------------
+      // 2. Look up secret record
+      // ---------------------------------------------------------------
+      const [secret] = await options.db
+        .select()
+        .from(companySecrets)
+        .where(
+          and(
+            eq(companySecrets.id, trimmedRef),
+            eq(companySecrets.status, "active"),
+          ),
+        )
+        .limit(1);
+
+      if (!secret) {
+        throw invalidSecretRef(trimmedRef);
+      }
+
+      // ---------------------------------------------------------------
+      // 3. Get latest version material
+      // ---------------------------------------------------------------
+      const [version] = await options.db
+        .select()
+        .from(companySecretVersions)
+        .where(
+          and(
+            eq(companySecretVersions.secretId, secret.id),
+            eq(companySecretVersions.version, secret.latestVersion),
+          ),
+        )
+        .orderBy(desc(companySecretVersions.createdAt))
+        .limit(1);
+
+      if (!version) {
+        throw new Error(`No active version for secret ${trimmedRef}`);
+      }
+
+      // ---------------------------------------------------------------
+      // 4. Decrypt via provider
+      // ---------------------------------------------------------------
+      const provider = getSecretProvider(secret.provider as Parameters<typeof getSecretProvider>[0]);
+      const value = await provider.resolveVersion({
+        material: version.material as Record<string, unknown>,
+        externalRef: secret.externalRef,
+        providerVersionRef: version.providerVersionRef,
+        providerConfig: undefined,
+        context: {
+          companyId: secret.companyId,
+          secretId: secret.id,
+          secretKey: secret.key,
+          version: secret.latestVersion,
+        },
+      });
+
+      return value;
     },
   };
 }

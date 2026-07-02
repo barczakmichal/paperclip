@@ -1,0 +1,30 @@
+title = "Paperclip gitleaks config"
+
+# Extend the built-in gitleaks default ruleset — we only ADD an allowlist below,
+# all default secret detection stays active.
+[extend]
+useDefault = true
+
+[allowlist]
+description = """
+Meta Ads plugin (packages/plugins/plugin-meta-ads) default secret references.
+
+These five values are company_secrets PRIMARY-KEY POINTERS (UUIDs), not secret
+values. They identify rows in the encrypted `company_secrets` vault; on their own
+they resolve to nothing without the vault database AND its master decryption key.
+gitleaks flags them only because they are UUID-shaped (rule: generic-api-key).
+
+They live in the plugin source as DEFAULT_CONFIG defaults ONLY because the
+server currently rejects secret references in per-plugin config (HTTP 422,
+"disabled until company-scoped plugin config lands", see
+server/src/services/plugin-secrets-handler.ts) and plugin workers receive a
+stripped env. Once company-scoped plugin config lands, these move out of source
+into per-company config and this allowlist can be deleted.
+"""
+regexes = [
+  '''b09cac61-7275-452a-92da-adcad0de6f9f''',
+  '''18abae0a-5c80-42ce-b6c6-43ada85d87d4''',
+  '''3f51657c-f553-4408-ae2e-9a41eb52f4b5''',
+  '''94e8d467-ebf2-4c7a-b3cf-6f85b42ecbe0''',
+  '''e3f3642f-bbcc-43b4-994f-5cb4453d7a61''',
+]

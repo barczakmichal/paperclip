@@ -1,0 +1,27 @@
+{
+  "name": "@paperclipai/plugin-meta-ads",
+  "version": "0.1.0",
+  "description": "Meta Ads plugin — manage Facebook/Instagram ad campaigns with server-side guardrails",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/worker.ts"
+  },
+  "paperclipPlugin": {
+    "manifest": "./dist/manifest.js",
+    "worker": "./dist/worker.js"
+  },
+  "scripts": {
+    "prebuild": "pnpm --filter @paperclipai/plugin-sdk ensure-build-deps",
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "typecheck": "pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit"
+  },
+  "dependencies": {
+    "@paperclipai/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "typescript": "^5.7.3"
+  }
+}
