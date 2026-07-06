@@ -881,6 +881,9 @@ describe("sandbox callback bridge", () => {
       { method: "GET", path: "/api/companies/co-1/approvals" },
       { method: "GET", path: "/api/companies/co-1/routines" },
       { method: "GET", path: "/api/companies/co-1/skills" },
+      { method: "GET", path: "/api/companies/co-1/documents/knowledge" },
+      { method: "PUT", path: "/api/companies/co-1/documents/knowledge" },
+      { method: "PATCH", path: "/api/companies/co-1/documents/knowledge/facts" },
       { method: "GET", path: "/api/projects/proj-1" },
       { method: "GET", path: "/api/goals/goal-1" },
       { method: "GET", path: "/api/issues/issue-1" },
@@ -932,6 +935,13 @@ describe("sandbox callback bridge", () => {
       // grows new actions later.
       { method: "POST", path: "/api/execution-workspaces/ws-1/runtime-services/delete" },
       { method: "POST", path: "/api/companies/co-1/agents" },
+      // Company knowledge writes are narrowly scoped to the documents/facts routes —
+      // company-level PUT/PATCH/DELETE and DELETE on a fact must stay blocked.
+      { method: "PUT", path: "/api/companies/co-1" },
+      { method: "PATCH", path: "/api/companies/co-1" },
+      { method: "DELETE", path: "/api/companies/co-1" },
+      { method: "DELETE", path: "/api/companies/co-1/documents/knowledge" },
+      { method: "DELETE", path: "/api/companies/co-1/documents/knowledge/facts/backend-stack" },
       { method: "POST", path: "/api/agents/agent-1/pause" },
       { method: "POST", path: "/api/agents/agent-1/terminate" },
       { method: "POST", path: "/api/agents/agent-1/keys" },

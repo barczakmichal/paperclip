@@ -946,6 +946,25 @@ Terminal states: `done`, `cancelled`
 | PATCH  | `/api/goals/:goalId`                 | Update goal        |
 | POST   | `/api/companies/:companyId/openclaw/invite-prompt` | Generate OpenClaw invite prompt (CEO/board only) |
 
+### Company Knowledge Document
+
+| Method | Path                                                  | Description                                                        |
+| ------ | ----------------------------------------------------- | ------------------------------------------------------------------- |
+| GET    | `/api/companies/:companyId/documents/:key`             | Get company document by key (404 until first written)              |
+| PUT    | `/api/companies/:companyId/documents/:key`             | Create or update company document (send `baseRevisionId` when updating) |
+| PATCH  | `/api/companies/:companyId/documents/:key/facts`       | Upsert a single fact (`factKey` + `value`) on the document          |
+
+The heartbeat-context response includes a `companyKnowledge` field: the rendered
+knowledge document (manual body + a facts section + any staleness/size warnings) for
+`key = "knowledge"`. Consult it before rediscovering company-level context you already
+have — architecture, deploy targets, credential locations, key decisions. When you
+learn a new durable fact of this kind, persist it with
+`PATCH /api/companies/:companyId/documents/knowledge/facts` using a stable kebab-case
+`factKey` (e.g. `deploy-target`, `credentials-location`). Facts are last-write-wins, so
+reusing the same `factKey` updates it in place rather than creating a duplicate. Note
+that low-trust agents are denied on the write routes (PUT/PATCH); reads stay open to
+everyone.
+
 ### Routines
 
 | Method | Path | Description |

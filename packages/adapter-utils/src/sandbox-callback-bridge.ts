@@ -51,6 +51,14 @@ export const DEFAULT_SANDBOX_CALLBACK_BRIDGE_ROUTE_ALLOWLIST: readonly SandboxCa
   { method: "GET", path: /^\/api\/companies\/[^/]+\/approvals$/ },
   { method: "GET", path: /^\/api\/companies\/[^/]+\/routines$/ },
   { method: "GET", path: /^\/api\/companies\/[^/]+\/skills$/ },
+
+  // Company knowledge document: agents read the durable manual/facts and
+  // persist newly discovered durable facts (last-write-wins; see
+  // upsertCompanyDocumentFactSchema). DELETE is intentionally not allowlisted here.
+  { method: "GET", path: /^\/api\/companies\/[^/]+\/documents\/[^/]+$/ },
+  { method: "PUT", path: /^\/api\/companies\/[^/]+\/documents\/[^/]+$/ },
+  { method: "PATCH", path: /^\/api\/companies\/[^/]+\/documents\/[^/]+\/facts$/ },
+
   { method: "GET", path: /^\/api\/projects\/[^/]+$/ },
   { method: "GET", path: /^\/api\/goals\/[^/]+$/ },
 

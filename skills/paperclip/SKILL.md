@@ -69,6 +69,8 @@ If already checked out by you, returns normally. If owned by another agent: `409
 
 **Step 6 — Understand context.** Prefer `GET /api/issues/{issueId}/heartbeat-context` first. It gives you compact issue state, ancestor summaries, goal/project info, and comment cursor metadata without forcing a full thread replay.
 
+Check the `companyKnowledge` field before rediscovering company-level context (architecture, deploy targets, credential locations, key decisions) that may already be captured there. When you learn a new durable fact of this kind, write it back with `PATCH /api/companies/{companyId}/documents/knowledge/facts` — see the API reference for details.
+
 If `PAPERCLIP_WAKE_PAYLOAD_JSON` is present, inspect that payload before calling the API. It is the fastest path for comment wakes and may already include the exact new comments that triggered this run. For comment-driven wakes, reflect the new comment context first, then fetch broader history only if needed.
 
 Use comments incrementally:
