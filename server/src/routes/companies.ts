@@ -282,6 +282,40 @@ export function companyRoutes(db: Db, storage?: StorageService) {
     res.status(200).json(fact);
   });
 
+  router.delete("/:companyId/documents/:key/facts/:factKey", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    if (await assertLowTrustControlPlaneDenied(req, res, companyId)) return;
+    const keyParsed = issueDocumentKeySchema.safeParse(String(req.params.key ?? "").trim().toLowerCase());
+    if (!keyParsed.success) {
+      res.status(400).json({ error: "Invalid document key", details: keyParsed.error.issues });
+      return;
+    }
+    const factKeyParsed = issueDocumentKeySchema.safeParse(String(req.params.factKey ?? "").trim().toLowerCase());
+    if (!factKeyParsed.success) {
+      res.status(400).json({ error: "Invalid fact key", details: factKeyParsed.error.issues });
+      return;
+    }
+    const deleted = await companyDocumentsSvc.deleteFact(companyId, keyParsed.data, factKeyParsed.data);
+    if (!deleted) {
+      res.status(404).json({ error: "Fact not found" });
+      return;
+    }
+    const actor = getActorInfo(req);
+    await logActivity(db, {
+      companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId,
+      runId: actor.runId,
+      action: "company.document_fact_deleted",
+      entityType: "company",
+      entityId: companyId,
+      details: { documentKey: keyParsed.data, factKey: factKeyParsed.data },
+    });
+    res.status(200).json(deleted);
+  });
+
   router.get("/:companyId", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);

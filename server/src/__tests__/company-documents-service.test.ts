@@ -190,4 +190,24 @@ describeEmbeddedPostgres("companyDocumentService", () => {
     const rendered = await svc.renderDocument(companyId, "knowledge");
     expect(rendered?.warnings.some((w) => w.includes("nie był aktualizowany"))).toBe(true);
   });
+
+  it("deletes an existing fact and removes it from listFacts", async () => {
+    const companyId = await createCompany();
+    await svc.upsertFact({ companyId, documentKey: "knowledge", factKey: "backend-stack", value: "Next.js" });
+    await svc.upsertFact({ companyId, documentKey: "knowledge", factKey: "deploy-target", value: "VPS" });
+
+    const deleted = await svc.deleteFact(companyId, "knowledge", "backend-stack");
+    expect(deleted?.factKey).toBe("backend-stack");
+    expect(deleted?.value).toBe("Next.js");
+
+    const facts = await svc.listFacts(companyId, "knowledge");
+    expect(facts).toHaveLength(1);
+    expect(facts[0]?.factKey).toBe("deploy-target");
+  });
+
+  it("returns null when deleting a fact that does not exist", async () => {
+    const companyId = await createCompany();
+    const deleted = await svc.deleteFact(companyId, "knowledge", "does-not-exist");
+    expect(deleted).toBeNull();
+  });
 });

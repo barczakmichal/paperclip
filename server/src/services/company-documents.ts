@@ -253,6 +253,20 @@ export function companyDocumentService(db: Db) {
       return row;
     },
 
+    deleteFact: async (companyId: string, rawDocumentKey: string, rawFactKey: string) => {
+      const documentKey = normalizeKey(rawDocumentKey, "document key");
+      const factKey = normalizeKey(rawFactKey, "fact key");
+      const [row] = await db
+        .delete(companyDocumentFacts)
+        .where(and(
+          eq(companyDocumentFacts.companyId, companyId),
+          eq(companyDocumentFacts.documentKey, documentKey),
+          eq(companyDocumentFacts.factKey, factKey),
+        ))
+        .returning();
+      return row ?? null;
+    },
+
     listFacts: async (companyId: string, rawDocumentKey: string) => {
       const documentKey = normalizeKey(rawDocumentKey, "document key");
       return db

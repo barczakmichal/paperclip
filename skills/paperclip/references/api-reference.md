@@ -953,6 +953,7 @@ Terminal states: `done`, `cancelled`
 | GET    | `/api/companies/:companyId/documents/:key`             | Get company document by key (404 until first written)              |
 | PUT    | `/api/companies/:companyId/documents/:key`             | Create or update company document (send `baseRevisionId` when updating) |
 | PATCH  | `/api/companies/:companyId/documents/:key/facts`       | Upsert a single fact (`factKey` + `value`) on the document          |
+| DELETE | `/api/companies/:companyId/documents/:key/facts/:factKey` | Delete a fact (404 if it doesn't exist)                          |
 
 The heartbeat-context response includes a `companyKnowledge` field: the rendered
 knowledge document (manual body + a facts section + any staleness/size warnings) for

@@ -247,4 +247,42 @@ describeEmbeddedPostgres("company document + fact routes", () => {
     const lowTrustGet = await request(lowTrustApp).get(`/api/companies/${company.id}/documents/knowledge`);
     expect(lowTrustGet.status, JSON.stringify(lowTrustGet.body)).toBe(200);
   });
+
+  it("deletes a fact (200 with the deleted fact), then 404s on repeat delete", async () => {
+    const company = await seedCompany(db, "FactDelete");
+    const app = createApp(db, boardActor());
+
+    await request(app)
+      .patch(`/api/companies/${company.id}/documents/knowledge/facts`)
+      .send({ factKey: "backend-stack", value: "Next.js + Postgres" });
+
+    const deleted = await request(app).delete(`/api/companies/${company.id}/documents/knowledge/facts/backend-stack`);
+    expect(deleted.status, JSON.stringify(deleted.body)).toBe(200);
+    expect(deleted.body).toEqual(
+      expect.objectContaining({
+        companyId: company.id,
+        documentKey: "knowledge",
+        factKey: "backend-stack",
+        value: "Next.js + Postgres",
+      }),
+    );
+
+    const repeat = await request(app).delete(`/api/companies/${company.id}/documents/knowledge/facts/backend-stack`);
+    expect(repeat.status, JSON.stringify(repeat.body)).toBe(404);
+  });
+
+  it("denies a low-trust agent from deleting a fact (403)", async () => {
+    const company = await seedCompany(db, "FactDeleteLowTrust");
+    const boardApp = createApp(db, boardActor());
+    await request(boardApp)
+      .patch(`/api/companies/${company.id}/documents/knowledge/facts`)
+      .send({ factKey: "backend-stack", value: "Next.js + Postgres" });
+
+    const lowTrustAgent = await seedLowTrustAgent(db, company.id);
+    const lowTrustApp = createApp(db, agentActor(company.id, lowTrustAgent.id));
+
+    const res = await request(lowTrustApp).delete(`/api/companies/${company.id}/documents/knowledge/facts/backend-stack`);
+    expect(res.status, JSON.stringify(res.body)).toBe(403);
+    expect(res.body.error).toBe("Low-trust actors cannot use this control-plane surface");
+  });
 });
