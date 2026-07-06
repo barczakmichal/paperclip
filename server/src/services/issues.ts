@@ -3801,7 +3801,21 @@ export function issueService(db: Db) {
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, input.actorRunId))
         .then((rows) => rows[0] ?? null);
-      if (!actorRun || TERMINAL_HEARTBEAT_RUN_STATUSES.has(actorRun.status)) return null;
+      if (actorRun && TERMINAL_HEARTBEAT_RUN_STATUSES.has(actorRun.status)) return null;
+
+      // When actorRun is not found in DB (e.g. process_lost_retry with unregistered run),
+      // allow adoption only if the issue is truly orphaned (both checkoutRunId and
+      // executionRunId are null). This recovers issues stuck in-progress after a crash.
+      if (!actorRun) {
+        const issueState = await tx
+          .select({ checkoutRunId: issues.checkoutRunId, executionRunId: issues.executionRunId })
+          .from(issues)
+          .where(eq(issues.id, input.issueId))
+          .then((rows) => rows[0] ?? null);
+        if (!issueState || issueState.checkoutRunId !== null || issueState.executionRunId !== null) {
+          return null;
+        }
+      }
 
       const now = new Date();
       const adopted = await tx
@@ -3882,7 +3896,11 @@ export function issueService(db: Db) {
   // heartbeat run that is terminal or no longer exists. No assignee/status
   // precondition: a terminal run holds no real claim regardless of who is
   // assigned or what status the issue is currently in.
-  async function clearCheckoutRunIfTerminal(issueId: string): Promise<boolean> {
+  //
+  // exceptRunId: when provided, skip clearing if checkoutRunId === exceptRunId.
+  // Used by assertCheckoutOwner so a live agent re-entering after process_lost_retry
+  // (whose heartbeat run may be marked terminal) can still act on its own checkout.
+  async function clearCheckoutRunIfTerminal(issueId: string, exceptRunId?: string): Promise<boolean> {
     return db.transaction(async (tx) => {
       await tx.execute(
         sql`select ${issues.id} from ${issues} where ${issues.id} = ${issueId} for update`,
@@ -3893,6 +3911,9 @@ export function issueService(db: Db) {
         .where(eq(issues.id, issueId))
         .then((rows) => rows[0] ?? null);
       if (!issue?.checkoutRunId) return false;
+
+      // Re-entry guard: don't clear the actor's own (possibly terminal) checkout.
+      if (exceptRunId && issue.checkoutRunId === exceptRunId) return false;
 
       await tx.execute(
         sql`select ${heartbeatRuns.id} from ${heartbeatRuns} where ${heartbeatRuns.id} = ${issue.checkoutRunId} for update`,
@@ -5739,7 +5760,7 @@ export function issueService(db: Db) {
 
     assertCheckoutOwner: async (id: string, actorAgentId: string, actorRunId: string | null) => {
       await clearExecutionRunIfTerminal(id);
-      await clearCheckoutRunIfTerminal(id);
+      await clearCheckoutRunIfTerminal(id, actorRunId ?? undefined);
       const loadCurrent = () =>
         db
           .select({
