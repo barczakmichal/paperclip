@@ -16,7 +16,7 @@ export const companyDocumentFacts = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    companyDocumentFactUq: uniqueIndex("company_document_facts_company_key_fact_uq").on(
+    companyDocumentFactUq: uniqueIndex("company_document_facts_company_document_fact_uq").on(
       table.companyId,
       table.documentKey,
       table.factKey,
