@@ -267,6 +267,22 @@ const manifest: PaperclipPluginManifestV1 = {
         required: ["campaignId"],
       },
     },
+    {
+      name: "meta-ads/delete-campaign",
+      displayName: "Delete Meta Ad Campaign",
+      description:
+        "Permanently deletes a campaign (sets status to DELETED). " +
+        "Safety guard: only campaigns whose name starts with '[TEST-' can be deleted via this tool. " +
+        "Use for cleanup of test campaigns only. No spend risk, no approval required.",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          campaignId: { type: "string", description: "Campaign ID to delete" },
+          reason: { type: "string", description: "Reason for deletion (for audit log)" },
+        },
+        required: ["campaignId"],
+      },
+    },
   ],
 };
 

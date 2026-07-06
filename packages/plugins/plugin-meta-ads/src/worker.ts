@@ -77,14 +77,14 @@ async function metaGet(creds: MetaCreds, path: string, params: Record<string, st
   return json;
 }
 
-async function metaPost(creds: MetaCreds, path: string, body: Record<string, string | number>): Promise<unknown> {
+async function metaPost(creds: MetaCreds, path: string, body: Record<string, string | number | string[]>): Promise<unknown> {
   const url = `https://graph.facebook.com/${creds.apiVersion}/${path}`;
-  const form = new URLSearchParams();
-  form.set("access_token", creds.accessToken);
-  for (const [k, v] of Object.entries(body)) {
-    form.set(k, String(v));
-  }
-  const res = await fetch(url, { method: "POST", body: form });
+  const payload = { access_token: creds.accessToken, ...body };
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
   const json = await res.json() as { error?: { message: string; code: number } };
   if (!res.ok || json.error) {
     throw new Error(`Meta API error: ${json.error?.message ?? res.statusText} (code ${json.error?.code ?? res.status})`);
@@ -479,12 +479,12 @@ async function toolCreateCampaign(
   }
 
   // Execute
-  const body: Record<string, string | number> = {
+  const body: Record<string, string | number | string[]> = {
     name,
     objective,
     status,
     daily_budget: dailyBudgetCents,
-    special_ad_categories: "[]",
+    special_ad_categories: [],
   };
 
   const created = await metaPost(creds, `${creds.accountId}/campaigns`, body) as { id: string };
@@ -627,6 +627,49 @@ async function toolResumeCampaign(
 }
 
 // ---------------------------------------------------------------------------
+// Tool: delete-campaign
+// ---------------------------------------------------------------------------
+
+async function toolDeleteCampaign(
+  ctx: PluginContext,
+  params: Record<string, unknown>,
+): Promise<ToolResult> {
+  const config = await getConfig(ctx);
+  const creds = await resolveCreds(ctx, config);
+
+  const campaignId = typeof params.campaignId === "string" ? params.campaignId : null;
+  if (!campaignId) return { error: "campaignId is required" };
+  const reason = typeof params.reason === "string" ? params.reason : "Deleted by agent";
+
+  // Read current state before deletion
+  const current = await metaGet(creds, campaignId, { fields: "id,name,status,daily_budget" }) as {
+    id: string; name: string; status: string; daily_budget?: string;
+  };
+
+  // Safety guard: only allow deletion of test campaigns
+  if (!current.name.startsWith("[TEST-")) {
+    return {
+      error: `Safety guard: delete-campaign is only allowed for campaigns whose name starts with "[TEST-". Campaign "${current.name}" cannot be deleted via this tool.`,
+    };
+  }
+
+  await metaPost(creds, campaignId, { status: "DELETED" });
+
+  await appendAudit(ctx, {
+    action: "delete-campaign",
+    campaignId,
+    before: current,
+    after: { status: "DELETED" },
+    success: true,
+  });
+
+  return {
+    content: `Campaign "${current.name}" (${campaignId}) deleted (status: DELETED). Reason: ${reason}`,
+    data: { success: true, campaignId, deletedCampaign: current },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Plugin definition
 // ---------------------------------------------------------------------------
 
@@ -682,7 +725,15 @@ const plugin = definePlugin({
       },
     );
 
-    ctx.logger.info(`${PLUGIN_ID} plugin ready — 6 tools registered`);
+    ctx.tools.register(
+      "meta-ads/delete-campaign",
+      manifest.tools![6]!,
+      async (params, _runCtx): Promise<ToolResult> => {
+        return toolDeleteCampaign(ctx, params as Record<string, unknown>);
+      },
+    );
+
+    ctx.logger.info(`${PLUGIN_ID} plugin ready — 7 tools registered`);
   },
 
   async onHealth() {
