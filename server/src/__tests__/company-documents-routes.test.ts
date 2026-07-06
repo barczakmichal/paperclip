@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
+import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
@@ -11,6 +12,8 @@ import {
   createDb,
   documentRevisions,
   documents,
+  heartbeatRuns,
+  issues,
 } from "@paperclipai/db";
 import { LOW_TRUST_REVIEW_PRESET } from "@paperclipai/shared";
 import {
@@ -107,6 +110,8 @@ describeEmbeddedPostgres("company document + fact routes", () => {
     await db.delete(companyDocuments);
     await db.delete(documentRevisions);
     await db.delete(documents);
+    await db.delete(issues);
+    await db.delete(heartbeatRuns);
     await db.delete(agents);
     await db.delete(companies);
   });
@@ -269,6 +274,90 @@ describeEmbeddedPostgres("company document + fact routes", () => {
 
     const repeat = await request(app).delete(`/api/companies/${company.id}/documents/knowledge/facts/backend-stack`);
     expect(repeat.status, JSON.stringify(repeat.body)).toBe(404);
+  });
+
+  it("denies a normal-permissions agent whose run is scoped to a low-trust issue (delegation pattern)", async () => {
+    const company = await seedCompany(db, "RunScopedLowTrust");
+    const boardApp = createApp(db, boardActor());
+    await request(boardApp)
+      .patch(`/api/companies/${company.id}/documents/knowledge/facts`)
+      .send({ factKey: "backend-stack", value: "Next.js + Postgres" });
+
+    // Agent has clean permissions — low trust comes ONLY from the issue's executionPolicy,
+    // discovered via the run's contextSnapshot.issueId (not carried in the snapshot itself).
+    const agent = await seedAgent(db, company.id, "NormalDelegated");
+    const [issue] = await db
+      .insert(issues)
+      .values({
+        companyId: company.id,
+        title: "Delegated low-trust review",
+        status: "in_progress",
+        priority: "medium",
+      })
+      .returning();
+    const executionPolicy = {
+      authorizationPolicy: {
+        trustBoundary: {
+          mode: LOW_TRUST_REVIEW_PRESET,
+          companyId: company.id,
+          rootIssueId: issue!.id,
+        },
+      },
+    };
+    await db.update(issues).set({ executionPolicy }).where(eq(issues.id, issue!.id));
+    const [run] = await db
+      .insert(heartbeatRuns)
+      .values({
+        companyId: company.id,
+        agentId: agent.id,
+        status: "running",
+        contextSnapshot: { issueId: issue!.id },
+      })
+      .returning();
+
+    const app = createApp(db, { ...agentActor(company.id, agent.id), runId: run!.id });
+
+    const deniedPut = await request(app)
+      .put(`/api/companies/${company.id}/documents/knowledge`)
+      .send({ body: "delegated low-trust attempt" });
+    expect(deniedPut.status, JSON.stringify(deniedPut.body)).toBe(403);
+    expect(deniedPut.body.error).toBe("Low-trust actors cannot use this control-plane surface");
+
+    const deniedPatch = await request(app)
+      .patch(`/api/companies/${company.id}/documents/knowledge/facts`)
+      .send({ factKey: "backend-stack", value: "should not persist" });
+    expect(deniedPatch.status, JSON.stringify(deniedPatch.body)).toBe(403);
+    expect(deniedPatch.body.error).toBe("Low-trust actors cannot use this control-plane surface");
+
+    const deniedDelete = await request(app)
+      .delete(`/api/companies/${company.id}/documents/knowledge/facts/backend-stack`);
+    expect(deniedDelete.status, JSON.stringify(deniedDelete.body)).toBe(403);
+    expect(deniedDelete.body.error).toBe("Low-trust actors cannot use this control-plane surface");
+
+    // Same agent, but with a run pointing at a policy-free issue: writes stay allowed.
+    const [cleanIssue] = await db
+      .insert(issues)
+      .values({
+        companyId: company.id,
+        title: "Standard work",
+        status: "in_progress",
+        priority: "medium",
+      })
+      .returning();
+    const [cleanRun] = await db
+      .insert(heartbeatRuns)
+      .values({
+        companyId: company.id,
+        agentId: agent.id,
+        status: "running",
+        contextSnapshot: { issueId: cleanIssue!.id },
+      })
+      .returning();
+    const cleanApp = createApp(db, { ...agentActor(company.id, agent.id), runId: cleanRun!.id });
+    const allowedPatch = await request(cleanApp)
+      .patch(`/api/companies/${company.id}/documents/knowledge/facts`)
+      .send({ factKey: "deploy-target", value: "VPS" });
+    expect(allowedPatch.status, JSON.stringify(allowedPatch.body)).toBe(200);
   });
 
   it("denies a low-trust agent from deleting a fact (403)", async () => {

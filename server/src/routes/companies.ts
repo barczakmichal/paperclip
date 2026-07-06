@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { and, count as countFn, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agents as agentsTable, heartbeatRuns } from "@paperclipai/db";
+import { agents as agentsTable } from "@paperclipai/db";
 import {
   DEFAULT_FEEDBACK_DATA_SHARING_TERMS_VERSION,
   companyArtifactsQuerySchema,
@@ -35,7 +35,7 @@ import {
 import type { StorageService } from "../storage/types.js";
 import { assertBoard, assertCompanyAccess, assertInstanceAdmin, getActorInfo } from "./authz.js";
 import { COMPANY_IMPORT_ROUTE_PATH } from "./company-import-paths.js";
-import { resolveCoreTrustPreset, type TrustPresetResolution } from "../services/trust-preset-resolver.js";
+import { resolveActorTrustForCompanyScope } from "../services/agent-trust-resolution.js";
 
 export function companyRoutes(db: Db, storage?: StorageService) {
   const router = Router();
@@ -88,52 +88,14 @@ export function companyRoutes(db: Db, storage?: StorageService) {
     }
   }
 
-  // Resolves the acting agent's trust preset at company scope (no issue/project context
-  // applies to company knowledge documents). Mirrors routes/issues.ts's
-  // resolveAgentTrustForIssue, but with issue/project omitted per resolveCoreTrustPreset's
-  // documented support for agent/company-level-only resolution.
-  async function resolveAgentTrustForCompanyScope(
-    req: Request,
-    companyId: string,
-  ): Promise<TrustPresetResolution | null> {
-    if (req.actor.type !== "agent" || !req.actor.agentId) return null;
-    const agentId = req.actor.agentId;
-    const runId = req.actor.runId ?? null;
-    const [agent, run] = await Promise.all([
-      agents.getById(agentId),
-      runId
-        ? db
-            .select({
-              companyId: heartbeatRuns.companyId,
-              agentId: heartbeatRuns.agentId,
-              contextSnapshot: heartbeatRuns.contextSnapshot,
-            })
-            .from(heartbeatRuns)
-            .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId)))
-            .then((rows) => rows[0] ?? null)
-        : Promise.resolve(null),
-    ]);
-    if (!agent || agent.companyId !== companyId) return null;
-    const runContext = run?.agentId === agent.id && run.contextSnapshot && typeof run.contextSnapshot === "object"
-      ? run.contextSnapshot as Record<string, unknown>
-      : null;
-    const runExecutionPolicy = runContext?.executionPolicy && typeof runContext.executionPolicy === "object"
-      ? runContext.executionPolicy as Record<string, unknown>
-      : null;
-    return resolveCoreTrustPreset({
-      companyId,
-      agent,
-      project: null,
-      issue: null,
-      run: runExecutionPolicy ? { companyId, executionPolicy: runExecutionPolicy } : null,
-    });
-  }
-
   // Denies low-trust agents on company knowledge write surfaces: the rendered document is
   // injected unredacted into every agent's heartbeat context, so a low-trust actor writing
-  // to it would bypass the platform's quarantine machinery entirely.
+  // to it would bypass the platform's quarantine machinery entirely. Trust is resolved by
+  // the shared helper from all policy sources — the agent's permissions, the run's issue
+  // executionPolicy (fetched from the DB; the run snapshot alone is not a reliable
+  // carrier), that issue's project workspace policy, and the run snapshot policy.
   async function assertLowTrustControlPlaneDenied(req: Request, res: Response, companyId: string) {
-    const resolution = await resolveAgentTrustForCompanyScope(req, companyId);
+    const resolution = await resolveActorTrustForCompanyScope(db, req.actor, companyId);
     if (resolution?.kind === "denied") {
       throw forbidden(resolution.detail);
     }

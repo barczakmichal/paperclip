@@ -99,8 +99,7 @@ import {
 import { getTelemetryClient } from "../telemetry.js";
 import { assertEnvironmentSelectionForCompany } from "./environment-selection.js";
 import { recoveryService } from "../services/recovery/service.js";
-import { resolveCoreTrustPreset } from "../services/trust-preset-resolver.js";
-import { readObject } from "../lib/objects.js";
+import { resolveAgentRunScopedTrust } from "../services/agent-trust-resolution.js";
 import { listInvalidOrgChainDescendantIds } from "../services/agent-invokability.js";
 
 const RUN_LOG_DEFAULT_LIMIT_BYTES = 256_000;
@@ -117,14 +116,6 @@ function readLiveRunsQueryInt(value: unknown, max: number, fallback = 0) {
   if (!Number.isFinite(parsed)) return fallback;
   if (parsed <= 0) return fallback;
   return Math.min(max, Math.trunc(parsed));
-}
-
-function readRunIssueId(context: Record<string, unknown> | null) {
-  const directIssueId = context?.issueId;
-  if (typeof directIssueId === "string" && isUuidLike(directIssueId)) return directIssueId;
-  const paperclipIssue = readObject(context?.paperclipIssue);
-  const nestedIssueId = paperclipIssue?.id;
-  return typeof nestedIssueId === "string" && isUuidLike(nestedIssueId) ? nestedIssueId : null;
 }
 
 export function agentRoutes(
@@ -578,50 +569,11 @@ export function agentRoutes(
     if (req.actor.type !== "agent" || req.actor.agentId !== agent.id) {
       return { kind: "standard" as const };
     }
-    const run = req.actor.type === "agent" && req.actor.runId
-      ? await db
-          .select({
-            companyId: heartbeatRuns.companyId,
-            agentId: heartbeatRuns.agentId,
-            contextSnapshot: heartbeatRuns.contextSnapshot,
-          })
-          .from(heartbeatRuns)
-          .where(and(eq(heartbeatRuns.id, req.actor.runId), eq(heartbeatRuns.companyId, agent.companyId)))
-          .then((rows) => rows[0] ?? null)
-      : null;
-    const runContext = run?.agentId === agent.id ? readObject(run.contextSnapshot) : null;
-    const runExecutionPolicy = readObject(runContext?.executionPolicy);
-    const runIssueId = readRunIssueId(runContext);
-    const runScopedIssue = runIssueId
-      ? await db
-          .select({
-            companyId: issuesTable.companyId,
-            projectId: issuesTable.projectId,
-            executionPolicy: issuesTable.executionPolicy,
-            projectExecutionWorkspacePolicy: projectsTable.executionWorkspacePolicy,
-          })
-          .from(issuesTable)
-          .leftJoin(projectsTable, and(eq(projectsTable.id, issuesTable.projectId), eq(projectsTable.companyId, issuesTable.companyId)))
-          .where(and(eq(issuesTable.id, runIssueId), eq(issuesTable.companyId, agent.companyId)))
-          .then((rows) => rows[0] ?? null)
-      : null;
-
-    return resolveCoreTrustPreset({
+    return resolveAgentRunScopedTrust({
+      db,
       companyId: agent.companyId,
       agent,
-      project: runScopedIssue?.projectId
-        ? {
-            companyId: runScopedIssue.companyId,
-            executionWorkspacePolicy: runScopedIssue.projectExecutionWorkspacePolicy,
-          }
-        : null,
-      issue: runScopedIssue
-        ? {
-            companyId: runScopedIssue.companyId,
-            executionPolicy: runScopedIssue.executionPolicy,
-          }
-        : null,
-      run: runExecutionPolicy ? { companyId: agent.companyId, executionPolicy: runExecutionPolicy } : null,
+      runId: req.actor.runId ?? null,
     });
   }
 
