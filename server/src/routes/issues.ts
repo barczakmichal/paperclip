@@ -71,6 +71,7 @@ import {
   agentService,
   companyService,
   companySearchService,
+  companyDocumentService,
   executionWorkspaceService,
   goalService,
   heartbeatService,
@@ -84,6 +85,7 @@ import {
   clampIssueListLimit,
   documentService,
   documentAnnotationService,
+  KNOWLEDGE_DOCUMENT_KEY,
   logActivity,
   projectService,
   routineService,
@@ -1040,6 +1042,7 @@ export function issueRoutes(
   const executionWorkspacesSvc = executionWorkspaceServiceDirect(db);
   const workProductsSvc = workProductService(db);
   const documentsSvc = documentService(db);
+  const companyDocumentsSvc = companyDocumentService(db);
   const documentAnnotationsSvc = documentAnnotationService(db);
   const issueReferencesSvc = issueReferenceService(db);
   const issueThreadInteractionsSvc = issueThreadInteractionService(db);
@@ -2751,6 +2754,7 @@ export function issueRoutes(
       continuationSummary,
       currentExecutionWorkspace,
       activeRecoveryAction,
+      companyKnowledge,
     ] =
       await Promise.all([
         resolveIssueProjectAndGoal(issue),
@@ -2765,6 +2769,7 @@ export function issueRoutes(
         documentsSvc.getIssueDocumentByKey(issue.id, ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY),
         currentExecutionWorkspacePromise,
         recoveryActionsSvc.getActiveForIssue(issue.companyId, issue.id),
+        companyDocumentsSvc.renderDocument(issue.companyId, KNOWLEDGE_DOCUMENT_KEY),
       ]);
     const recoveryActionsByRelationIssue = await relationRecoveryActionMap(
       recoveryActionsSvc,
@@ -2863,6 +2868,8 @@ export function issueRoutes(
           }
         : null,
       currentExecutionWorkspace,
+      // Company knowledge is company-scoped (not issue-scoped) content; low-trust redaction does not apply.
+      companyKnowledge,
     });
   });
 

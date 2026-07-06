@@ -36,6 +36,10 @@ const mockExecutionWorkspaceService = vi.hoisted(() => ({
   getById: vi.fn(),
 }));
 
+const mockCompanyDocumentService = vi.hoisted(() => ({
+  renderDocument: vi.fn(),
+}));
+
 const mockAccessService = vi.hoisted(() => ({
   canUser: vi.fn(),
   decide: vi.fn(),
@@ -104,6 +108,8 @@ vi.mock("../services/index.js", () => ({
   }),
   accessService: () => mockAccessService,
   agentService: () => mockAgentService,
+  companyDocumentService: () => mockCompanyDocumentService,
+  KNOWLEDGE_DOCUMENT_KEY: "knowledge",
   documentAnnotationService: () => ({ remapOpenThreadsForDocument: async () => [] }),
   documentService: () => mockDocumentsService,
   environmentService: () => mockEnvironmentService,
@@ -211,6 +217,7 @@ describe.sequential("issue goal context routes", () => {
     mockDocumentsService.getIssueDocumentPayload.mockResolvedValue({});
     mockDocumentsService.getIssueDocumentByKey.mockResolvedValue(null);
     mockExecutionWorkspaceService.getById.mockResolvedValue(null);
+    mockCompanyDocumentService.renderDocument.mockResolvedValue(null);
     mockDb.select.mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
@@ -387,5 +394,39 @@ describe.sequential("issue goal context routes", () => {
         }),
       ],
     }));
+  });
+
+  it("surfaces the company knowledge document on GET /issues/:id/heartbeat-context", async () => {
+    mockCompanyDocumentService.renderDocument.mockResolvedValue({
+      key: "knowledge",
+      body: "# Company Handbook\n\nWe ship on Fridays.",
+      charCount: 40,
+      updatedAt: new Date("2026-05-01T00:00:00.000Z"),
+      warnings: [],
+    });
+
+    const res = await request(createApp()).get(
+      "/api/issues/11111111-1111-4111-8111-111111111111/heartbeat-context",
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockCompanyDocumentService.renderDocument).toHaveBeenCalledWith("company-1", "knowledge");
+    expect(res.body.companyKnowledge).toEqual(
+      expect.objectContaining({
+        body: expect.stringContaining("We ship on Fridays."),
+        warnings: [],
+      }),
+    );
+  });
+
+  it("returns companyKnowledge as null on GET /issues/:id/heartbeat-context when none exists", async () => {
+    mockCompanyDocumentService.renderDocument.mockResolvedValue(null);
+
+    const res = await request(createApp()).get(
+      "/api/issues/11111111-1111-4111-8111-111111111111/heartbeat-context",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.companyKnowledge).toBeNull();
   });
 });
