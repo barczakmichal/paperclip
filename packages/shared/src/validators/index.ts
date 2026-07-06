@@ -22,9 +22,13 @@ export {
   createCompanySchema,
   updateCompanySchema,
   updateCompanyBrandingSchema,
+  upsertCompanyDocumentSchema,
+  upsertCompanyDocumentFactSchema,
   type CreateCompany,
   type UpdateCompany,
   type UpdateCompanyBranding,
+  type UpsertCompanyDocument,
+  type UpsertCompanyDocumentFact,
 } from "./company.js";
 export {
   environmentDriverSchema,

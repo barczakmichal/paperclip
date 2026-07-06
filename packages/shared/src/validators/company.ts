@@ -3,6 +3,8 @@ import {
   COMPANY_STATUSES,
   MAX_COMPANY_ATTACHMENT_MAX_BYTES,
 } from "../constants.js";
+import { multilineTextSchema } from "./text.js";
+import { issueDocumentKeySchema } from "./issue.js";
 
 const logoAssetIdSchema = z.string().uuid().nullable().optional();
 const brandColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional();
@@ -57,3 +59,17 @@ export const updateCompanyBrandingSchema = z
   );
 
 export type UpdateCompanyBranding = z.infer<typeof updateCompanyBrandingSchema>;
+
+export const upsertCompanyDocumentSchema = z.object({
+  title: z.string().trim().max(200).nullable().optional(),
+  body: multilineTextSchema.pipe(z.string().max(524288)),
+  changeSummary: z.string().trim().max(500).nullable().optional(),
+  baseRevisionId: z.string().uuid().nullable().optional(),
+});
+export type UpsertCompanyDocument = z.infer<typeof upsertCompanyDocumentSchema>;
+
+export const upsertCompanyDocumentFactSchema = z.object({
+  factKey: issueDocumentKeySchema,
+  value: z.string().trim().min(1).max(2000),
+});
+export type UpsertCompanyDocumentFact = z.infer<typeof upsertCompanyDocumentFactSchema>;
