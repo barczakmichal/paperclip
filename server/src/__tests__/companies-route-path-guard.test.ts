@@ -22,6 +22,13 @@ vi.mock("../services/index.js", () => ({
   companyArtifactsService: () => ({
     list: vi.fn(),
   }),
+  companyDocumentService: () => ({
+    getDocumentByKey: vi.fn(),
+    upsertDocument: vi.fn(),
+    upsertFact: vi.fn(),
+    listFacts: vi.fn(),
+    renderDocument: vi.fn(),
+  }),
   accessService: () => ({
     canUser: vi.fn(),
     ensureMembership: vi.fn(),

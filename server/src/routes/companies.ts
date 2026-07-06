@@ -13,8 +13,11 @@ import {
   feedbackTargetTypeSchema,
   feedbackTraceStatusSchema,
   feedbackVoteValueSchema,
+  issueDocumentKeySchema,
   updateCompanyBrandingSchema,
   updateCompanySchema,
+  upsertCompanyDocumentFactSchema,
+  upsertCompanyDocumentSchema,
 } from "@paperclipai/shared";
 import { badRequest, forbidden } from "../errors.js";
 import { validate } from "../middleware/validate.js";
@@ -23,6 +26,7 @@ import {
   agentService,
   budgetService,
   companyArtifactsService,
+  companyDocumentService,
   companyPortabilityService,
   companyService,
   feedbackService,
@@ -41,6 +45,7 @@ export function companyRoutes(db: Db, storage?: StorageService) {
   const budgets = budgetService(db);
   const artifacts = companyArtifactsService(db, storage);
   const feedback = feedbackService(db);
+  const companyDocumentsSvc = companyDocumentService(db);
   const importJobs = new Map<string, ImportJobRecord>();
   const importJobTerminalRetentionMs = 5 * 60 * 1000;
 
@@ -133,6 +138,91 @@ export function companyRoutes(db: Db, storage?: StorageService) {
     assertCompanyAccess(req, companyId);
     const query = companyArtifactsQuerySchema.parse(req.query);
     res.json(await artifacts.list(companyId, query));
+  });
+
+  router.get("/:companyId/documents/:key", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    const keyParsed = issueDocumentKeySchema.safeParse(String(req.params.key ?? "").trim().toLowerCase());
+    if (!keyParsed.success) {
+      res.status(400).json({ error: "Invalid document key", details: keyParsed.error.issues });
+      return;
+    }
+    const doc = await companyDocumentsSvc.getDocumentByKey(companyId, keyParsed.data);
+    if (!doc) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+    res.json(doc);
+  });
+
+  router.put("/:companyId/documents/:key", validate(upsertCompanyDocumentSchema), async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    const keyParsed = issueDocumentKeySchema.safeParse(String(req.params.key ?? "").trim().toLowerCase());
+    if (!keyParsed.success) {
+      res.status(400).json({ error: "Invalid document key", details: keyParsed.error.issues });
+      return;
+    }
+    const actor = getActorInfo(req);
+    const result = await companyDocumentsSvc.upsertDocument({
+      companyId,
+      key: keyParsed.data,
+      title: req.body.title ?? null,
+      body: req.body.body,
+      changeSummary: req.body.changeSummary ?? null,
+      baseRevisionId: req.body.baseRevisionId ?? null,
+      createdByAgentId: actor.agentId ?? null,
+      createdByUserId: actor.actorType === "user" ? actor.actorId : null,
+      createdByRunId: actor.runId ?? null,
+    });
+    await logActivity(db, {
+      companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId,
+      runId: actor.runId,
+      action: result.created ? "company.document_created" : "company.document_updated",
+      entityType: "company",
+      entityId: companyId,
+      details: {
+        key: result.document.key,
+        documentId: result.document.id,
+        revisionNumber: result.document.latestRevisionNumber,
+      },
+    });
+    res.status(result.created ? 201 : 200).json(result.document);
+  });
+
+  router.patch("/:companyId/documents/:key/facts", validate(upsertCompanyDocumentFactSchema), async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    const keyParsed = issueDocumentKeySchema.safeParse(String(req.params.key ?? "").trim().toLowerCase());
+    if (!keyParsed.success) {
+      res.status(400).json({ error: "Invalid document key", details: keyParsed.error.issues });
+      return;
+    }
+    const actor = getActorInfo(req);
+    const fact = await companyDocumentsSvc.upsertFact({
+      companyId,
+      documentKey: keyParsed.data,
+      factKey: req.body.factKey,
+      value: req.body.value,
+      updatedByAgentId: actor.agentId ?? null,
+      updatedByUserId: actor.actorType === "user" ? actor.actorId : null,
+    });
+    await logActivity(db, {
+      companyId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      agentId: actor.agentId,
+      runId: actor.runId,
+      action: "company.document_fact_upserted",
+      entityType: "company",
+      entityId: companyId,
+      details: { documentKey: keyParsed.data, factKey: fact.factKey },
+    });
+    res.status(200).json(fact);
   });
 
   router.get("/:companyId", async (req, res) => {

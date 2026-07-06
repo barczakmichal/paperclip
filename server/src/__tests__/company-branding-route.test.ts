@@ -35,6 +35,14 @@ const mockCompanyArtifactsService = vi.hoisted(() => ({
   list: vi.fn(),
 }));
 
+const mockCompanyDocumentService = vi.hoisted(() => ({
+  getDocumentByKey: vi.fn(),
+  upsertDocument: vi.fn(),
+  upsertFact: vi.fn(),
+  listFacts: vi.fn(),
+  renderDocument: vi.fn(),
+}));
+
 const mockLogActivity = vi.hoisted(() => vi.fn());
 const mockFeedbackService = vi.hoisted(() => ({
   listIssueVotesForUser: vi.fn(),
@@ -48,6 +56,7 @@ vi.mock("../services/index.js", () => ({
   agentService: () => mockAgentService,
   budgetService: () => mockBudgetService,
   companyArtifactsService: () => mockCompanyArtifactsService,
+  companyDocumentService: () => mockCompanyDocumentService,
   companyPortabilityService: () => mockCompanyPortabilityService,
   companyService: () => mockCompanyService,
   feedbackService: () => mockFeedbackService,
