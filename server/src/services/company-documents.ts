@@ -1,10 +1,13 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { companyDocuments, documentRevisions, documents } from "@paperclipai/db";
+import { companyDocumentFacts, companyDocuments, documentRevisions, documents } from "@paperclipai/db";
 import { issueDocumentKeySchema } from "@paperclipai/shared";
 import { conflict, unprocessable } from "../errors.js";
 
 export const KNOWLEDGE_DOCUMENT_KEY = "knowledge";
+
+const SIZE_WARNING_THRESHOLD_CHARS = 4000;
+const STALENESS_WARNING_DAYS = 30;
 
 function isUniqueViolation(error: unknown): boolean {
   return !!error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "23505";
@@ -209,6 +212,91 @@ export function companyDocumentService(db: Db) {
         }
         throw error;
       });
+    },
+
+    upsertFact: async (input: {
+      companyId: string;
+      documentKey: string;
+      factKey: string;
+      value: string;
+      updatedByAgentId?: string | null;
+      updatedByUserId?: string | null;
+    }) => {
+      const documentKey = normalizeDocumentKey(input.documentKey);
+      const factKey = normalizeDocumentKey(input.factKey);
+      const now = new Date();
+      const [row] = await db
+        .insert(companyDocumentFacts)
+        .values({
+          companyId: input.companyId,
+          documentKey,
+          factKey,
+          value: input.value,
+          updatedByAgentId: input.updatedByAgentId ?? null,
+          updatedByUserId: input.updatedByUserId ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [companyDocumentFacts.companyId, companyDocumentFacts.documentKey, companyDocumentFacts.factKey],
+          set: {
+            value: input.value,
+            updatedByAgentId: input.updatedByAgentId ?? null,
+            updatedByUserId: input.updatedByUserId ?? null,
+            updatedAt: now,
+          },
+        })
+        .returning();
+      return row;
+    },
+
+    listFacts: async (companyId: string, rawDocumentKey: string) => {
+      const documentKey = normalizeDocumentKey(rawDocumentKey);
+      return db
+        .select()
+        .from(companyDocumentFacts)
+        .where(and(eq(companyDocumentFacts.companyId, companyId), eq(companyDocumentFacts.documentKey, documentKey)))
+        .orderBy(companyDocumentFacts.factKey);
+    },
+
+    renderDocument: async (companyId: string, rawKey: string) => {
+      const key = normalizeDocumentKey(rawKey);
+      const [doc, facts] = await Promise.all([
+        db
+          .select(companyDocumentSelect)
+          .from(companyDocuments)
+          .innerJoin(documents, eq(companyDocuments.documentId, documents.id))
+          .where(and(eq(companyDocuments.companyId, companyId), eq(companyDocuments.key, key)))
+          .then((rows) => rows[0] ?? null),
+        db
+          .select()
+          .from(companyDocumentFacts)
+          .where(and(eq(companyDocumentFacts.companyId, companyId), eq(companyDocumentFacts.documentKey, key)))
+          .orderBy(companyDocumentFacts.factKey),
+      ]);
+
+      if (!doc && facts.length === 0) {
+        return null;
+      }
+
+      const manualBody = doc?.latestBody?.trim() ?? "";
+      const factsSection = facts.length
+        ? `## Fakty\n${facts.map((f) => `- **${f.factKey}**: ${f.value}`).join("\n")}`
+        : "";
+      const body = [manualBody, factsSection].filter((part) => part.length > 0).join("\n\n");
+
+      const warnings: string[] = [];
+      if (body.length > SIZE_WARNING_THRESHOLD_CHARS) {
+        warnings.push(`⚠️ Dokument wiedzy jest duży (${body.length} znaków) — rozważ przycięcie.`);
+      }
+      if (doc) {
+        const ageDays = Math.floor((Date.now() - doc.updatedAt.getTime()) / (1000 * 60 * 60 * 24));
+        if (ageDays > STALENESS_WARNING_DAYS) {
+          warnings.push(`⚠️ Dokument wiedzy nie był aktualizowany od ${ageDays} dni.`);
+        }
+      }
+
+      return { key, body, charCount: body.length, updatedAt: doc?.updatedAt ?? null, warnings };
     },
   };
 }

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { companies, companyDocumentFacts, companyDocuments, createDb, documentRevisions, documents } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -103,16 +104,11 @@ describeEmbeddedPostgres("companyDocumentService", () => {
     ]);
     const fulfilled = results.filter((r) => r.status === "fulfilled");
     const rejected = results.filter((r) => r.status === "rejected");
-    // Either both interleave cleanly (one create, one conflict) — or in rare timing both succeed sequentially; assert no raw pg error leaks
-    if (rejected.length > 0) {
-      for (const r of rejected) {
-        const err = (r as PromiseRejectedResult).reason as { status?: number; code?: string };
-        expect(err.status).toBe(409);
-        expect(err.code).not.toBe("23505");
-      }
-    } else {
-      expect(fulfilled.length).toBe(2); // sequential timing — acceptable, no race occurred
-    }
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    const err = (rejected[0] as PromiseRejectedResult).reason as { status?: number; code?: string };
+    expect(err.status).toBe(409);
+    expect(err.code).not.toBe("23505");
   });
 
   it("isolates documents between companies", async () => {
@@ -121,5 +117,64 @@ describeEmbeddedPostgres("companyDocumentService", () => {
     await svc.upsertDocument({ companyId: companyA, key: "knowledge", body: "only A" });
     const forB = await svc.getDocumentByKey(companyB, "knowledge");
     expect(forB).toBeNull();
+  });
+
+  it("upserts a fact and overwrites the same factKey", async () => {
+    const companyId = await createCompany();
+    await svc.upsertFact({ companyId, documentKey: "knowledge", factKey: "backend-stack", value: "Vercel (wrong)" });
+    await svc.upsertFact({ companyId, documentKey: "knowledge", factKey: "backend-stack", value: "Next.js + Postgres + Prisma on VPS" });
+
+    const facts = await svc.listFacts(companyId, "knowledge");
+    expect(facts).toHaveLength(1);
+    expect(facts[0]?.value).toBe("Next.js + Postgres + Prisma on VPS");
+  });
+
+  it("renders null when no document and no facts exist", async () => {
+    const companyId = await createCompany();
+    const rendered = await svc.renderDocument(companyId, "knowledge");
+    expect(rendered).toBeNull();
+  });
+
+  it("renders manual body plus facts section", async () => {
+    const companyId = await createCompany();
+    await svc.upsertDocument({ companyId, key: "knowledge", body: "## Kontekst\n\nSklep wedkarski." });
+    await svc.upsertFact({ companyId, documentKey: "knowledge", factKey: "backend-stack", value: "Next.js + Postgres" });
+    await svc.upsertFact({ companyId, documentKey: "knowledge", factKey: "deploy-target", value: "VPS Hostinger, NIE Vercel" });
+
+    const rendered = await svc.renderDocument(companyId, "knowledge");
+    expect(rendered?.body).toContain("## Kontekst");
+    expect(rendered?.body).toContain("## Fakty");
+    expect(rendered?.body).toContain("- **backend-stack**: Next.js + Postgres");
+    expect(rendered?.body).toContain("- **deploy-target**: VPS Hostinger, NIE Vercel");
+    expect(rendered?.warnings).toEqual([]);
+  });
+
+  it("renders facts alone when no manual document exists", async () => {
+    const companyId = await createCompany();
+    await svc.upsertFact({ companyId, documentKey: "knowledge", factKey: "backend-stack", value: "Next.js" });
+    const rendered = await svc.renderDocument(companyId, "knowledge");
+    expect(rendered?.body).toContain("## Fakty");
+    expect(rendered?.updatedAt).toBeNull();
+  });
+
+  it("warns when the rendered document is larger than the size threshold", async () => {
+    const companyId = await createCompany();
+    await svc.upsertDocument({ companyId, key: "knowledge", body: "x".repeat(4001) });
+
+    const rendered = await svc.renderDocument(companyId, "knowledge");
+    expect(rendered?.warnings.some((w) => w.includes("duży"))).toBe(true);
+  });
+
+  it("warns when the document has not been updated in over 30 days", async () => {
+    const companyId = await createCompany();
+    await svc.upsertDocument({ companyId, key: "knowledge", body: "stara wersja" });
+    const thirtyOneDaysAgo = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await db
+      .update(documents)
+      .set({ updatedAt: thirtyOneDaysAgo })
+      .where(eq(documents.companyId, companyId));
+
+    const rendered = await svc.renderDocument(companyId, "knowledge");
+    expect(rendered?.warnings.some((w) => w.includes("nie był aktualizowany"))).toBe(true);
   });
 });
