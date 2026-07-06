@@ -13,11 +13,11 @@ function isUniqueViolation(error: unknown): boolean {
   return !!error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "23505";
 }
 
-function normalizeDocumentKey(key: string) {
+function normalizeKey(key: string, label: string) {
   const normalized = key.trim().toLowerCase();
   const parsed = issueDocumentKeySchema.safeParse(normalized);
   if (!parsed.success) {
-    throw unprocessable("Invalid document key", parsed.error.issues);
+    throw unprocessable(`Invalid ${label}`, parsed.error.issues);
   }
   return parsed.data;
 }
@@ -40,15 +40,18 @@ const companyDocumentSelect = {
 };
 
 export function companyDocumentService(db: Db) {
+  const fetchDocumentRow = (companyId: string, key: string) =>
+    db
+      .select(companyDocumentSelect)
+      .from(companyDocuments)
+      .innerJoin(documents, eq(companyDocuments.documentId, documents.id))
+      .where(and(eq(companyDocuments.companyId, companyId), eq(companyDocuments.key, key)))
+      .then((rows) => rows[0] ?? null);
+
   return {
     getDocumentByKey: async (companyId: string, rawKey: string) => {
-      const key = normalizeDocumentKey(rawKey);
-      const row = await db
-        .select(companyDocumentSelect)
-        .from(companyDocuments)
-        .innerJoin(documents, eq(companyDocuments.documentId, documents.id))
-        .where(and(eq(companyDocuments.companyId, companyId), eq(companyDocuments.key, key)))
-        .then((rows) => rows[0] ?? null);
+      const key = normalizeKey(rawKey, "document key");
+      const row = await fetchDocumentRow(companyId, key);
       return row ? { ...row, body: row.latestBody } : null;
     },
 
@@ -63,7 +66,7 @@ export function companyDocumentService(db: Db) {
       createdByUserId?: string | null;
       createdByRunId?: string | null;
     }) => {
-      const key = normalizeDocumentKey(input.key);
+      const key = normalizeKey(input.key, "document key");
       return db.transaction(async (tx) => {
         const now = new Date();
         const existing = await tx
@@ -222,8 +225,8 @@ export function companyDocumentService(db: Db) {
       updatedByAgentId?: string | null;
       updatedByUserId?: string | null;
     }) => {
-      const documentKey = normalizeDocumentKey(input.documentKey);
-      const factKey = normalizeDocumentKey(input.factKey);
+      const documentKey = normalizeKey(input.documentKey, "document key");
+      const factKey = normalizeKey(input.factKey, "fact key");
       const now = new Date();
       const [row] = await db
         .insert(companyDocumentFacts)
@@ -251,7 +254,7 @@ export function companyDocumentService(db: Db) {
     },
 
     listFacts: async (companyId: string, rawDocumentKey: string) => {
-      const documentKey = normalizeDocumentKey(rawDocumentKey);
+      const documentKey = normalizeKey(rawDocumentKey, "document key");
       return db
         .select()
         .from(companyDocumentFacts)
@@ -260,14 +263,9 @@ export function companyDocumentService(db: Db) {
     },
 
     renderDocument: async (companyId: string, rawKey: string) => {
-      const key = normalizeDocumentKey(rawKey);
+      const key = normalizeKey(rawKey, "document key");
       const [doc, facts] = await Promise.all([
-        db
-          .select(companyDocumentSelect)
-          .from(companyDocuments)
-          .innerJoin(documents, eq(companyDocuments.documentId, documents.id))
-          .where(and(eq(companyDocuments.companyId, companyId), eq(companyDocuments.key, key)))
-          .then((rows) => rows[0] ?? null),
+        fetchDocumentRow(companyId, key),
         db
           .select()
           .from(companyDocumentFacts)
@@ -285,18 +283,24 @@ export function companyDocumentService(db: Db) {
         : "";
       const body = [manualBody, factsSection].filter((part) => part.length > 0).join("\n\n");
 
+      const timestamps = [
+        ...(doc ? [doc.updatedAt.getTime()] : []),
+        ...facts.map((f) => f.updatedAt.getTime()),
+      ];
+      const lastUpdatedAt = timestamps.length ? new Date(Math.max(...timestamps)) : null;
+
       const warnings: string[] = [];
       if (body.length > SIZE_WARNING_THRESHOLD_CHARS) {
         warnings.push(`⚠️ Dokument wiedzy jest duży (${body.length} znaków) — rozważ przycięcie.`);
       }
-      if (doc) {
-        const ageDays = Math.floor((Date.now() - doc.updatedAt.getTime()) / (1000 * 60 * 60 * 24));
+      if (lastUpdatedAt) {
+        const ageDays = Math.floor((Date.now() - lastUpdatedAt.getTime()) / (1000 * 60 * 60 * 24));
         if (ageDays > STALENESS_WARNING_DAYS) {
           warnings.push(`⚠️ Dokument wiedzy nie był aktualizowany od ${ageDays} dni.`);
         }
       }
 
-      return { key, body, charCount: body.length, updatedAt: doc?.updatedAt ?? null, warnings };
+      return { key, body, charCount: body.length, updatedAt: lastUpdatedAt, warnings };
     },
   };
 }

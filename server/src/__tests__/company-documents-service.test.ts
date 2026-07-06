@@ -154,7 +154,7 @@ describeEmbeddedPostgres("companyDocumentService", () => {
     await svc.upsertFact({ companyId, documentKey: "knowledge", factKey: "backend-stack", value: "Next.js" });
     const rendered = await svc.renderDocument(companyId, "knowledge");
     expect(rendered?.body).toContain("## Fakty");
-    expect(rendered?.updatedAt).toBeNull();
+    expect(rendered?.updatedAt).not.toBeNull();
   });
 
   it("warns when the rendered document is larger than the size threshold", async () => {
@@ -173,6 +173,19 @@ describeEmbeddedPostgres("companyDocumentService", () => {
       .update(documents)
       .set({ updatedAt: thirtyOneDaysAgo })
       .where(eq(documents.companyId, companyId));
+
+    const rendered = await svc.renderDocument(companyId, "knowledge");
+    expect(rendered?.warnings.some((w) => w.includes("nie był aktualizowany"))).toBe(true);
+  });
+
+  it("warns when facts-only knowledge has not been updated in over 30 days", async () => {
+    const companyId = await createCompany();
+    await svc.upsertFact({ companyId, documentKey: "knowledge", factKey: "backend-stack", value: "Next.js" });
+    const thirtyOneDaysAgo = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await db
+      .update(companyDocumentFacts)
+      .set({ updatedAt: thirtyOneDaysAgo })
+      .where(eq(companyDocumentFacts.companyId, companyId));
 
     const rendered = await svc.renderDocument(companyId, "knowledge");
     expect(rendered?.warnings.some((w) => w.includes("nie był aktualizowany"))).toBe(true);
