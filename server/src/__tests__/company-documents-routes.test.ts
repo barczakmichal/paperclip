@@ -4,6 +4,7 @@ import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
+  agents,
   companies,
   companyDocumentFacts,
   companyDocuments,
@@ -11,6 +12,7 @@ import {
   documentRevisions,
   documents,
 } from "@paperclipai/db";
+import { LOW_TRUST_REVIEW_PRESET } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -61,6 +63,35 @@ async function seedCompany(db: Db, label: string) {
     .then((rows) => rows[0]!);
 }
 
+async function seedAgent(db: Db, companyId: string, label: string, permissions: Record<string, unknown> = {}) {
+  return db
+    .insert(agents)
+    .values({
+      companyId,
+      name: `Agent ${label}`,
+      role: "engineer",
+      adapterType: "process",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions,
+    })
+    .returning()
+    .then((rows) => rows[0]!);
+}
+
+function seedLowTrustAgent(db: Db, companyId: string) {
+  return seedAgent(db, companyId, "LowTrust", {
+    trustPreset: LOW_TRUST_REVIEW_PRESET,
+    authorizationPolicy: {
+      trustBoundary: {
+        mode: LOW_TRUST_REVIEW_PRESET,
+        companyId,
+        rootIssueId: randomUUID(),
+      },
+    },
+  });
+}
+
 describeEmbeddedPostgres("company document + fact routes", () => {
   let db!: Db;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
@@ -76,6 +107,7 @@ describeEmbeddedPostgres("company document + fact routes", () => {
     await db.delete(companyDocuments);
     await db.delete(documentRevisions);
     await db.delete(documents);
+    await db.delete(agents);
     await db.delete(companies);
   });
 
@@ -176,5 +208,43 @@ describeEmbeddedPostgres("company document + fact routes", () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toContain("Agent key cannot access another company");
+  });
+
+  it("denies a low-trust agent from writing the knowledge document or a fact (403), while a normal agent still succeeds", async () => {
+    const company = await seedCompany(db, "LowTrustWrites");
+    const lowTrustAgent = await seedLowTrustAgent(db, company.id);
+    const normalAgent = await seedAgent(db, company.id, "Normal");
+
+    const lowTrustApp = createApp(db, agentActor(company.id, lowTrustAgent.id));
+    const normalApp = createApp(db, agentActor(company.id, normalAgent.id));
+
+    const deniedPut = await request(lowTrustApp)
+      .put(`/api/companies/${company.id}/documents/knowledge`)
+      .send({ body: "low-trust attempt" });
+    expect(deniedPut.status, JSON.stringify(deniedPut.body)).toBe(403);
+    expect(deniedPut.body.error).toBe("Low-trust actors cannot use this control-plane surface");
+
+    const deniedPatch = await request(lowTrustApp)
+      .patch(`/api/companies/${company.id}/documents/knowledge/facts`)
+      .send({ factKey: "backend-stack", value: "should not persist" });
+    expect(deniedPatch.status, JSON.stringify(deniedPatch.body)).toBe(403);
+    expect(deniedPatch.body.error).toBe("Low-trust actors cannot use this control-plane surface");
+
+    const noDocument = await request(normalApp).get(`/api/companies/${company.id}/documents/knowledge`);
+    expect(noDocument.status).toBe(404);
+
+    const allowedPut = await request(normalApp)
+      .put(`/api/companies/${company.id}/documents/knowledge`)
+      .send({ body: "normal agent write" });
+    expect(allowedPut.status, JSON.stringify(allowedPut.body)).toBe(201);
+
+    const allowedPatch = await request(normalApp)
+      .patch(`/api/companies/${company.id}/documents/knowledge/facts`)
+      .send({ factKey: "backend-stack", value: "Next.js + Postgres" });
+    expect(allowedPatch.status, JSON.stringify(allowedPatch.body)).toBe(200);
+
+    // The low-trust agent's GET access remains open (read is not gated by this guard).
+    const lowTrustGet = await request(lowTrustApp).get(`/api/companies/${company.id}/documents/knowledge`);
+    expect(lowTrustGet.status, JSON.stringify(lowTrustGet.body)).toBe(200);
   });
 });

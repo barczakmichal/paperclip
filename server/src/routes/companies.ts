@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { Router, type Request } from "express";
+import { Router, type Request, type Response } from "express";
 import { and, count as countFn, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agents as agentsTable } from "@paperclipai/db";
+import { agents as agentsTable, heartbeatRuns } from "@paperclipai/db";
 import {
   DEFAULT_FEEDBACK_DATA_SHARING_TERMS_VERSION,
   companyArtifactsQuerySchema,
@@ -35,6 +35,7 @@ import {
 import type { StorageService } from "../storage/types.js";
 import { assertBoard, assertCompanyAccess, assertInstanceAdmin, getActorInfo } from "./authz.js";
 import { COMPANY_IMPORT_ROUTE_PATH } from "./company-import-paths.js";
+import { resolveCoreTrustPreset, type TrustPresetResolution } from "../services/trust-preset-resolver.js";
 
 export function companyRoutes(db: Db, storage?: StorageService) {
   const router = Router();
@@ -85,6 +86,60 @@ export function companyRoutes(db: Db, storage?: StorageService) {
     if (actorAgent.role !== "ceo") {
       throw forbidden("Only CEO agents can update company branding");
     }
+  }
+
+  // Resolves the acting agent's trust preset at company scope (no issue/project context
+  // applies to company knowledge documents). Mirrors routes/issues.ts's
+  // resolveAgentTrustForIssue, but with issue/project omitted per resolveCoreTrustPreset's
+  // documented support for agent/company-level-only resolution.
+  async function resolveAgentTrustForCompanyScope(
+    req: Request,
+    companyId: string,
+  ): Promise<TrustPresetResolution | null> {
+    if (req.actor.type !== "agent" || !req.actor.agentId) return null;
+    const agentId = req.actor.agentId;
+    const runId = req.actor.runId ?? null;
+    const [agent, run] = await Promise.all([
+      agents.getById(agentId),
+      runId
+        ? db
+            .select({
+              companyId: heartbeatRuns.companyId,
+              agentId: heartbeatRuns.agentId,
+              contextSnapshot: heartbeatRuns.contextSnapshot,
+            })
+            .from(heartbeatRuns)
+            .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId)))
+            .then((rows) => rows[0] ?? null)
+        : Promise.resolve(null),
+    ]);
+    if (!agent || agent.companyId !== companyId) return null;
+    const runContext = run?.agentId === agent.id && run.contextSnapshot && typeof run.contextSnapshot === "object"
+      ? run.contextSnapshot as Record<string, unknown>
+      : null;
+    const runExecutionPolicy = runContext?.executionPolicy && typeof runContext.executionPolicy === "object"
+      ? runContext.executionPolicy as Record<string, unknown>
+      : null;
+    return resolveCoreTrustPreset({
+      companyId,
+      agent,
+      project: null,
+      issue: null,
+      run: runExecutionPolicy ? { companyId, executionPolicy: runExecutionPolicy } : null,
+    });
+  }
+
+  // Denies low-trust agents on company knowledge write surfaces: the rendered document is
+  // injected unredacted into every agent's heartbeat context, so a low-trust actor writing
+  // to it would bypass the platform's quarantine machinery entirely.
+  async function assertLowTrustControlPlaneDenied(req: Request, res: Response, companyId: string) {
+    const resolution = await resolveAgentTrustForCompanyScope(req, companyId);
+    if (resolution?.kind === "denied") {
+      throw forbidden(resolution.detail);
+    }
+    if (resolution?.kind !== "low_trust_review") return false;
+    res.status(403).json({ error: "Low-trust actors cannot use this control-plane surface" });
+    return true;
   }
 
   async function assertCanManagePortability(req: Request, companyId: string, capability: "imports" | "exports") {
@@ -159,6 +214,7 @@ export function companyRoutes(db: Db, storage?: StorageService) {
   router.put("/:companyId/documents/:key", validate(upsertCompanyDocumentSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
+    if (await assertLowTrustControlPlaneDenied(req, res, companyId)) return;
     const keyParsed = issueDocumentKeySchema.safeParse(String(req.params.key ?? "").trim().toLowerCase());
     if (!keyParsed.success) {
       res.status(400).json({ error: "Invalid document key", details: keyParsed.error.issues });
@@ -197,6 +253,7 @@ export function companyRoutes(db: Db, storage?: StorageService) {
   router.patch("/:companyId/documents/:key/facts", validate(upsertCompanyDocumentFactSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
+    if (await assertLowTrustControlPlaneDenied(req, res, companyId)) return;
     const keyParsed = issueDocumentKeySchema.safeParse(String(req.params.key ?? "").trim().toLowerCase());
     if (!keyParsed.success) {
       res.status(400).json({ error: "Invalid document key", details: keyParsed.error.issues });
