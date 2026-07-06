@@ -6,6 +6,10 @@ import { conflict, unprocessable } from "../errors.js";
 
 export const KNOWLEDGE_DOCUMENT_KEY = "knowledge";
 
+function isUniqueViolation(error: unknown): boolean {
+  return !!error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "23505";
+}
+
 function normalizeDocumentKey(key: string) {
   const normalized = key.trim().toLowerCase();
   const parsed = issueDocumentKeySchema.safeParse(normalized);
@@ -195,6 +199,15 @@ export function companyDocumentService(db: Db) {
             updatedAt: document.updatedAt,
           },
         };
+      }).catch((error: unknown) => {
+        // Concurrent first-time creates for the same (companyId, key) can both pass the
+        // existence check and collide on company_documents_company_key_uq; concurrent
+        // updates with the same baseRevisionId collide on document_revisions_document_revision_uq.
+        // Translate the raw pg 23505 into a 409 instead of leaking a 500.
+        if (isUniqueViolation(error)) {
+          throw conflict("Document already exists for this company", { key });
+        }
+        throw error;
       });
     },
   };

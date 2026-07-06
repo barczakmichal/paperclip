@@ -95,6 +95,26 @@ describeEmbeddedPostgres("companyDocumentService", () => {
     ).rejects.toThrow();
   });
 
+  it("translates a concurrent duplicate create into a conflict error, not a raw pg error", async () => {
+    const companyId = await createCompany();
+    const results = await Promise.allSettled([
+      svc.upsertDocument({ companyId, key: "knowledge", body: "racer A" }),
+      svc.upsertDocument({ companyId, key: "knowledge", body: "racer B" }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    // Either both interleave cleanly (one create, one conflict) — or in rare timing both succeed sequentially; assert no raw pg error leaks
+    if (rejected.length > 0) {
+      for (const r of rejected) {
+        const err = (r as PromiseRejectedResult).reason as { status?: number; code?: string };
+        expect(err.status).toBe(409);
+        expect(err.code).not.toBe("23505");
+      }
+    } else {
+      expect(fulfilled.length).toBe(2); // sequential timing — acceptable, no race occurred
+    }
+  });
+
   it("isolates documents between companies", async () => {
     const companyA = await createCompany();
     const companyB = await createCompany();
